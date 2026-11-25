@@ -17,7 +17,6 @@
 import type { ComfyCubeRuntime } from '../../cube/ComfyCubeRuntime.js';
 import { requireCubeIdentity } from '../../cube/node/ComfyCubeNodeFactory.js';
 import type { CubeNode } from '../../cube/node/ComfyCubeNodeFactory.js';
-import type { CubeGraphStackGateway } from '../../workflow/domain/CubeGraphStackModels.js';
 import type { CubeStackRowModel } from '../../surface/stack/CubeStackView.js';
 import { CubeStackCartSession } from '../application/CubeStackCartSession.js';
 import type { CubePickerCatalogRegistry } from '../CubePickerCatalogRegistry.js';
@@ -38,17 +37,14 @@ export interface CapturedCubeStackCart {
 /** Require only the graph, construction geometry and commit ports used during cart capture. */
 interface CubeStackCartRuntime {
   readonly graphScope: Pick<ComfyCubeRuntime['graphScope'], 'assertCurrentRoot'>;
-  readonly reorder: Pick<ComfyCubeRuntime['reorder'], 'pending' | 'refresh'>;
-  readonly graphSnapshots: ComfyCubeRuntime['graphSnapshots'];
+  readonly chain: Pick<ComfyCubeRuntime['chain'], 'order' | 'apply'>;
   readonly construction: Pick<ComfyCubeRuntime['construction'], 'previewSize'>;
   readonly nodes: Pick<ComfyCubeRuntime['nodes'], 'list'>;
-  readonly stackCommit: ComfyCubeRuntime['stackCommit'];
 }
 
 interface CartFactoryOptions {
   readonly registry: Pick<CubePickerCatalogRegistry, 'entries' | 'capturedPayload'>;
   readonly placement: Pick<CubePickerPlacementAdapter, 'prepareCaptured'>;
-  readonly gateway: CubeGraphStackGateway;
   getRuntime(): CubeStackCartRuntime;
   ensureCatalog(): Promise<void>;
   refreshCatalog(): Promise<void>;
@@ -68,16 +64,6 @@ export class CubeStackCartFactory {
     await this.#options.ensureCatalog();
     const runtime = this.#options.getRuntime();
     runtime.graphScope.assertCurrentRoot('edited');
-    if (runtime.reorder.pending)
-      throw new Error('Wait for Cube reordering to finish before opening the cart.');
-    const snapshot = runtime.graphSnapshots.snapshot();
-    const analysis = await runtime.reorder.refresh();
-    if (
-      !analysis ||
-      !runtime.graphSnapshots.available ||
-      runtime.graphSnapshots.snapshot().revision !== snapshot.revision
-    )
-      throw new Error('Workflow changed while the Cube cart was opening.');
     const catalog = new CubeStackCartCatalog(this.#options.registry);
     const initial = catalog.capture(runtime.construction, 0);
     let library = initial.library;
@@ -91,30 +77,15 @@ export class CubeStackCartFactory {
         .map((node) => [String(requireCubeIdentity(node).instance_id), existingRow(node)]),
     );
     const session = new CubeStackCartSession({
-      snapshot,
-      analysis,
+      order: runtime.chain.order(),
       artifacts: initial.artifacts,
-      snapshots: runtime.graphSnapshots,
-      gateway: this.#options.gateway,
+      chain: runtime.chain,
       createId: this.#options.createId,
-      commit: {
-        commit: (opening, entries, result) =>
-          runtime.stackCommit.commit(
-            opening,
-            result,
-            entries.flatMap((entry) => {
-              if (entry.source === 'existing') return [];
-              const captured = payloads.get(entry.catalogKey);
-              if (!captured) throw new Error('Captured Cube cart artifact is unavailable.');
-              const prepared = this.#options.placement.prepareCaptured(
-                captured.descriptor,
-                captured.payload,
-              );
-              return [
-                { instanceId: entry.instanceId, payload: prepared.payload, size: entry.size },
-              ];
-            }),
-          ),
+      prepare: (catalogKey) => {
+        const captured = payloads.get(catalogKey);
+        if (!captured) throw new Error('Captured Cube cart artifact is unavailable.');
+        return this.#options.placement.prepareCaptured(captured.descriptor, captured.payload)
+          .payload;
       },
     });
     return {

@@ -202,7 +202,7 @@ test('uses the same source capture owner after native serialization in Cube dire
   const service = new CubeDirectExecutionService({
     client: { queue } as unknown as CubeExecutionApiClient,
     getGraph: () => graph,
-    getProximityMatches: () => [],
+    getStack: () => null,
     prepareInputs: (payload) => f.preparation.prepare(payload),
   });
   await service.queue(0, {});

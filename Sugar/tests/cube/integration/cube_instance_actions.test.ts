@@ -23,6 +23,8 @@ import {
 } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import type { NativeCubeSubgraph } from '../../../frontend/comfyui/ui/cube/ComfyCubeGraphBuilder.js';
 import type { GraphId } from '../../../frontend/comfyui/ui/types/graph.js';
+import { CubeChainService } from '../../../frontend/comfyui/ui/cube/chain/CubeChainService.js';
+import { ComfyCubeChainCommitHost } from '../../../frontend/comfyui/ui/cube/chain/ComfyCubeChainCommitHost.js';
 
 test('renames literal instance text while retaining shared definition identity', () => {
   const f = fixture();
@@ -124,34 +126,57 @@ function fixture() {
   const after = jest.fn();
   let retired = false;
   let failure = '';
+  const history = { beforeChange: before, afterChange: after, setDirtyCanvas: jest.fn() };
+  const graph = {
+    getNodeById: (id: GraphId) => root.get(id),
+    getLink: () => null,
+    add: (node: CubeNode) => {
+      root.set(node.id, node);
+      if (failure === 'insertion') {
+        failure = '';
+        throw new Error('insertion');
+      }
+    },
+    remove: (node: CubeNode) => {
+      root.delete(node.id);
+      if (failure === 'removal') {
+        failure = '';
+        throw new Error('removal');
+      }
+    },
+  };
+  // Duplicates join the stack through the same chain every other addition uses.
+  const chain = new CubeChainService({
+    graph: {
+      get _nodes() {
+        return [...root.values()];
+      },
+    },
+    nodes: catalog,
+    isCurrentRoot: () => true,
+    matches: () => [],
+    accepts: () => true,
+    commit: new ComfyCubeChainCommitHost({
+      graph,
+      nodes: catalog,
+      history,
+      construction: { construct: unused, discard: () => undefined },
+      definitions: { stage: unused, discard: () => undefined },
+      reconcile: () => undefined,
+      announce: () => undefined,
+    }),
+  });
   const actions = new CubeInstanceActions({
     nodes: catalog,
-    history: { beforeChange: before, afterChange: after, setDirtyCanvas: jest.fn() },
+    history,
     scope: {
       assertCurrentRoot: () => {
         if (retired) throw new Error('retired workflow');
       },
     },
-    isReordering: () => false,
+    chain,
     createId: () => 'copy',
-    graph: {
-      getNodeById: (id) => root.get(id),
-      getLink: () => null,
-      add: (node) => {
-        root.set(node.id, node);
-        if (failure === 'insertion') {
-          failure = '';
-          throw new Error('insertion');
-        }
-      },
-      remove: (node) => {
-        root.delete(node.id);
-        if (failure === 'removal') {
-          failure = '';
-          throw new Error('removal');
-        }
-      },
-    },
+    graph,
   });
   return {
     source,
@@ -217,4 +242,9 @@ function cube(): CubeNode {
     widgets: node.widgets?.map((widget) => ({ ...widget })),
   });
   return node;
+}
+
+/** No Cube is constructed in this proof. */
+function unused(): never {
+  throw new Error('No Cube is constructed here.');
 }

@@ -48,13 +48,13 @@ export class SugarScriptAuthoringApi {
     }
     /**
      * Write the project script of one serialized workflow, without storing it, and name the
-     * mask files its loaders read.
+     * mask files its loaders read. The script lists Cubes in the stack the page shows.
      */
-    async render(workflow) {
+    async render(workflow, stack) {
         const result = await this.#api.fetchJson('/sugarcubes/v2/sugarscript/render', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ workflow }),
+            body: JSON.stringify(stack ? { workflow, stack } : { workflow }),
         });
         const source = 'source' in result.data ? result.data.source : null;
         if (result.response.status !== 200 || typeof source !== 'string')

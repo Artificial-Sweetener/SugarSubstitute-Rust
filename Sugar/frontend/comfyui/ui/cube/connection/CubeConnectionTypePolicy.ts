@@ -67,6 +67,18 @@ export class CubeConnectionTypePolicy implements CubeConnectionCompatibility {
   }
 }
 
+/** Read Comfy's own connection rule from LiteGraph, when LiteGraph offers one. */
+export function comfyConnectionLiteGraph(host: unknown): CubeConnectionLiteGraph {
+  if (typeof host !== 'object' || host === null) return {};
+  const isValidConnection: unknown = Reflect.get(host, 'isValidConnection');
+  return typeof isValidConnection === 'function'
+    ? {
+        isValidConnection: (outputType: unknown, inputType: unknown) =>
+          Boolean(isValidConnection.call(host, outputType, inputType)),
+      }
+    : {};
+}
+
 /** Normalize one dynamic Comfy slot type for stable comparisons and persistence. */
 export function normalizeCubePortType(type: unknown): string {
   if (type == null || type === '') return '*';

@@ -27,6 +27,7 @@ from ..authoring.workflow_sugarscript_projection import (
     project_workflow_script,
 )
 from ..cube_model import CubeSchemaError
+from ..workflow_analysis import read_cube_stack_view
 from ..language.substitute_writer import write_substitute_script
 from .composition import BackendServices
 from .responses import BackendError, json_error_from_exception, json_success
@@ -108,10 +109,12 @@ def build_sugarscript_route_handlers(
             if not isinstance(workflow, dict):
                 raise BackendError("'workflow' field is required", status=400)
             try:
-                analysis = services.workflow_analysis.analyze(workflow)
+                analysis = services.workflow_analysis.analyze(
+                    workflow, read_cube_stack_view(body.get("stack"))
+                )
                 source = write_substitute_script(project_workflow_script(analysis))
                 mask_files = project_mask_files(analysis)
-            except (WorkflowScriptProjectionError, CubeSchemaError) as error:
+            except (WorkflowScriptProjectionError, CubeSchemaError, ValueError) as error:
                 raise BackendError(str(error), status=422) from error
             return json_success(
                 {

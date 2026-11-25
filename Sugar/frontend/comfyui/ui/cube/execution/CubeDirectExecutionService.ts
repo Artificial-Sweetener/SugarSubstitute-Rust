@@ -19,8 +19,7 @@ import { isCubeKind } from '../CubeKind.js';
 import { enrichWorkflowPayload } from '../../graph/WorkflowPayloadBuilder.js';
 import { isRecord } from '../../types/common.js';
 import type { ComfyGraph, ComfyHostApi } from '../../types/graph.js';
-import type { CubeNode } from '../node/ComfyCubeNodeFactory.js';
-import { requireCubeIdentity } from '../node/ComfyCubeNodeFactory.js';
+import type { CubeStackView } from '../chain/CubeStackView.js';
 import { CubeExecutionApiClient } from './CubeExecutionApiClient.js';
 import type { ComfyPromptQueueOptions } from '../../execution/infrastructure/ComfyPromptQueueBridge.js';
 import type { WorkflowPromptPreparation } from '../../execution/domain/WorkflowPreparation.js';
@@ -35,7 +34,8 @@ export interface CubeDirectExecutionServiceOptions {
   hostApi?: ComfyHostApi;
   logger?: Pick<Console, 'debug'>;
   getGraph(): ComfyGraph | null | undefined;
-  getProximityMatches(): readonly unknown[];
+  /** The stack the page shows: its order and proximity links; null without Cubes. */
+  getStack(): CubeStackView | null;
 }
 
 export interface CreateCubeDirectExecutionOptions {
@@ -46,7 +46,8 @@ export interface CreateCubeDirectExecutionOptions {
   api: unknown;
   logger?: Pick<Console, 'debug'>;
   getGraph(): ComfyGraph | null | undefined;
-  getProximityMatches(): readonly unknown[];
+  /** The stack the page shows: its order and proximity links; null without Cubes. */
+  getStack(): CubeStackView | null;
 }
 
 /** Own browser-side request projection without interpreting Cube graph semantics. */
@@ -74,8 +75,7 @@ export class CubeDirectExecutionService {
     if (typeof serialize !== 'function') {
       throw new TypeError('The active Comfy graph cannot be serialized.');
     }
-    const proximityMatches = this.options.getProximityMatches();
-    const proximityConnections = proximityMatches.flatMap(toConnection);
+    const stack = this.options.getStack() ?? { order: [], proximity_connections: [] };
     const serialized = enrichWorkflowPayload(serialize.call(graph), graph);
     const scene = this.options.sceneWorkflow
       ? this.options.sceneWorkflow(comfyPayload, serialized)
@@ -93,12 +93,13 @@ export class CubeDirectExecutionService {
     preparedInput?.(preparation);
     const payload = isRecord(comfyPayload) ? comfyPayload : {};
     const extraData = buildExtraData(workflow, payload, queueOptions, this.options.hostApi);
+    // Output saving numbers images by the stack the page shows.
+    extraData.sugarcubes_stack = stack;
     const clientId = readString(this.options.hostApi?.clientId) || readString(payload.client_id);
     const explicitNumber = position !== 0 && position !== -1 ? position : null;
-    this.options.logger?.debug('SugarCubes projected direct-execution proximity.', {
-      acceptedMatches: proximityMatches.length,
-      projectedConnections: proximityConnections.length,
-      endpoints: proximityMatches.map(describeMatchProjection),
+    this.options.logger?.debug('SugarCubes sent the stack with a direct run.', {
+      cubes: stack.order.length,
+      proximityConnections: stack.proximity_connections.length,
     });
     return await this.options.client.queue({
       ...(preparation.preparedInputs?.length
@@ -106,7 +107,7 @@ export class CubeDirectExecutionService {
         : {}),
       schema_version: 1,
       workflow,
-      proximity_connections: proximityConnections,
+      proximity_connections: [...stack.proximity_connections],
       queue: {
         client_id: clientId || null,
         front: position === -1,
@@ -136,24 +137,11 @@ export function createCubeDirectExecution(
     hostApi: options.api as ComfyHostApi,
     ...(options.logger ? { logger: options.logger } : {}),
     getGraph: options.getGraph,
-    getProximityMatches: options.getProximityMatches,
+    getStack: options.getStack,
     ...(options.prepareInputs ? { prepareInputs: options.prepareInputs } : {}),
     ...(options.sceneWorkflow ? { sceneWorkflow: options.sceneWorkflow } : {}),
     ...(options.resolveWorkflow ? { resolveWorkflow: options.resolveWorkflow } : {}),
   });
-}
-
-/** Describe non-sensitive endpoint shape for actionable projection diagnostics. */
-function describeMatchProjection(value: unknown): Record<string, unknown> {
-  if (!isRecord(value)) return { match: typeof value };
-  return {
-    output_id: value.outputId,
-    input_id: value.inputId,
-    output_node_is_cube: isCubeLike(value.outputNode),
-    input_node_is_cube: isCubeLike(value.inputNode),
-    output_cube_kind: typeof value.outputCube,
-    input_cube_kind: typeof value.inputCube,
-  };
 }
 
 /** Preserve native Comfy history and sensitive metadata for direct queueing. */
@@ -183,68 +171,6 @@ function copyNonEmptyString(target: Record<string, unknown>, key: string, value:
 function isPersistedCubeNode(value: unknown): boolean {
   if (!isRecord(value) || !isRecord(value.properties)) return false;
   return isCubeKind(value.properties.sugarcubes_kind);
-}
-
-/** Project only accepted Cube-to-Cube proximity matches into stable boundary identities. */
-function toConnection(value: unknown): unknown[] {
-  if (!isRecord(value)) return [];
-  const match = value;
-  const stableConnection = readStableMatchConnection(match);
-  if (stableConnection) return [stableConnection];
-  const outputCube = isCubeLike(match.outputNode) ? match.outputNode : match.outputCube;
-  const inputCube = isCubeLike(match.inputNode) ? match.inputNode : match.inputCube;
-  if (!isCubeLike(outputCube) || !isCubeLike(inputCube)) return [];
-  const sourceIdentity = requireCubeIdentity(outputCube);
-  const targetIdentity = requireCubeIdentity(inputCube);
-  const sourceInstanceId = readString(sourceIdentity.instance_id);
-  const targetInstanceId = readString(targetIdentity.instance_id);
-  const sourceBinding = readBoundaryName(outputCube.subgraph.outputs, match.outputSlot);
-  const targetBinding = readBoundaryName(inputCube.subgraph.inputs, match.inputSlot);
-  if (!sourceInstanceId || !targetInstanceId || !sourceBinding || !targetBinding) return [];
-  return [
-    {
-      source_instance_id: sourceInstanceId,
-      source_binding: sourceBinding,
-      target_instance_id: targetInstanceId,
-      target_binding: targetBinding,
-    },
-  ];
-}
-
-/** Project matcher-owned endpoint identity without inspecting host node shape. */
-function readStableMatchConnection(match: Record<string, unknown>): Record<string, string> | null {
-  if (match.outputCube == null || match.inputCube == null) return null;
-  const sourceInstanceId = readString(match.outputInstanceId);
-  const sourceBinding = readString(match.outputBinding);
-  const targetInstanceId = readString(match.inputInstanceId);
-  const targetBinding = readString(match.inputBinding);
-  if (!sourceInstanceId || !sourceBinding || !targetInstanceId || !targetBinding) return null;
-  return {
-    source_instance_id: sourceInstanceId,
-    source_binding: sourceBinding,
-    target_instance_id: targetInstanceId,
-    target_binding: targetBinding,
-  };
-}
-
-/** Narrow a native Cube surface without coupling to its renderer. */
-function isCubeLike(value: unknown): value is CubeNode {
-  return (
-    isRecord(value) &&
-    isRecord(value.properties) &&
-    isRecord(value.subgraph) &&
-    Array.isArray(value.subgraph.inputs) &&
-    Array.isArray(value.subgraph.outputs)
-  );
-}
-
-/** Read one ordered native boundary name. */
-function readBoundaryName(entries: unknown[], slotValue: unknown): string {
-  if (typeof slotValue !== 'number' || !Number.isInteger(slotValue)) return '';
-  const slot = slotValue;
-  if (slot < 0 || slot >= entries.length) return '';
-  const entry = entries[slot];
-  return isRecord(entry) ? readString(entry.name) : '';
 }
 
 /** Normalize an optional external string list. */

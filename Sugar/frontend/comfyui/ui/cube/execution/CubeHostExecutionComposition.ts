@@ -24,6 +24,7 @@ import type { PromptQueueObserver } from '../../execution/infrastructure/ComfyPr
 import { CubePromptPipeline } from './CubePromptPipeline.js';
 import { CubeOutputPromptAdapter } from './CubeOutputPromptAdapter.js';
 import { createCubeDirectExecution } from './CubeDirectExecutionService.js';
+import type { CubeStackView } from '../chain/CubeStackView.js';
 import type { WorkflowPromptPreparation } from '../../execution/domain/WorkflowPreparation.js';
 
 export interface CubeHostExecutionOptions {
@@ -38,7 +39,7 @@ export interface CubeHostExecutionOptions {
   boundaryResolver: NativeSubgraphBoundaryResolver;
   getGraph(): ComfyGraph | null | undefined;
   getCubes(): readonly CubeNode[];
-  getProximityMatches(): readonly unknown[];
+  getStack(): CubeStackView | null;
   applyProximity(payload: unknown): unknown;
   prepareRelations(payload: unknown): unknown;
   preflight(): void;
@@ -77,7 +78,7 @@ export function createCubeHostExecution(options: CubeHostExecutionOptions): Cube
     api: options.api,
     logger: options.logger,
     getGraph: options.getGraph,
-    getProximityMatches: options.getProximityMatches,
+    getStack: options.getStack,
     ...(options.prepareCanvasInputs ? { prepareInputs: options.prepareCanvasInputs } : {}),
     sceneWorkflow: (payload, workflow) => scenes.workflow(payload, workflow),
     resolveWorkflow: (payload, workflow) => wildcards.workflow(payload, workflow),

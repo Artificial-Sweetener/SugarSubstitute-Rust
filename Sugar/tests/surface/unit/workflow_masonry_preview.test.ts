@@ -13,42 +13,9 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove drag preview retains section identity and ordinary runs independently of canonical graph state. */
+/** Prove drag preview retains section identity and ordinary runs. */
 import { expect, test } from '@jest/globals';
 import { previewMasonrySections } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryPreview.js';
-import {
-  orderCanonicalCubeSections,
-  type WorkflowMasonrySection,
-} from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryProjection.js';
-import type { CubeGraphAnalysis } from '../../../frontend/comfyui/ui/workflow/domain/CubeGraphModels.js';
-
-test('retains canonical accepted and undone order while preserving loose slots and control identity', () => {
-  const sections: WorkflowMasonrySection[] = [
-    'cube:first',
-    'loose:10',
-    'cube:second',
-    'cube:fixed',
-  ].map((id) => ({ id, label: id, cube: null, target: { _nodes: [] }, cards: [] }));
-  const analysis = (instanceIds: readonly string[]): CubeGraphAnalysis => ({
-    semanticHash: 'accepted',
-    instances: [],
-    placements: [...instanceIds, 'fixed'].map((instanceId, index) => ({
-      instanceId,
-      nodeId: instanceId,
-      position: [index * 344, 0],
-    })),
-    segments: [
-      { instanceIds, reorderable: true, boundaryNodeIds: [] },
-      { instanceIds: ['fixed'], reorderable: false, boundaryNodeIds: ['10'] },
-    ],
-  });
-  const accepted = orderCanonicalCubeSections(sections, analysis(['second', 'first']));
-  expect(accepted).toEqual([sections[2], sections[1], sections[0], sections[3]]);
-  expect(accepted[0]).toBe(sections[2]);
-  expect(orderCanonicalCubeSections(accepted, analysis(['first', 'second']))).toEqual(sections);
-  expect(orderCanonicalCubeSections(sections, analysis(['second', 'missing']))).toEqual(sections);
-  expect(orderCanonicalCubeSections(sections, null)).toEqual(sections);
-});
 
 test('moves Cube sections between their display slots while preserving every native reference', () => {
   const first = { id: 'cube:first', cube: {}, control: {} };

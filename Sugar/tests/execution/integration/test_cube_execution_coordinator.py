@@ -429,3 +429,34 @@ def test_prepare_routes_workflow_local_output_saving_without_changing_definition
         assert isinstance(inputs, Mapping)
         assert inputs["save_outputs"] is save_outputs
     assert workflow == original
+
+
+class _RecordingMatcher:
+    """Record whether the backend matched proximity links of its own."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def match(self, workflow: Mapping[str, object]) -> tuple[ProximityConnection, ...]:
+        """Count one backend match and find nothing."""
+
+        self.calls += 1
+        return ()
+
+
+def test_the_backend_matches_proximity_only_for_a_client_that_sends_no_links() -> None:
+    """An empty list from the page means no links; only a missing list asks the backend."""
+
+    workflow = cube_workflow(
+        {"provider": provider_document("Image"), "consumer": consumer_document()}
+    )
+    matcher = _RecordingMatcher()
+    coordinator = CubeExecutionCoordinator(proximity_matcher=matcher)  # type: ignore[arg-type]
+
+    coordinator.prepare(
+        CubeExecutionRequest(workflow=workflow, proximity_connections=())
+    )
+    assert matcher.calls == 0
+
+    coordinator.prepare(CubeExecutionRequest(workflow=workflow))
+    assert matcher.calls == 1

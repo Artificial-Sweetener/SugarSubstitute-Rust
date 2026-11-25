@@ -47,8 +47,6 @@ import { ComfyCubeSaveAdapter } from './cube/node/ComfyCubeSaveAdapter.js';
 import { CubePackService } from './packs/CubePackService.js';
 import { RendererGeometryCoordinator } from './geometry/RendererGeometryCoordinator.js';
 import { CubeWorkflowLibraryState } from './workflow/CubeWorkflowLibraryState.js';
-import { CubeGraphAnalysisCache } from './workflow/application/CubeGraphAnalysisCache.js';
-import { CubeGraphApi } from './workflow/infrastructure/CubeGraphApi.js';
 import { MemoryBudgetRegistry } from './core/memory/MemoryBudgetRegistry.js';
 import { ComfyCubeRuntimeCaches } from './cube/ComfyCubeRuntimeCaches.js';
 import { CubeWorkflowLibraryActions } from './workflow/CubeWorkflowLibraryActions.js';
@@ -88,7 +86,6 @@ export class SugarCubesUI {
     rendererGeometry;
     workflowLibraryState;
     /** Share canonical workflow analyses across runtimes so unchanged switches issue no request. */
-    workflowGraphAnalyses;
     /** Enforce one page allowance across every SugarCubes in-memory cache. */
     memory = new MemoryBudgetRegistry();
     /** Keep workflow-independent Cube runtime caches across workflow switches. */
@@ -112,7 +109,6 @@ export class SugarCubesUI {
         this._setupDone = false;
         this.workflowNodePackMetadata = new CubeWorkflowNodePackMetadata();
         this.workflowLibraryState = new CubeWorkflowLibraryState(this.api, this.adapter.getConsole?.() ?? console);
-        this.workflowGraphAnalyses = new CubeGraphAnalysisCache(new CubeGraphApi(this.api));
         this.runtimeCaches = new ComfyCubeRuntimeCaches(this.memory, this.api, this.adapter.getConsole?.() ?? console);
         this.workflowLibraryActions = new CubeWorkflowLibraryActions({
             api: this.api,
@@ -295,7 +291,6 @@ export class SugarCubesUI {
     /** Retire workflow results derived from a catalog that a local mutation just changed. */
     retireWorkflowCatalogResults() {
         this.workflowLibraryState.invalidateCatalog();
-        this.workflowGraphAnalyses.invalidate();
         this.runtimeCaches.invalidateLibrary();
     }
     dispose() {

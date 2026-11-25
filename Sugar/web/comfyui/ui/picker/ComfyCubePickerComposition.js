@@ -21,13 +21,12 @@ import { ComfyCubePickerResultPresenter } from './ComfyCubePickerResultPresenter
 import { CubePickerCatalogRegistry } from './CubePickerCatalogRegistry.js';
 import { CubePickerHostIntegration } from './CubePickerHostIntegration.js';
 import { CubePickerPlacementAdapter } from './CubePickerPlacementAdapter.js';
-import { CubeConnectionTypePolicy } from '../cube/connection/CubeConnectionTypePolicy.js';
+import { CubeConnectionTypePolicy, comfyConnectionLiteGraph, } from '../cube/connection/CubeConnectionTypePolicy.js';
 import { CubeAddCandidateCatalog } from './CubeAddCandidateCatalog.js';
 import { CubePickerInsertAfterService } from './CubePickerInsertAfterService.js';
 import { ComfyCubeAddMenuPresenter } from './ComfyCubeAddMenuPresenter.js';
 import { CubeAddMenuController } from './CubeAddMenuController.js';
 import { createComfyRendererModeChangeSource } from '../core/ComfyRendererMode.js';
-import { CubeGraphApi } from '../workflow/infrastructure/CubeGraphApi.js';
 import { CubeStackCartFactory } from './infrastructure/CubeStackCartFactory.js';
 import { CubeStackCartHost } from './CubeStackCartHost.js';
 /** Build one picker integration while isolating all dynamic Comfy capability checks. */
@@ -63,27 +62,18 @@ export function createComfyCubePickerIntegration(options) {
         document: options.document,
         definitions: () => registry.definitions(),
     });
-    const getConnectionLiteGraph = () => {
-        const host = getLiteGraph();
-        if (!host)
-            return null;
-        const isValidConnection = host.isValidConnection;
-        return typeof isValidConnection === 'function'
-            ? {
-                isValidConnection: (outputType, inputType) => Boolean(isValidConnection.call(host, outputType, inputType)),
-            }
-            : {};
-    };
     const candidates = new CubeAddCandidateCatalog({
         compatibility: new CubeConnectionTypePolicy({
-            getLiteGraph: getConnectionLiteGraph,
+            getLiteGraph: () => comfyConnectionLiteGraph(getLiteGraph()),
             logger: options.logger,
         }),
         strict: options.isProximityStrict,
     });
+    const createId = () => options.document.defaultView?.crypto.randomUUID() ?? globalThis.crypto.randomUUID();
     const insertion = new CubePickerInsertAfterService({
         placement,
         getRuntime: options.getRuntime,
+        createId,
     });
     const addMenu = new CubeAddMenuController({
         registry,
@@ -105,10 +95,9 @@ export function createComfyCubePickerIntegration(options) {
             registry,
             placement,
             getRuntime: options.getRuntime,
-            gateway: new CubeGraphApi(options.api),
             ensureCatalog: () => definitions.ensureReady(),
             refreshCatalog: () => definitions.reconcile().then(() => undefined),
-            createId: () => options.document.defaultView?.crypto.randomUUID() ?? globalThis.crypto.randomUUID(),
+            createId,
         }),
     });
     return new CubePickerHostIntegration({

@@ -127,12 +127,10 @@ export class CubeStackCartHost {
             return;
         this.#mounted?.update(this.#state(this.#capture));
         this.#shell.setConfirmEnabled(this.#capture.session.changed && !this.#refreshing);
-        this.#shell.setBusy(this.#capture.session.pending);
         if (this.#reset)
-            this.#reset.disabled =
-                this.#capture.session.pending || this.#refreshing || !this.#capture.session.changed;
+            this.#reset.disabled = this.#refreshing || !this.#capture.session.changed;
         if (this.#refreshButton)
-            this.#refreshButton.disabled = this.#refreshing || this.#capture.session.pending;
+            this.#refreshButton.disabled = this.#refreshing;
     }
     /** Project immutable captured rows onto independent stable draft identities. */
     #state(capture) {
@@ -147,7 +145,7 @@ export class CubeStackCartHost {
         return {
             library: capture.library,
             rows,
-            pending: capture.session.pending || this.#refreshing,
+            pending: this.#refreshing,
             appearance: this.#options.appearance.appearance.style,
         };
     }
@@ -167,7 +165,7 @@ export class CubeStackCartHost {
     /** Refresh the current library without retiring staged artifacts, search or Cancel. */
     async #refreshLibrary() {
         const capture = this.#capture;
-        if (!capture || this.#refreshing || capture.session.pending)
+        if (!capture || this.#refreshing)
             return;
         this.#refreshing = true;
         this.#shell.setError('');
@@ -191,11 +189,11 @@ export class CubeStackCartHost {
     /** Keep errors in the edited cart and close only after one accepted native application. */
     async #apply() {
         const capture = this.#capture;
-        if (!capture || this.#refreshing || capture.session.pending)
+        if (!capture || this.#refreshing)
             return;
         this.#shell.setError('');
         try {
-            if (await capture.session.apply()) {
+            if (capture.session.apply()) {
                 this.#shell.close(true);
                 await this.#options.onApplied();
             }

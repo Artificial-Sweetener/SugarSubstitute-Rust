@@ -24,19 +24,18 @@ from enum import Enum
 from typing import Any, Mapping
 
 from ..execution import (
-    CubeBoundaryEndpoint,
     CubeExecutionError,
     CubeExecutionRequest,
     CubeOptimizationOptions,
     ProximityConnection,
     QueueMetadata,
 )
-from ..execution.limits import MAX_PROXIMITY_CONNECTIONS
 from ..execution.prepared_input_values import parse_prepared_input_assets
 from .composition import BackendServices
 from .responses import BackendError, json_error_from_exception, json_success
 from .route_types import RouteHandler
 from .validation import parse_json_body
+from ..workflow_analysis import read_proximity_connections
 from ..runtime import QUEUE_OBSERVER_API_VERSION
 
 
@@ -127,35 +126,19 @@ def _parse_request(body: Mapping[str, Any]) -> CubeExecutionRequest:
     )
 
 
-def _parse_proximity(value: object) -> tuple[ProximityConnection, ...]:
-    """Parse only explicit Cube-to-Cube endpoint records."""
+def _parse_proximity(value: object) -> tuple[ProximityConnection, ...] | None:
+    """Parse the client's Cube-to-Cube proximity links; None when it sent none.
+
+    The SugarCubes page always sends the links its matcher shows, an empty list included. A
+    client that sends no field (the Python SugarSubstitute app) gets the backend's own matcher.
+    """
 
     if value is None:
-        return ()
-    if not isinstance(value, list):
-        raise BackendError("'proximity_connections' must be an array", status=400)
-    if len(value) > MAX_PROXIMITY_CONNECTIONS:
-        raise BackendError(
-            "Proximity connections exceed the execution safety limit of "
-            f"{MAX_PROXIMITY_CONNECTIONS} entries.",
-            status=400,
-        )
-    result: list[ProximityConnection] = []
-    for entry in value:
-        record = _mapping(entry)
-        result.append(
-            ProximityConnection(
-                source=CubeBoundaryEndpoint(
-                    _required_string(record, "source_instance_id"),
-                    _required_string(record, "source_binding"),
-                ),
-                target=CubeBoundaryEndpoint(
-                    _required_string(record, "target_instance_id"),
-                    _required_string(record, "target_binding"),
-                ),
-            )
-        )
-    return tuple(result)
+        return None
+    try:
+        return read_proximity_connections(value)
+    except ValueError as error:
+        raise BackendError(str(error), status=400) from error
 
 
 def _parse_queue(value: object) -> QueueMetadata:
@@ -205,15 +188,6 @@ def _mapping(value: object) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise BackendError("Expected a JSON object", status=400)
     return {str(key): item for key, item in value.items()}
-
-
-def _required_string(record: Mapping[str, object], name: str) -> str:
-    """Read one non-empty endpoint identifier."""
-
-    value = record.get(name)
-    if not isinstance(value, str) or not value.strip():
-        raise BackendError(f"'{name}' must be a non-empty string", status=400)
-    return value.strip()
 
 
 def _json_value(value: object) -> Any:

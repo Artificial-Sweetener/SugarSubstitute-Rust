@@ -23,7 +23,13 @@ from typing import cast
 
 from sugarcubes.authoring import NativeWorkflowNormalizer
 from sugarcubes.cube_model import CubeDocument
-from sugarcubes.workflow_analysis import CubeGraphAnalysisService, analyze_cube_graph
+from sugarcubes.execution import CubeBoundaryEndpoint, ProximityConnection
+from sugarcubes.workflow_analysis import (
+    CubeGraphAnalysisService,
+    CubeStackView,
+    analyze_cube_graph,
+    read_cube_stack_view,
+)
 from tests.execution.support.execution_fixtures import cube_document, cube_workflow
 
 
@@ -196,6 +202,78 @@ def test_analysis_treats_ordinary_graph_region_as_fixed_cube_boundaries() -> Non
         ("ordinary-boundary",),
     ]
     assert analysis.normalized_workflow["nodes"][1] == nodes[1]  # type: ignore[index]
+
+
+def test_analysis_uses_the_pages_proximity_links_and_order_when_it_sends_them() -> None:
+    """The page's matcher and stack decide; the backend matches nothing of its own."""
+
+    workflow = _positioned_cube_pair()
+    page_link = ProximityConnection(
+        source=CubeBoundaryEndpoint("source", "output.image"),
+        target=CubeBoundaryEndpoint("target", "input.image"),
+    )
+
+    given = CubeGraphAnalysisService().analyze(
+        workflow,
+        CubeStackView(proximity_connections=(page_link,), order=("source", "target")),
+    )
+    none = CubeGraphAnalysisService().analyze(
+        workflow, CubeStackView(proximity_connections=(), order=("source", "target"))
+    )
+
+    assert given.proximity_connections == (page_link,)
+    assert [edge.semantic_key for edge in given.edges] == [
+        ("source", "output.image", "target", "input.image")
+    ]
+    assert given.order == ("source", "target")
+    # An empty list is the page saying there are no proximity links, not "match them yourself".
+    assert none.proximity_connections == ()
+    assert none.edges == ()
+
+
+def test_analysis_lists_cubes_in_the_pages_stack_order_only_when_it_names_every_cube() -> (
+    None
+):
+    """A stack order naming exactly this workflow's Cubes is used; any other is ignored."""
+
+    workflow = _positioned_cube_pair()
+    service = CubeGraphAnalysisService()
+
+    reversed_order = service.analyze(
+        workflow, CubeStackView(proximity_connections=(), order=("target", "source"))
+    )
+    partial = service.analyze(
+        workflow, CubeStackView(proximity_connections=(), order=("target",))
+    )
+
+    assert reversed_order.order == ("target", "source")
+    assert partial.order == ("source", "target")
+    assert analyze_cube_graph(workflow).order == ("source", "target")
+
+
+def test_a_page_stack_is_read_from_its_json_record() -> None:
+    """The page's record becomes a stack view; a missing one leaves the backend to work it out."""
+
+    view = read_cube_stack_view(
+        {
+            "order": ["source", "target"],
+            "proximity_connections": [
+                {
+                    "source_instance_id": "source",
+                    "source_binding": "output.image",
+                    "target_instance_id": "target",
+                    "target_binding": "input.image",
+                }
+            ],
+        }
+    )
+
+    assert view is not None
+    assert view.order == ("source", "target")
+    assert view.proximity_connections[0].target == CubeBoundaryEndpoint(
+        "target", "input.image"
+    )
+    assert read_cube_stack_view(None) is None
 
 
 def _positioned_cube_pair() -> dict[str, object]:

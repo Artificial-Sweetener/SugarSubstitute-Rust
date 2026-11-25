@@ -234,14 +234,16 @@ describe('workflow masonry sections', () => {
     expect(JSON.stringify(graph)).toBe(snapshot);
   });
 
-  test('keeps Cube position order despite proximity edges and applies shared card eligibility', () => {
+  test('lists Cubes in the stack order and applies shared card eligibility', () => {
     const source = cubeNode('source', [node('custom', 0)], 1000);
     const target = cubeNode('target', [node('widgetless', 0)], 0);
-    const sections = projectWorkflowMasonry(
-      { _nodes: [target, source] },
-      [source, target],
-      [{ source: 'source', target: 'target' }],
-    );
+    const graph = { _nodes: [target, source] };
+    const edges = [{ source: 'source', target: 'target' }];
+    // A Cube that feeds another reads first; the stack order, when given, decides.
+    expect(
+      projectWorkflowMasonry(graph, [source, target], edges).map((section) => section.id),
+    ).toEqual(['cube:source', 'cube:target']);
+    const sections = projectWorkflowMasonry(graph, [source, target], edges, ['target', 'source']);
     expect(sections.map((section) => section.id)).toEqual(['cube:target', 'cube:source']);
     expect(sections.flatMap((section) => section.cards)).toHaveLength(2);
   });

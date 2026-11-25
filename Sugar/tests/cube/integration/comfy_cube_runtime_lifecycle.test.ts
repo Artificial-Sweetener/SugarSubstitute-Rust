@@ -21,21 +21,25 @@ import type { ComfyCubeRuntime } from '../../../frontend/comfyui/ui/cube/ComfyCu
 import { CubeInstanceActions } from '../../../frontend/comfyui/ui/cube/stack/CubeInstanceActions.js';
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 import { CubeEditorContextResolver } from '../../../frontend/comfyui/ui/surface/CubeEditorContextResolver.js';
-import { CubeGraphReorderService } from '../../../frontend/comfyui/ui/workflow/application/CubeGraphReorderService.js';
+import { CubeChainService } from '../../../frontend/comfyui/ui/cube/chain/CubeChainService.js';
 
 /** Build the smallest graph-bound runtime needed by the lifecycle owner. */
 function createRuntime(dispose: () => void): ComfyCubeRuntime {
   const nodes = new CubeNodeCatalog();
+  const chain = new CubeChainService({
+    graph: { _nodes: [] },
+    nodes,
+    isCurrentRoot: () => false,
+    matches: () => [],
+    accepts: () => true,
+    commit: { commit: () => [] },
+  });
   return {
     construction: {} as ComfyCubeRuntime['construction'],
     placement: {} as ComfyCubeRuntime['placement'],
     authoring: {} as ComfyCubeRuntime['authoring'],
     nodes,
-    graphSnapshots: {
-      available: false,
-      snapshot: () => ({ revision: '', serializedWorkflow: '{}' }),
-    },
-    stackCommit: { commit: () => undefined },
+    chain,
     instanceActions: new CubeInstanceActions({
       nodes,
       graph: { add() {}, remove() {}, getNodeById: () => null, getLink: () => null },
@@ -46,26 +50,7 @@ function createRuntime(dispose: () => void): ComfyCubeRuntime {
           throw new Error('Inactive lifecycle fixture');
         },
       },
-      isReordering: () => false,
-    }),
-    reorder: new CubeGraphReorderService({
-      host: {
-        available: false,
-        revision: '',
-        snapshot: () => ({ revision: '', serializedWorkflow: '{}' }),
-        isCurrent: () => false,
-        isPlacementCurrent: () => false,
-        isOrderCurrent: () => false,
-        commit: () => false,
-      },
-      gateway: {
-        analyze: async () => {
-          throw new Error('Inactive lifecycle fixture');
-        },
-        reorder: async () => {
-          throw new Error('Inactive lifecycle fixture');
-        },
-      },
+      chain,
     }),
     cardState: {} as ComfyCubeRuntime['cardState'],
     graphChanges: { subscribe: () => () => undefined },

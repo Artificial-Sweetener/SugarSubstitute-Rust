@@ -13,48 +13,52 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Sequence temporary cart edits and one validated canonical application without host dependencies. */
-import { cubeGraphOrder } from '../../workflow/domain/CubeGraphOrder.js';
+/** Hold the Add cubes draft and apply it to the workflow through the Cube chain, once. */
 import { CubeStackDraft, type CubeStackDraftEntry } from '../domain/CubeStackDraft.js';
 import type { CubeStackArtifact } from '../domain/CubeStackArtifact.js';
-import type {
-  CubeGraphAnalysis,
-  CubeGraphSnapshot,
-} from '../../workflow/domain/CubeGraphModels.js';
-import type {
-  CubeGraphSnapshotSource,
-  CubeGraphStackCommit,
-  CubeGraphStackEntry,
-  CubeGraphStackGateway,
-} from '../../workflow/domain/CubeGraphStackModels.js';
 
-interface CartSessionOptions {
-  readonly snapshot: CubeGraphSnapshot;
-  readonly analysis: CubeGraphAnalysis;
+/** One entry of the stack the cart asks for: a Cube in the workflow, or a new one. */
+export type CubeStackRequest<Payload> =
+  | { readonly source: 'existing'; readonly instanceId: string }
+  | {
+      readonly source: 'new';
+      readonly instanceId: string;
+      readonly alias: string;
+      readonly payload: Payload;
+      readonly size: readonly [number, number];
+    };
+
+/** The workflow's Cube chain, as the cart reads and changes it. */
+export interface CubeStackChain<Payload> {
+  order(): readonly string[];
+  apply(requested: readonly CubeStackRequest<Payload>[]): unknown;
+}
+
+interface CartSessionOptions<Payload> {
+  /** The stack when the dialog opened. */
+  readonly order: readonly string[];
   readonly artifacts: readonly CubeStackArtifact[];
-  readonly snapshots: CubeGraphSnapshotSource;
-  readonly gateway: CubeGraphStackGateway;
-  readonly commit: CubeGraphStackCommit;
+  readonly chain: CubeStackChain<Payload>;
+  /** The payload to construct a new Cube from, prepared when the cart is applied. */
+  prepare(catalogKey: string): Payload;
   createId(): string;
 }
 
-/** Own the exact opening workflow, draft lifetime, pending transition and one-shot Apply semantics. */
-export class CubeStackCartSession {
-  readonly #options: CartSessionOptions;
+/** Own the draft's lifetime and its one application to the live workflow. */
+export class CubeStackCartSession<Payload = unknown> {
+  readonly #options: CartSessionOptions<Payload>;
   readonly #artifacts: Map<string, CubeStackArtifact>;
   readonly #draft: CubeStackDraft;
   readonly #listeners = new Set<() => void>();
-  #pending = false;
   #retired = false;
 
-  /** Capture canonical opening order and already isolated placement-ready artifacts. */
-  constructor(options: CartSessionOptions) {
+  /** Start the draft from the stack as it is now. */
+  constructor(options: CartSessionOptions<Payload>) {
     this.#options = options;
     this.#artifacts = new Map(options.artifacts.map((artifact) => [artifact.catalogKey, artifact]));
     if (this.#artifacts.size !== options.artifacts.length)
       throw new Error('Cube cart artifacts contain duplicate identities.');
-    this.#draft = new CubeStackDraft(cubeGraphOrder(options.analysis), options.createId);
-    this.#requireCurrent();
+    this.#draft = new CubeStackDraft(options.order, options.createId);
   }
 
   /** Expose immutable references for keyed presentation without revealing mutable draft state. */
@@ -64,14 +68,6 @@ export class CubeStackCartSession {
   /** Enable Apply and Reset only for a live changed draft. */
   get changed(): boolean {
     return !this.#retired && this.#draft.changed;
-  }
-  /** Prevent edits and duplicate application while a canonical plan is pending. */
-  get pending(): boolean {
-    return this.#pending;
-  }
-  /** Resolve existing row metadata from the same immutable opening analysis. */
-  get openingAnalysis(): CubeGraphAnalysis {
-    return this.#options.analysis;
   }
 
   /** Observe only session transitions without starting graph or catalog discovery. */
@@ -83,7 +79,6 @@ export class CubeStackCartSession {
   /** Accept a complete new catalog generation without replacing staged artifact definitions. */
   registerArtifacts(artifacts: readonly CubeStackArtifact[]): void {
     this.#requireEditable();
-    this.#requireCurrent();
     const keys = artifacts.map((artifact) => artifact.catalogKey);
     if (new Set(keys).size !== keys.length || keys.some((key) => this.#artifacts.has(key)))
       throw new Error('Cube cart refresh contains duplicate captured identities.');
@@ -103,7 +98,7 @@ export class CubeStackCartSession {
   remove(draftId: string): void {
     this.#edit(() => this.#draft.remove(draftId));
   }
-  /** Accept a complete drag or keyboard draft permutation for canonical validation on Apply. */
+  /** Accept a complete drag or keyboard draft permutation. */
   reorder(draftIds: readonly string[]): void {
     this.#edit(() => this.#draft.reorder(draftIds));
   }
@@ -112,114 +107,51 @@ export class CubeStackCartSession {
     this.#edit(() => this.#draft.reset());
   }
 
-  /** Apply exactly once, rejecting stale workflows and malformed canonical responses before native mutation. */
-  async apply(): Promise<boolean> {
+  /** Make the workflow's stack the draft. Returns false when nothing changed. */
+  apply(): boolean {
     this.#requireEditable();
     this.#requireCurrent();
     if (!this.#draft.changed) return false;
-    const entries = this.#plan();
-    this.#pending = true;
+    this.#options.chain.apply(this.#requests());
+    this.#retired = true;
     this.#notify();
-    try {
-      const result = await this.#options.gateway.applyStack(this.#options.snapshot, entries);
-      this.#requireCurrent();
-      this.#validateResult(entries, result);
-      this.#options.commit.commit(this.#options.snapshot, entries, result);
-      this.#retired = true;
-      return true;
-    } finally {
-      this.#pending = false;
-      this.#notify();
-    }
+    return true;
   }
 
-  /** Retire a closed modal so delayed responses cannot modify its former graph. */
+  /** Retire a closed modal so a late click cannot change its former workflow. */
   dispose(): void {
     this.#retired = true;
     this.#listeners.clear();
   }
 
-  /** Translate draft references into complete captured-artifact intent without reloading catalog state. */
-  #plan(): readonly CubeGraphStackEntry[] {
-    return this.#draft.entries.map((entry): CubeGraphStackEntry => {
+  /** Turn draft rows into the stack the chain builds. */
+  #requests(): readonly CubeStackRequest<Payload>[] {
+    return this.#draft.entries.map((entry): CubeStackRequest<Payload> => {
       if (entry.source === 'existing') return { source: 'existing', instanceId: entry.instanceId };
       const artifact = this.#artifacts.get(entry.catalogKey);
       if (!artifact) throw new Error('Cube cart captured artifact is unavailable.');
-      return { source: 'new', instanceId: entry.draftId.slice(4), ...artifact };
+      return {
+        source: 'new',
+        instanceId: entry.draftId.slice(4),
+        alias: artifact.alias,
+        payload: this.#options.prepare(entry.catalogKey),
+        size: artifact.size,
+      };
     });
   }
 
-  /** Require exact requested order, retained native identities and captured new artifact versions. */
-  #validateResult(entries: readonly CubeGraphStackEntry[], result: CubeGraphAnalysis): void {
-    const requested = new Map(entries.map((entry) => [entry.instanceId, entry]));
-    const originals = new Map(
-      this.#options.analysis.instances.map((instance) => [instance.instanceId, instance]),
-    );
-    const order = cubeGraphOrder(result);
-    if (
-      result.instances.length !== entries.length ||
-      new Set(result.instances.map((instance) => instance.instanceId)).size !== entries.length ||
-      order.length !== entries.length ||
-      order.some((id, index) => id !== entries[index]?.instanceId)
-    )
-      throw new Error('Cube cart response did not fulfill its complete requested order.');
-    for (const instance of result.instances) {
-      const entry = requested.get(instance.instanceId);
-      if (!entry) throw new Error('Cube cart response contains an unrequested instance.');
-      if (entry.source === 'existing') {
-        const original = originals.get(instance.instanceId);
-        if (
-          !original ||
-          original.nodeId !== instance.nodeId ||
-          original.definitionId !== instance.definitionId ||
-          original.cubeId !== instance.cubeId ||
-          original.version !== instance.version ||
-          original.alias !== instance.alias ||
-          original.executionMode !== instance.executionMode
-        )
-          throw new Error('Cube cart response changed a retained workflow identity.');
-      } else {
-        const artifact = this.#artifacts.get(entry.catalogKey);
-        if (
-          !artifact ||
-          instance.cubeId !== artifact.cubeId ||
-          instance.version !== artifact.version ||
-          instance.executionMode !== 0 ||
-          !instance.alias.trim()
-        )
-          throw new Error('Cube cart response changed a captured artifact identity.');
-      }
-    }
-    const nativeIds = new Map(
-      result.instances.map((instance) => [instance.instanceId, instance.nodeId]),
-    );
-    if (
-      result.placements.length !== entries.length ||
-      new Set(result.placements.map((placement) => placement.instanceId)).size !== entries.length ||
-      result.placements.some(
-        (placement) =>
-          nativeIds.get(placement.instanceId) !== placement.nodeId ||
-          !placement.position.every(Number.isFinite),
-      )
-    )
-      throw new Error('Cube cart response contains incomplete native placements.');
-  }
-
-  /** Protect every asynchronous application boundary with the same exact native snapshot owner. */
+  /** Refuse a draft whose workflow gained or lost Cubes while the dialog was open. */
   #requireCurrent(): void {
-    if (
-      this.#retired ||
-      !this.#options.snapshots.available ||
-      this.#options.snapshots.snapshot().revision !== this.#options.snapshot.revision
-    )
+    const opening = [...this.#options.order].sort();
+    const now = [...this.#options.chain.order()].sort();
+    if (opening.length !== now.length || opening.some((id, index) => id !== now[index]))
       throw new Error(
         'Workflow changed while the Cube cart was open. Reopen the cart to continue.',
       );
   }
-  /** Enforce one live synchronous draft editor and one asynchronous application transition. */
+  /** Enforce one live draft editor. */
   #requireEditable(): void {
     if (this.#retired) throw new Error('Cube cart is closed.');
-    if (this.#pending) throw new Error('Cube cart application is already in progress.');
   }
   /** Publish accepted draft edits once. */
   #edit(edit: () => void): void {

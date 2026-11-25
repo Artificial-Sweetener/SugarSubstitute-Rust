@@ -122,7 +122,7 @@ class CubeExecutionCoordinator:
             workflow = read_canonical_workflow(materialized)
             observed_workflow = (
                 read_canonical_workflow(request.workflow)
-                if request.proximity_connections
+                if request.proximity_connections is not None
                 and self._workflow_normalizer is not None
                 else None
             )
@@ -135,7 +135,8 @@ class CubeExecutionCoordinator:
         measurements.finish("workflow")
         proximity_connections = (
             request.proximity_connections
-            or self._proximity_matcher.match(workflow.payload)
+            if request.proximity_connections is not None
+            else self._proximity_matcher.match(workflow.payload)
         )
         topology = build_cube_topology(
             workflow, proximity_connections, observed_workflow=observed_workflow

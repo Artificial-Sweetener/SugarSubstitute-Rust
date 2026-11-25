@@ -265,7 +265,7 @@ test('preserves ordered image sources through Cube execution using the same prep
   const service = new CubeDirectExecutionService({
     client: { queue } as unknown as CubeExecutionApiClient,
     getGraph: () => ({ _nodes: [], serialize: () => workflow }) as ComfyGraph,
-    getProximityMatches: () => [],
+    getStack: () => null,
     prepareInputs: (payload) => f.preparation.prepare(payload),
   });
   await service.queue(0, {});

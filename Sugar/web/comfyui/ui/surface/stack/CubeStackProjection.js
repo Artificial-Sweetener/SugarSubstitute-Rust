@@ -16,11 +16,10 @@
 /** Project rail rows from the mounted masonry inventory and canonical graph permissions. */
 import { requireCubeIdentity } from '../../cube/node/ComfyCubeNodeFactory.js';
 import { resolveCubeIdentityPresentation, } from '../../cube/CubeIdentityPresentation.js';
-import { orderCanonicalCubeSections } from '../masonry/WorkflowMasonryProjection.js';
 import { cubeStackRowIdentity } from './CubeStackRowIdentity.js';
-/** Present compact stack identity while retaining canonical section order and full tooltips. */
-export function projectCubeStackRows(sections, analysis, selectedId, resolveSource, available) {
-    return orderCanonicalCubeSections(sections, analysis).flatMap((section) => {
+/** Present compact stack identity in the masonry's stack order, with full tooltips. */
+export function projectCubeStackRows(sections, selectedId, resolveSource, available) {
+    return sections.flatMap((section) => {
         const node = section.cube;
         if (!node)
             return [];

@@ -218,12 +218,6 @@ runtime_file = "web/icons/node/edit.svg"
 sha256 = "f14fdc76c0e3953d273e99394e724003bebd8779a55e30df6130455841f237c6"
 
 [[component.asset]]
-source_path = "assets/Eraser/SVG/ic_fluent_eraser_20_regular.svg"
-vendored_file = "frontend/static/icons/node/eraser.svg"
-runtime_file = "web/icons/node/eraser.svg"
-sha256 = "8e416de6d847eebb2dc8409f5610585ef418658596ffe56cf03d2a488e1bbc3d"
-
-[[component.asset]]
 source_path = "assets/Folder/SVG/ic_fluent_folder_20_regular.svg"
 vendored_file = "frontend/static/icons/node/folder.svg"
 runtime_file = "web/icons/node/folder.svg"
@@ -1114,7 +1108,7 @@ license_file = "third_party/licenses/sugarsubstitute.LICENSE.txt"
 source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
 revision = "84b6c882d1323447cf82350495dadaeb41d948d5"
 modifications = "Stack geometry, selection, bypass and issue states adapted to stable Vue rows with canonical drag constraints, keyboard movement and reduced-motion transitions. Temporary cart drafts use immutable workflow instance and exact catalog references. Repeated artifacts retain distinct draft identities; Reset preserves the opening instance order. Refresh accepts a new catalog generation without replacing staged definitions or row identities. Neutral icon tone profiling and contrast variants preserve colored details and alpha."
-runtime_files = ["sugarcubes/workflow_stack_mutation.py", "web/comfyui/ui/picker/domain/CubeStackDraft.js", "web/comfyui/ui/surface/stack/CubeStackStyles.js", "web/comfyui/ui/surface/stack/vue/CubeStackRail.js", "web/comfyui/ui/surface/stack/vue/CubeStackRow.js", "web/comfyui/ui/picker/CubeStackCartStyles.js", "web/comfyui/ui/picker/CubeStackCartHost.js", "web/comfyui/ui/picker/vue/CubeStackCart.js", "web/comfyui/ui/picker/infrastructure/CubeStackCartFactory.js", "web/comfyui/ui/picker/infrastructure/CubeStackCartCatalog.js", "web/comfyui/ui/picker/CubeStackCartRow.js", "web/comfyui/ui/core/CubeIconToneProfile.js", "web/comfyui/ui/core/CubeIconAssetContrast.js"]
+runtime_files = ["web/comfyui/ui/cube/chain/CubeChainService.js", "web/comfyui/ui/picker/domain/CubeStackDraft.js", "web/comfyui/ui/surface/stack/CubeStackStyles.js", "web/comfyui/ui/surface/stack/vue/CubeStackRail.js", "web/comfyui/ui/surface/stack/vue/CubeStackRow.js", "web/comfyui/ui/picker/CubeStackCartStyles.js", "web/comfyui/ui/picker/CubeStackCartHost.js", "web/comfyui/ui/picker/vue/CubeStackCart.js", "web/comfyui/ui/picker/infrastructure/CubeStackCartFactory.js", "web/comfyui/ui/picker/infrastructure/CubeStackCartCatalog.js", "web/comfyui/ui/picker/CubeStackCartRow.js", "web/comfyui/ui/core/CubeIconToneProfile.js", "web/comfyui/ui/core/CubeIconAssetContrast.js"]
 
 [[component.implementation]]
 source_path = "substitute/application/cubes/cube_stack_draft_models.py"
@@ -1139,12 +1133,12 @@ adapted_paths = ["frontend/comfyui/ui/surface/stack/CubeStackStyles.ts"]
 [[component.implementation]]
 source_path = "substitute/domain/workflow/policies.py"
 source_sha256 = "3a52e5dfce0f887f10a37adabf1f81915abf1751e0e702c9d6402f708b8a6787"
-adapted_paths = ["sugarcubes/workflow_stack_mutation.py"]
+adapted_paths = ["frontend/comfyui/ui/cube/chain/CubeChainService.ts"]
 
 [[component.implementation]]
 source_path = "substitute/application/cubes/graph_backed_cube_stack_service.py"
 source_sha256 = "494778a94241390973af559a327d00e443bb886a5cdd984ddb2cca34c878ee73"
-adapted_paths = ["sugarcubes/workflow_stack_mutation.py"]
+adapted_paths = ["frontend/comfyui/ui/cube/chain/CubeChainService.ts"]
 
 [[component.implementation]]
 source_path = "substitute/presentation/cube_picker/cube_stack_cart_modal.py"
@@ -1219,13 +1213,6 @@ adapted_paths = ["frontend/comfyui/ui/surface/frame/SubstituteFrameView.ts"]
 source_path = "substitute/presentation/shell/titlebar_buttons.py"
 source_sha256 = "4d01853b628dc09b1fc704cc259aeee7f8af0c80bce0dc1d8b5b2dca8c16395b"
 adapted_paths = ["frontend/comfyui/ui/surface/frame/GenerationStripStyles.ts", "frontend/comfyui/ui/surface/frame/GenerationStripView.ts"]
-
-[[component.asset]]
-source_path = "substitute/presentation/resources/app_icons/app_icon_256.png"
-vendored_file = "frontend/static/orb/app_icon_256.png"
-runtime_file = "web/orb/app_icon_256.png"
-sha256 = "c6e1e822fbe3fe67fe00eefffb678b52f41ac734bea25f62a048a7aa1414d0f3"
-generated_derivatives = [{ runtime_file = "build/gimp/companion/companion.ico", sha256 = "858644748f3798e5dc2182134ba70cfa6c2b2dc9a537878e19f825938884f41f", modification = "Wrap the unmodified PNG bytes in an ICO container for the Windows Tauri companion." }]
 
 [[component.asset]]
 source_path = "substitute/presentation/resources/app_orb/orb_base.png"
@@ -1371,25 +1358,13 @@ license = "GPL-3.0-or-later"
 license_file = "third_party/licenses/qfluentwidgets.LICENSE.txt"
 source = "https://github.com/zhiyiYo/PyQt-Fluent-Widgets"
 revision = "d90c008c534b2b0079ce7981d19b2bc957b354a5"
-modifications = "None; original clear-selection, accept, close and edit SVGs copied verbatim and tinted through a CSS mask."
+modifications = "None; original clear-selection and edit SVGs copied verbatim and tinted through a CSS mask."
 
 [[component.asset]]
 source_path = "qfluentwidgets/_rc/images/icons/ClearSelection_white.svg"
 vendored_file = "frontend/static/canvas-editing/deselect.svg"
 runtime_file = "web/canvas-editing/deselect.svg"
 sha256 = "cf054622861c62faf17459afb4b7f3d58d074a1411c899a39b00f2c315858c93"
-
-[[component.asset]]
-source_path = "qfluentwidgets/_rc/images/icons/Accept_white.svg"
-vendored_file = "frontend/static/canvas-editing/apply.svg"
-runtime_file = "web/canvas-editing/apply.svg"
-sha256 = "834f797be70c6ce7b5f043608bcc2e8ecee6eac4e5148264d32e7b346b831bda"
-
-[[component.asset]]
-source_path = "qfluentwidgets/_rc/images/icons/Close_white.svg"
-vendored_file = "frontend/static/canvas-editing/close.svg"
-runtime_file = "web/canvas-editing/close.svg"
-sha256 = "14a60451f23e1bf73a113011ef76e4bb5ba6cbbeedd661b74017e425d4143642"
 
 [[component.asset]]
 source_path = "qfluentwidgets/_rc/images/icons/Edit_white.svg"
@@ -1930,3 +1905,38 @@ source_path = "qframelesswindow/_rc/title_bar/close.svg"
 vendored_file = "integrations/contracts/ui/icons/window-close.svg"
 runtime_file = "web/icons/shared/window-close.svg"
 sha256 = "e67c255f212cc5c97769f4c6e43d8c246661d8204231c38149534690c8211535"
+
+[[component]]
+name = "SugarSubstitute shared UI QFluent artwork"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/qfluentwidgets.LICENSE.txt"
+source = "https://github.com/zhiyiYo/PyQt-Fluent-Widgets"
+revision = "d90c008c534b2b0079ce7981d19b2bc957b354a5"
+modifications = "None; accept and close SVGs copied verbatim and tinted through a CSS mask on the page and in the native host."
+
+[[component.asset]]
+source_path = "qfluentwidgets/_rc/images/icons/Accept_white.svg"
+vendored_file = "integrations/contracts/ui/icons/fluent-accept.svg"
+runtime_file = "web/icons/shared/fluent-accept.svg"
+sha256 = "834f797be70c6ce7b5f043608bcc2e8ecee6eac4e5148264d32e7b346b831bda"
+
+[[component.asset]]
+source_path = "qfluentwidgets/_rc/images/icons/Close_white.svg"
+vendored_file = "integrations/contracts/ui/icons/fluent-close.svg"
+runtime_file = "web/icons/shared/fluent-close.svg"
+sha256 = "14a60451f23e1bf73a113011ef76e4bb5ba6cbbeedd661b74017e425d4143642"
+
+[[component]]
+name = "SugarSubstitute shared UI application icon"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/sugarsubstitute.LICENSE.txt"
+source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
+revision = "34ce6d9976c76ac708b1dbda3920e9311010006a"
+modifications = "None; the ICO is copied verbatim. The executables embed it, the GIMP companion ships it, and the page is served its 256 px PNG image, extracted unmodified when the pack is built."
+
+[[component.asset]]
+source_path = "substitute/presentation/resources/app_icons/app_icon.ico"
+vendored_file = "integrations/contracts/ui/icons/app-icon.ico"
+runtime_file = "web/icons/shared/app-icon-256.png"
+sha256 = "c611ddb77ce719d48f28df28e21463d3ae00d94c442ddf4cb2a1fecf6fdde334"
+generated_derivatives = [{ runtime_file = "web/icons/shared/app-icon-256.png", sha256 = "c6e1e822fbe3fe67fe00eefffb678b52f41ac734bea25f62a048a7aa1414d0f3", modification = "The ICO's 256 px PNG image, extracted unmodified for the page." }]

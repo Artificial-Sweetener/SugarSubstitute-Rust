@@ -25,6 +25,7 @@ import logging
 import sqlite3
 
 from ...execution.models import ApiPrompt, ExecutionNodeOwner, JsonValue
+from ...workflow_analysis import read_cube_stack_view
 from ..application.prompt_preparer import OutputSavingPromptPreparer
 from ..application.settings_service import OutputSavingSettingsService
 from ..domain.run_plan import SavingRun, SourceKind
@@ -97,7 +98,11 @@ class OutputSavingQueuePolicy:
         try:
             preferences = self._settings.load()
             inventory = self._inventory.collect(
-                prompt, workflow=workflow, owners=owners
+                prompt,
+                workflow=workflow,
+                owners=owners,
+                # The page sends its stack; numbering follows the order the stack shows.
+                stack=read_cube_stack_view(extra_data.get("sugarcubes_stack")),
             )
             enabled = self._metadata_enabled()
             metadata = (

@@ -13,183 +13,86 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove full-cart staging remains isolated and delayed applications cannot mutate another workflow. */
+/** Prove the Add cubes draft stays isolated and reaches the workflow once, through the Cube chain. */
 import { expect, jest, test } from '@jest/globals';
-import { CubeStackCartSession } from '../../../frontend/comfyui/ui/picker/application/CubeStackCartSession.js';
-import type { CubeGraphAnalysis } from '../../../frontend/comfyui/ui/workflow/domain/CubeGraphModels.js';
-import type { CubeGraphStackEntry } from '../../../frontend/comfyui/ui/workflow/domain/CubeGraphStackModels.js';
+import {
+  CubeStackCartSession,
+  type CubeStackRequest,
+} from '../../../frontend/comfyui/ui/picker/application/CubeStackCartSession.js';
 
-test('Reset restores the full opening stack and unchanged Apply creates no request or transaction', async () => {
+test('Reset restores the full opening stack and an unchanged Apply changes nothing', () => {
   const f = fixture();
   f.session.remove('existing:first');
   f.session.add('artifact');
   expect(f.session.entries).toHaveLength(2);
-  expect(f.commit).not.toHaveBeenCalled();
   f.session.reset();
   expect(f.session.entries.map((entry) => entry.draftId)).toEqual([
     'existing:first',
     'existing:second',
   ]);
-  expect(await f.session.apply()).toBe(false);
-  expect(f.gateway).not.toHaveBeenCalled();
+  expect(f.session.apply()).toBe(false);
+  expect(f.apply).not.toHaveBeenCalled();
 });
 
-test('repeated staged artifacts retain exact captured documents and independent instance identities', async () => {
+test('repeated staged artifacts become independent new Cubes in the requested order', () => {
   const f = fixture();
   f.session.add('artifact');
   f.session.add('artifact');
-  expect(await f.session.apply()).toBe(true);
-  const entries = f.gateway.mock.calls[0]![1];
-  expect(entries.map((entry) => entry.instanceId)).toEqual(['first', 'second', 'new-1', 'new-2']);
-  expect(entries.slice(2)).toEqual(
+  expect(f.session.apply()).toBe(true);
+  const requested = f.apply.mock.calls[0]![0];
+  expect(requested.map((entry) => entry.instanceId)).toEqual(['first', 'second', 'new-1', 'new-2']);
+  expect(requested.slice(2)).toEqual(
     ['new-1', 'new-2'].map((instanceId) => ({
       source: 'new',
       instanceId,
-      catalogKey: 'artifact',
-      cubeId: 'cube',
-      version: '1',
       alias: 'Cube',
-      document: f.document,
+      payload: { prepared: 'artifact' },
       size: [920, 600],
     })),
   );
-  expect(f.commit).toHaveBeenCalledTimes(1);
-  await expect(f.session.apply()).rejects.toThrow('closed');
+  expect(() => f.session.apply()).toThrow('closed');
 });
 
-test.each(['stale', 'closed'] as const)(
-  'a %s cart cannot commit a delayed successful plan',
-  async (reason) => {
-    const f = fixture();
-    let complete: ((result: CubeGraphAnalysis) => void) | undefined;
-    f.gateway.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          complete = resolve;
-        }),
-    );
-    f.session.add('artifact');
-    const applying = f.session.apply();
-    expect(f.session.pending).toBe(true);
-    expect(() => f.session.reset()).toThrow('in progress');
-    await expect(f.session.apply()).rejects.toThrow('in progress');
-    if (reason === 'stale') f.editWorkflow();
-    else f.session.dispose();
-    complete?.(analysis(['first', 'second', 'new-1']));
-    await expect(applying).rejects.toThrow('Workflow changed');
-    expect(f.commit).not.toHaveBeenCalled();
-    expect(f.session.pending).toBe(false);
-  },
-);
-
-test.each(['identity', 'order', 'placements', 'artifact'] as const)(
-  'rejects an invalid %s response before native commit',
-  async (kind) => {
-    const f = fixture();
-    f.session.add('artifact');
-    const result = analysis(['first', 'second', 'new-1']);
-    f.gateway.mockResolvedValue(
-      kind === 'identity'
-        ? {
-            ...result,
-            instances: result.instances.map((instance) => ({ ...instance, alias: 'changed' })),
-          }
-        : kind === 'order'
-          ? {
-              ...result,
-              placements: result.placements.map((placement, index) => ({
-                ...placement,
-                position: [index === 0 ? 244 : index === 1 ? 0 : 488, 0],
-              })),
-            }
-          : kind === 'artifact'
-            ? {
-                ...result,
-                instances: result.instances.map((instance) =>
-                  instance.instanceId === 'new-1' ? { ...instance, version: 'later' } : instance,
-                ),
-              }
-            : { ...result, placements: result.placements.slice(1) },
-    );
-    await expect(f.session.apply()).rejects.toThrow('Cube cart response');
-    expect(f.commit).not.toHaveBeenCalled();
-    expect(f.session.pending).toBe(false);
-    expect(f.session.changed).toBe(true);
-  },
-);
-
-test('a planner rejection retains the edited cart for retry and reports the original failure', async () => {
+test('a cart whose workflow gained or lost Cubes meanwhile changes nothing', () => {
   const f = fixture();
   f.session.add('artifact');
-  f.gateway.mockRejectedValueOnce(new Error('Fixed by wiring'));
-  await expect(f.session.apply()).rejects.toThrow('Fixed by wiring');
+  f.workflow.push('pasted');
+  expect(() => f.session.apply()).toThrow('Workflow changed');
+  expect(f.apply).not.toHaveBeenCalled();
   expect(f.session.changed).toBe(true);
-  expect(f.session.pending).toBe(false);
-  expect(await f.session.apply()).toBe(true);
 });
 
-/** Provide immutable captured facts and inject only external planning and native commit boundaries. */
-function fixture() {
-  let revision = 'opening';
-  let id = 0;
-  const document = Object.freeze({
-    cube_id: 'cube',
-    version: '1',
-    implementation: Object.freeze({ nodes: {} }),
+test('a refused stack keeps the edited cart for another try', () => {
+  const f = fixture();
+  f.session.add('artifact');
+  f.apply.mockImplementationOnce(() => {
+    throw new Error('Upscale is wired to the Cube before it, so it cannot be first.');
   });
-  const snapshot = { revision, serializedWorkflow: '{}' };
-  const gateway = jest.fn(
-    async (_snapshot: typeof snapshot, entries: readonly CubeGraphStackEntry[]) =>
-      analysis(entries.map((entry) => entry.instanceId)),
-  );
-  const commit = jest.fn();
-  const session = new CubeStackCartSession({
-    snapshot,
-    analysis: analysis(['first', 'second']),
+  expect(() => f.session.apply()).toThrow('cannot be first');
+  expect(f.session.changed).toBe(true);
+  expect(f.session.apply()).toBe(true);
+});
+
+/** Provide captured artifacts and a chain that records what the cart asks of it. */
+function fixture() {
+  let id = 0;
+  const workflow = ['first', 'second'];
+  const apply = jest.fn((_requested: readonly CubeStackRequest<{ prepared: string }>[]) => []);
+  const session = new CubeStackCartSession<{ prepared: string }>({
+    order: [...workflow],
     artifacts: [
       {
         catalogKey: 'artifact',
         cubeId: 'cube',
         version: '1',
         alias: 'Cube',
-        document,
+        document: { cube_id: 'cube', version: '1' },
         size: [920, 600],
       },
     ],
-    snapshots: { available: true, snapshot: () => ({ ...snapshot, revision }) },
-    gateway: { applyStack: gateway },
-    commit: { commit },
+    chain: { order: () => workflow, apply },
+    prepare: (catalogKey) => ({ prepared: catalogKey }),
     createId: () => `new-${++id}`,
   });
-  return {
-    session,
-    gateway,
-    commit,
-    document,
-    editWorkflow: () => {
-      revision = 'changed';
-    },
-  };
-}
-
-/** Generate typed canonical results for independently retained and newly staged instances. */
-function analysis(ids: readonly string[]): CubeGraphAnalysis {
-  return {
-    semanticHash: 'hash',
-    instances: ids.map((instanceId) => ({
-      instanceId,
-      nodeId: instanceId,
-      definitionId: instanceId,
-      cubeId: 'cube',
-      version: '1',
-      alias: instanceId,
-      executionMode: 0,
-    })),
-    segments: [{ instanceIds: ids, reorderable: true, boundaryNodeIds: [] }],
-    placements: ids.map((instanceId, index) => ({
-      instanceId,
-      nodeId: instanceId,
-      position: [index * 244, 0],
-    })),
-  };
+  return { session, apply, workflow };
 }

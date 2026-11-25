@@ -48,10 +48,9 @@ test('places, bypasses, connects, and attaches source in one batch', () => {
   expect(result.instanceIds).toEqual(['source', 'target']);
   expect(placed[0]!.node.mode).toBe(4);
   expect(connect).toHaveBeenCalledWith(0, placed[1]!.node, 0);
-  expect(placeBatch.mock.calls[0]?.[0]).toEqual([
-    expect.objectContaining({ options: expect.objectContaining({ position: [100, 200] }) }),
-    expect.objectContaining({ options: expect.objectContaining({ position: [1100, 200] }) }),
-  ]);
+  // The imported Cubes form one chain from the drop point, laid out at their real sizes.
+  expect([...placed[0]!.node.pos]).toEqual([100, 200]);
+  expect([...placed[1]!.node.pos]).toEqual([1024, 200]);
   expect(graph.extra).toMatchObject({
     retained: true,
     sugarcubes_sugarscript: {
@@ -221,6 +220,8 @@ function placedCube(
     id,
     title: id,
     mode: 0,
+    pos: [0, 0],
+    size: [900, 600],
     connect,
   } as unknown as CubeNode;
   return {

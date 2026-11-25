@@ -90,8 +90,8 @@ test('an unchanged model keeps the same item in the catalog that replaces it', a
   const first = adapt([ink, oil]);
   const second = adapt([ink, model('style', 'oil', 'Oil Paint')], first);
   const signal = new AbortController().signal;
-  const [before] = await first.completionCatalog!.search('ink');
-  const [after] = await second.completionCatalog!.search('ink');
+  const [before] = first.completionCatalog!.search('ink');
+  const [after] = second.completionCatalog!.search('ink');
   assert.equal(before?.item, after?.item);
   const [renamed] = second.completionCatalog!.search('oil paint');
   assert.equal(renamed?.item.title, 'Oil Paint');

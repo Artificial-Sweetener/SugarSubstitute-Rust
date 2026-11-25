@@ -75,7 +75,12 @@ class _Candidate:
 
 
 class SerializedCubeProximityMatcher:
-    """Project Cube-to-Cube proximity from durable native graph geometry."""
+    """Project Cube-to-Cube proximity from durable native graph geometry.
+
+    The SugarCubes page owns proximity matching and sends its links with every request. This
+    matcher serves only a client that sends none, the Python SugarSubstitute app; it is kept for
+    that app and planned for removal.
+    """
 
     def match(self, workflow: Mapping[str, object]) -> tuple[ProximityConnection, ...]:
         """Return deterministic free-port matches without frontend state."""

@@ -68,8 +68,7 @@ def project_workflow_script(analysis: CubeGraphAnalysis) -> SubstituteScript:
     instances = {instance.instance_id: instance for instance in analysis.instances}
     ordered = [
         instances[instance_id]
-        for segment in analysis.segments
-        for instance_id in segment.instance_ids
+        for instance_id in analysis.order
         if instance_id in instances
     ]
     ordered.extend(

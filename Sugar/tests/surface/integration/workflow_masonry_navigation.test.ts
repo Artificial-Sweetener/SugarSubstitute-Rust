@@ -447,7 +447,7 @@ function fixture(rootCount = 1) {
         appearance: { style: 'comfy', dark: true },
         subscribeAppearance: () => () => undefined,
       },
-      getReorder: () => null,
+      getChain: () => null,
       resolveSource: () => null,
       openCart() {},
       remove() {},

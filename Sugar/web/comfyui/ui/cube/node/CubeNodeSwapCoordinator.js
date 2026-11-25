@@ -1,22 +1,22 @@
 /** Translate face interaction without reproducing graph permissions or geometry. */
 export class CubeNodeSwapCoordinator {
     #options;
-    /** Share exactly the same application owner used by stack dragging and keyboard movement. */
+    /** Share exactly the same chain used by stack dragging and keyboard movement. */
     constructor(options) {
         this.#options = options;
     }
-    /** Reflect native order availability for this stable instance. */
+    /** Whether this Cube can move that way, wiring included. */
     canSwap(metadata, direction) {
         const instanceId = readInstanceId(metadata);
-        return instanceId !== null && this.#options.reorder.canMove(instanceId, delta(direction));
+        return instanceId !== null && this.#options.chain.canMove(instanceId, delta(direction));
     }
-    /** Report rejected or stale actions through the existing SugarCubes feedback owner. */
-    async swap(metadata, direction) {
+    /** Report a refused move through the existing SugarCubes feedback owner. */
+    swap(metadata, direction) {
         const instanceId = readInstanceId(metadata);
         if (!instanceId || !this.canSwap(metadata, direction))
             return;
         try {
-            await this.#options.reorder.move(instanceId, delta(direction));
+            this.#options.chain.move(instanceId, delta(direction));
         }
         catch (error) {
             this.#options.reportError(error);

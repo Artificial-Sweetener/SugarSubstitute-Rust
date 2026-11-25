@@ -21,8 +21,6 @@ import { orderWorkflowNodes } from '../WorkflowNodeOrder.js';
 import type { WorkflowNodeConnection } from '../WorkflowNodeOrder.js';
 import { readCubeFaceCardState, type CubeFaceCardTarget } from '../CubeFaceCardStateService.js';
 import { projectNodeCards, type ProjectedNodeCard } from '../NodeCardProjection.js';
-import { cubeGraphOrder } from '../../workflow/domain/CubeGraphOrder.js';
-import type { CubeGraphAnalysis } from '../../workflow/domain/CubeGraphModels.js';
 
 export interface WorkflowMasonryCard extends ProjectedNodeCard {
   columnSpan: number;
@@ -43,13 +41,13 @@ export function projectWorkflowMasonry(
   graph: ComfyGraph,
   cubes: readonly CubeNode[],
   connections: readonly WorkflowMasonryConnection[] = [],
-  analysis: CubeGraphAnalysis | null = null,
+  cubeOrder: readonly string[] | null = null,
 ): WorkflowMasonrySection[] {
   const cubeSet = new Set<ComfyNode>(cubes);
   const sections: WorkflowMasonrySection[] = [];
   const looseMembers = new Map<string, ComfyNode[]>();
   let loose: WorkflowMasonrySection | null = null;
-  for (const node of orderWorkflowNodes(graph, connections)) {
+  for (const node of orderWorkflowNodes(graph, connections, cubeOrder)) {
     if (node.sugarcubesPresentationOnly === true) continue;
     const id = String(node.id);
     const cube = cubeSet.has(node) ? cubes.find((candidate) => candidate === node) : undefined;
@@ -82,30 +80,7 @@ export function projectWorkflowMasonry(
     if (!section.cube)
       section.cards = orderedCards(looseMembers.get(section.id) ?? [], graph, 'root', graph);
   }
-  return orderCanonicalCubeSections(sections, analysis);
-}
-
-/** Honor accepted native Cube position order without moving loose runs or recomputing graph policy. */
-export function orderCanonicalCubeSections(
-  sections: readonly WorkflowMasonrySection[],
-  analysis: CubeGraphAnalysis | null,
-): WorkflowMasonrySection[] {
-  const ordered = [...sections];
-  if (!analysis) return ordered;
-  const ids = cubeGraphOrder(analysis).map((id) => `cube:${id}`);
-  const members = new Map(
-    ordered.filter((section) => ids.includes(section.id)).map((section) => [section.id, section]),
-  );
-  if (members.size !== ids.length || ids.some((id) => !members.has(id))) return ordered;
-  let index = 0;
-  for (const [slot, section] of ordered.entries()) {
-    if (!members.has(section.id)) continue;
-    const id = ids[index++];
-    const replacement = id === undefined ? undefined : members.get(id);
-    if (replacement) ordered[slot] = replacement;
-  }
-
-  return ordered;
+  return sections;
 }
 
 /** Project the exact Cube-face decisions with namespaced placement identities. */

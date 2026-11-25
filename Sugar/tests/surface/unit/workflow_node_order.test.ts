@@ -33,7 +33,7 @@ test('uses position for independent nodes and honors native and accepted implici
   expect(orderWorkflowNodes(graph, [{ source: 'left', target: 'right' }])).toEqual([left, right]);
 });
 
-test('keeps Cube order spatial without moving loose-node dependency slots', () => {
+test('reads a Cube wired into another before it, wherever the two sit', () => {
   const first = nativeCube('first', 200);
   const second = nativeCube('second', 100);
   second.inputs = [{ link: 1 }];
@@ -42,9 +42,19 @@ test('keeps Cube order spatial without moving loose-node dependency slots', () =
     _nodes: [first, second, loose],
     links: [{ id: 1, origin_id: 'first', target_id: 'second' }],
   };
-  expect(orderWorkflowNodes(graph)).toEqual([second, loose, first]);
+  expect(orderWorkflowNodes(graph)).toEqual([first, loose, second]);
   first.pos = [0, 0];
   expect(orderWorkflowNodes(graph)).toEqual([first, loose, second]);
+});
+
+test('fills the Cube places with the stack order it is given and leaves loose nodes in place', () => {
+  const first = nativeCube('first', 0);
+  const second = nativeCube('second', 900);
+  const loose = { id: 'loose', pos: [500, 0] };
+  const graph: ComfyGraph = { _nodes: [first, second, loose] };
+  expect(orderWorkflowNodes(graph, [], ['second', 'first'])).toEqual([second, loose, first]);
+  // An order that does not name every Cube is not the stack; the graph's own reading stands.
+  expect(orderWorkflowNodes(graph, [], ['second'])).toEqual([first, loose, second]);
 });
 
 /** Supply a recognized native Cube wrapper without editable implementation fields. */

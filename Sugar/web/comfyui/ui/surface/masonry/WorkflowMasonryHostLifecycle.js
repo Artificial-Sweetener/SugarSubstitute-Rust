@@ -53,7 +53,7 @@ export class WorkflowMasonryHostLifecycle {
             getSections: () => {
                 const graph = options.app?.graph;
                 return graph
-                    ? projectWorkflowMasonry(graph, options.getCubes(), options.getConnections(graph), options.stack.getReorder()?.analysis ?? null)
+                    ? projectWorkflowMasonry(graph, options.getCubes(), options.getConnections(graph), options.stack.getChain()?.order() ?? null)
                     : [];
             },
             getRenderer: options.getRenderer,

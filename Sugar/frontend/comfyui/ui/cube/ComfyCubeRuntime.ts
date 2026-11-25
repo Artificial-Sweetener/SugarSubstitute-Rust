@@ -58,9 +58,14 @@ import { ComfyCanvasSelectionStateAdapter } from '../surface/ComfyCanvasSelectio
 import { createComfyCubeHistoryAdapter } from './ComfyCubeHistoryAdapter.js';
 import { ComfyCubeNodeFactory } from './node/ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog } from './node/CubeNodeCatalog.js';
-import { createComfyCubeReorder } from '../workflow/infrastructure/ComfyCubeReorderComposition.js';
-import type { CubeGraphGateway } from '../workflow/domain/CubeGraphModels.js';
-import type { CubeGraphReorderService } from '../workflow/application/CubeGraphReorderService.js';
+import { createComfyCubeChain } from './chain/ComfyCubeChainComposition.js';
+import {
+  CubeConnectionTypePolicy,
+  comfyConnectionLiteGraph,
+} from './connection/CubeConnectionTypePolicy.js';
+import { ComfyCubeChainCommitHost } from './chain/ComfyCubeChainCommitHost.js';
+import type { CubeChainService } from './chain/CubeChainService.js';
+import type { ProximityMatch } from '../overlays/proximity/ProximityModel.js';
 import { discardNativeCubeDefinition } from './graph/NativeCubeDefinitionRegistry.js';
 import { ComfyCubeNodeLifecycleAdapter } from './node/ComfyCubeNodeLifecycleAdapter.js';
 import {
@@ -113,14 +118,15 @@ import { buildCubeRuntimePresentationBindings } from './CubeRuntimePresentationB
 import { buildCubeRuntimeEditorBindings } from './CubeRuntimeEditorBindings.js';
 import { ComfyCubeRootMutationAdapter } from './ComfyCubeRootMutationAdapter.js';
 import { CubeInstanceActions } from './stack/CubeInstanceActions.js';
-import { ComfyCubeStackCommitHost } from './stack/ComfyCubeStackCommitHost.js';
-import type { CubeGraphSnapshotSource } from '../workflow/domain/CubeGraphStackModels.js';
 import type { CubeWorkflowNodePackMetadata } from './node/CubeWorkflowNodePackMetadata.js';
 
 export interface ComfyCubeRuntimeOptions {
   app: unknown;
   api: unknown;
-  graphGateway: CubeGraphGateway;
+  /** The proximity links the graph shows now, from the one proximity matcher. */
+  proximityMatches(): readonly ProximityMatch[];
+  /** Whether proximity requires exact port types rather than Comfy's looser rule. */
+  isProximityStrict(): boolean;
   reconcileCubeMembership(): void;
   liteGraph: unknown;
   document: Document;
@@ -147,10 +153,8 @@ export interface ComfyCubeRuntime {
   placement: CubePlacementService;
   authoring: ComfyCubeAuthoringAdapter;
   nodes: CubeNodeCatalog;
-  reorder: CubeGraphReorderService;
-  graphSnapshots: CubeGraphSnapshotSource;
+  chain: CubeChainService;
   instanceActions: CubeInstanceActions;
-  stackCommit: Pick<ComfyCubeStackCommitHost, 'commit'>;
   cardState: CubeFaceCardStateService;
   graphChanges: CanvasGraphChangeSource;
   versionAvailability: CubeVersionAvailabilityService;
@@ -255,33 +259,16 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     nodePackMetadata: options.nodePackMetadata,
   });
   const canvasGraphChanges = new ComfyCanvasGraphChangeAdapter(canvas);
-  const reorder = createComfyCubeReorder({
-    graph,
-    nodes,
-    history,
-    gateway: options.graphGateway,
-    reconcileOrder: options.reconcileCubeMembership,
-    graphChanges: canvasGraphChanges,
-    isCurrentRoot: () => graphScope.isCurrentRoot(),
-    reportError: (error) => {
-      options.logger.error('SugarCubes Cube reorder failed.', { error });
-      options.feedback?.push?.(
-        'error',
-        'Cube reorder unavailable',
-        error instanceof Error ? error.message : String(error),
-      );
-    },
+  const connectionPolicy = new CubeConnectionTypePolicy({
+    getLiteGraph: () => comfyConnectionLiteGraph(liteGraph),
+    logger: options.logger,
   });
   const chromeActions: CubeFaceChromeActions = {
-    subscribeAvailability: (listener) => reorder.service.subscribe(listener),
+    subscribeAvailability: (listener) => chain.service.subscribe(listener),
     ...(options.openAddCubeMenu ? { onAddCube: options.openAddCubeMenu } : {}),
-    onSwapLeft: (metadata) => {
-      void reorder.swap.swap(metadata, 'left');
-    },
-    onSwapRight: (metadata) => {
-      void reorder.swap.swap(metadata, 'right');
-    },
-    canSwap: (metadata, direction) => reorder.swap.canSwap(metadata, direction),
+    onSwapLeft: (metadata) => chain.swap.swap(metadata, 'left'),
+    onSwapRight: (metadata) => chain.swap.swap(metadata, 'right'),
+    canSwap: (metadata, direction) => chain.swap.canSwap(metadata, direction),
   };
   const legacyContainerMigration = new LegacyCubeContainerMigrationAdapter({
     graph: runtimeGraph,
@@ -446,16 +433,37 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
       createId: createUuid,
     }),
   });
-  const stackCommit = new ComfyCubeStackCommitHost({
-    snapshots: reorder.snapshots,
-    graph: rootMutations,
+  const chain = createComfyCubeChain({
+    graph,
     nodes,
-    history,
-    construction,
-    definitions: new CubeEmbeddedDefinitionStager({
-      registrar: subgraphRegistrar,
-      createId: createUuid,
+    graphChanges: canvasGraphChanges,
+    isCurrentRoot: () => graphScope.isCurrentRoot(),
+    matches: options.proximityMatches,
+    accepts: (outputType, inputType) =>
+      connectionPolicy.accepts(outputType, inputType, options.isProximityStrict()),
+    commit: new ComfyCubeChainCommitHost({
+      reconcile: options.reconcileCubeMembership,
+      announce: () => {
+        const afterChange: unknown = graph.afterChange;
+        if (typeof afterChange === 'function') afterChange.call(graph);
+      },
+      graph: rootMutations,
+      nodes,
+      history,
+      construction,
+      definitions: new CubeEmbeddedDefinitionStager({
+        registrar: subgraphRegistrar,
+        createId: createUuid,
+      }),
     }),
+    reportError: (error) => {
+      options.logger.error('SugarCubes could not move the Cube.', { error });
+      options.feedback?.push?.(
+        'error',
+        'Cube not moved',
+        error instanceof Error ? error.message : String(error),
+      );
+    },
   });
   const placement = new CubePlacementService({
     construction,
@@ -520,16 +528,14 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     authoring,
     nodes,
     cardState,
-    reorder: reorder.service,
-    graphSnapshots: reorder.snapshots,
-    stackCommit,
+    chain: chain.service,
     instanceActions: new CubeInstanceActions({
       nodes,
       graph: rootMutations,
       history,
       createId: createUuid,
       scope: graphScope,
-      isReordering: () => reorder.service.pending,
+      chain: chain.service,
     }),
     graphChanges: canvasGraphChanges,
     versionAvailability,
@@ -547,7 +553,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     restoreLegacy: (batch) => legacyMigration.restore(batch),
     detectLegacyBlueprints: () => blueprintMigration.scan(graph),
     dispose: () => {
-      reorder.dispose();
+      chain.dispose();
       outputSurfaceSynchronizer.dispose();
       editorNavigation.dispose();
       metadataHud?.dispose();

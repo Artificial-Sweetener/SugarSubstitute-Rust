@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import hashlib
+import struct
 import re
 import tomllib
 from collections.abc import Mapping
@@ -131,15 +132,27 @@ SHARED_UI_ARTWORK = {
         "LGPL-3.0-only",
         "https://github.com/zhiyiYo/PyQt-Frameless-Window",
     ),
+    "SugarSubstitute shared UI QFluent artwork": (
+        "GPL-3.0-or-later",
+        "https://github.com/zhiyiYo/PyQt-Fluent-Widgets",
+    ),
+    "SugarSubstitute shared UI application icon": (
+        "GPL-3.0-or-later",
+        "https://github.com/Artificial-Sweetener/SugarSubstitute",
+    ),
 }
+
+#: The page is served the application icon's 256 px image; everything else as it is shipped.
+SERVED_APP_ICON = "app-icon-256.png"
 
 
 def test_shared_ui_artwork_has_pinned_licensed_deployment_bytes() -> None:
     """Verify the shared native and web icons against pinned sources and served bytes.
 
     The shared icons live once in the UI element record; the native host embeds them and the
-    web build serves them under ``web/icons/shared``. Every third-party-derived one is recorded;
-    the rest are SugarSubstitute's own artwork.
+    web build serves them under ``web/icons/shared``. The application icon is an ICO the
+    executables embed; the page is served its 256 px PNG image. Every third-party-derived icon
+    is recorded; the rest are SugarSubstitute's own artwork.
     """
     manifest = tomllib.loads((ROOT / "third_party/manifest.toml").read_text("utf-8"))
     pending = dict(SHARED_UI_ARTWORK)
@@ -157,17 +170,37 @@ def test_shared_ui_artwork_has_pinned_licensed_deployment_bytes() -> None:
         for asset in component["asset"]:
             authored = asset["vendored_file"]
             assert authored.startswith("integrations/contracts/ui/icons/")
-            assert asset["runtime_file"] == "web/icons/shared/" + Path(authored).name
             recorded.add(Path(authored).name)
             contents = (ROOT / authored).read_bytes()
             assert hashlib.sha256(contents).hexdigest() == asset["sha256"]
+            if authored.endswith(".ico"):
+                assert asset["runtime_file"] == "web/icons/shared/" + SERVED_APP_ICON
+                (derivative,) = asset["generated_derivatives"]
+                served_icon = (ROOT / asset["runtime_file"]).read_bytes()
+                assert served_icon == largest_icon_image(contents)
+                assert hashlib.sha256(served_icon).hexdigest() == derivative["sha256"]
+                continue
+            assert asset["runtime_file"] == "web/icons/shared/" + Path(authored).name
             assert (ROOT / asset["runtime_file"]).read_bytes() == contents
     assert not pending
-    assert recorded == {"console-open.svg", "console-close.svg", "window-close.svg"}
-    shipped = {
-        path.name for path in (ROOT / "integrations/contracts/ui/icons").iterdir()
+    assert recorded == {
+        "console-open.svg",
+        "console-close.svg",
+        "window-close.svg",
+        "fluent-accept.svg",
+        "fluent-close.svg",
+        "app-icon.ico",
     }
-    served = {path.name for path in (ROOT / "web/icons/shared").iterdir()}
+    shipped = {
+        path.name
+        for path in (ROOT / "integrations/contracts/ui/icons").iterdir()
+        if path.suffix == ".svg"
+    }
+    served = {
+        path.name
+        for path in (ROOT / "web/icons/shared").iterdir()
+        if path.name != SERVED_APP_ICON
+    }
     assert shipped == served
     for name in shipped:
         contents = (ROOT / "integrations/contracts/ui/icons" / name).read_bytes()
@@ -181,6 +214,20 @@ def test_shared_ui_artwork_has_pinned_licensed_deployment_bytes() -> None:
                 "href" in key.lower() and not value.startswith("#")
                 for key, value in element.attrib.items()
             )
+
+
+def largest_icon_image(ico: bytes) -> bytes:
+    """Return the PNG bytes of the largest image an ICO file holds."""
+
+    reserved, kind, count = struct.unpack_from("<HHH", ico, 0)
+    assert (reserved, kind) == (0, 1) and count
+    entries = [
+        struct.unpack_from("<BBBBHHII", ico, 6 + index * 16) for index in range(count)
+    ]
+    width, _, _, _, _, _, size, offset = max(entries, key=lambda entry: entry[0] or 256)
+    image = ico[offset : offset + size]
+    assert image.startswith(b"\x89PNG") and (width or 256) == 256
+    return image
 
 
 def test_every_vendored_icon_has_exact_provenance_and_deployment_bytes() -> None:

@@ -70,20 +70,17 @@ export class ProximityMatcher {
     const candidates: Candidate[] = [];
     for (const output of endpoints.outputs) {
       for (const input of inputIndex.query(output, radius + 40)) {
-        if (isSameInstance(output, input)) continue;
-        if (!output.cube && !input.cube) continue;
+        // Only Cubes link by proximity; a plain node reaches a Cube through a real link.
+        if (isSameInstance(output, input) || output.cube == null || input.cube == null) continue;
         const pairKey = `${output.key}>${input.key}`;
         const releaseRadius = this.#previousPairs.has(pairKey) ? radius + 40 : radius;
         const dx = output.slotPos[0] - input.slotPos[0];
         const dy = output.slotPos[1] - input.slotPos[1];
         const distanceSquared = dx * dx + dy * dy;
-        const cubePair = output.cube != null && input.cube != null;
-        const adjacency = cubePair
-          ? resolveHorizontalAdjacency(output, input)
-          : Math.sqrt(distanceSquared);
+        const adjacency = resolveHorizontalAdjacency(output, input);
         if (
           adjacency > releaseRadius ||
-          (cubePair && !hasVerticalAdjacency(output.node, input.node, releaseRadius))
+          !hasVerticalAdjacency(output.node, input.node, releaseRadius)
         ) {
           continue;
         }
@@ -94,10 +91,10 @@ export class ProximityMatcher {
           output,
           input,
           pairKey,
-          cubePair,
           adjacency,
           distanceSquared,
-          score: Math.sqrt(distanceSquared) - (aliasMatch ? 40 : 0) - (typeMatch ? 20 : 0),
+          aliasMatch,
+          typeMatch,
         });
       }
     }
@@ -124,25 +121,21 @@ interface Candidate {
   output: ProximityOutputEndpoint;
   input: ProximityInputEndpoint;
   pairKey: string;
-  cubePair: boolean;
   adjacency: number;
   distanceSquared: number;
-  score: number;
+  aliasMatch: boolean;
+  typeMatch: boolean;
 }
 
-/** Prefer adjacent Cube pairs and then preserve canonical slot ordering. */
+/** Prefer the nearest neighbouring Cube and then preserve canonical slot ordering. */
 function compareCandidates(left: Candidate, right: Candidate): number {
-  if (left.cubePair !== right.cubePair) return left.cubePair ? -1 : 1;
-  if (left.cubePair && right.cubePair) {
-    return (
-      left.adjacency - right.adjacency ||
-      left.output.slot - right.output.slot ||
-      left.input.slot - right.input.slot ||
-      left.distanceSquared - right.distanceSquared ||
-      left.pairKey.localeCompare(right.pairKey)
-    );
-  }
-  return left.score - right.score || left.pairKey.localeCompare(right.pairKey);
+  return (
+    left.adjacency - right.adjacency ||
+    left.output.slot - right.output.slot ||
+    left.input.slot - right.input.slot ||
+    left.distanceSquared - right.distanceSquared ||
+    left.pairKey.localeCompare(right.pairKey)
+  );
 }
 
 /** Convert one selected candidate into overlay and prompt-routing data. */
@@ -173,8 +166,8 @@ function toMatch(candidate: Candidate): ProximityMatch {
     candidateDetails: {
       outType: output.type,
       inType: input.type,
-      aliasMatch: Boolean(output.alias && output.alias === input.alias),
-      typeMatch: normalizeCubePortType(output.type) === normalizeCubePortType(input.type),
+      aliasMatch: candidate.aliasMatch,
+      typeMatch: candidate.typeMatch,
     },
   };
 }

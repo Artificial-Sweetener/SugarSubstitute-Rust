@@ -115,8 +115,8 @@ export function orderNodesUpstreamFirst(nodes, graph, additionalEdges = []) {
 function nodeId(node, index) {
     return String(node.id ?? index);
 }
-/** Return source node identifiers for every resolvable incoming connection on one card. */
-function linkedOriginNodeIds(node, graph) {
+/** Return source node identifiers for every resolvable incoming connection on one node. */
+export function linkedOriginNodeIds(node, graph) {
     const ownerGraph = graph ?? node.graph;
     if (!ownerGraph)
         return [];
@@ -134,7 +134,7 @@ function inputLinkIds(input) {
     ];
 }
 /** Resolve one host graph link without coupling the ordering policy to a graph implementation. */
-function resolveGraphLink(graph, id) {
+export function resolveGraphLink(graph, id) {
     const fromMethod = graph.getLink?.(id);
     if (fromMethod)
         return fromMethod;

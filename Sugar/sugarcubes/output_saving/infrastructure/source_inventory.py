@@ -22,7 +22,7 @@ from collections.abc import Mapping, Callable
 
 from ...execution.models import ApiPrompt, ExecutionNodeOwner
 from ...execution.output_instrumentation import is_instrumented_cube_output
-from ...workflow_analysis import CubeGraphAnalysisService
+from ...workflow_analysis import CubeGraphAnalysisService, CubeStackView
 
 from ..domain.run_plan import SavingSource, SourceKind
 from ..domain.source_inventory import SavingSourceInventory
@@ -51,6 +51,7 @@ class ComfySavingSourceInventory:
         *,
         workflow: object,
         owners: Mapping[str, ExecutionNodeOwner] | None = None,
+        stack: CubeStackView | None = None,
     ) -> SavingSourceInventory:
         """Read workflow-local choices while retaining exact execution and source identities."""
         cube_nodes = {
@@ -73,12 +74,8 @@ class ComfySavingSourceInventory:
                 raise ValueError(
                     "Cube saving requires its serialized workflow to resolve active stack order."
                 )
-            analyzed = self._analysis.analyze(workflow)
-            ordered = tuple(
-                identity
-                for segment in analyzed.segments
-                for identity in segment.instance_ids
-            )
+            analyzed = self._analysis.analyze(workflow, stack)
+            ordered = analyzed.order
             positions = {
                 identity: index for index, identity in enumerate(ordered, start=1)
             }

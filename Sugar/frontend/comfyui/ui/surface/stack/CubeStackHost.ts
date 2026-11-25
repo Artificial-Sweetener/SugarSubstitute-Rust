@@ -16,7 +16,7 @@
 /** Bind one Vue rail to masonry, accepted appearance, persisted preferences and graph use cases. */
 import { readOwnedVisualStyle, subscribeVisualStyle } from '../appearance/VisualStyleBoundary.js';
 import { readPluginMode, subscribePluginMode } from '../../core/PluginMode.js';
-import type { CubeGraphReorderService } from '../../workflow/application/CubeGraphReorderService.js';
+import type { CubeChainService } from '../../cube/chain/CubeChainService.js';
 import type { UnknownRecord } from '../../types/common.js';
 import type { CubeIdentitySource } from '../../cube/CubeIdentityPresentation.js';
 import type { WorkflowMasonrySection } from '../masonry/WorkflowMasonryProjection.js';
@@ -40,10 +40,7 @@ import type {
   MountedCubeStackView,
 } from './CubeStackView.js';
 
-type StackReorder = Pick<
-  CubeGraphReorderService,
-  'analysis' | 'available' | 'pending' | 'subscribe' | 'move' | 'reorder' | 'refresh'
->;
+type StackChain = Pick<CubeChainService, 'available' | 'subscribe' | 'order' | 'move' | 'reorder'>;
 
 /** Address only already mounted masonry presentation through its explicit layout boundary. */
 export interface CubeStackSurface {
@@ -70,7 +67,7 @@ export interface CubeStackHostOptions {
   readonly document: Document;
   readonly app: unknown;
   readonly appearance: AppearanceSource;
-  getReorder(): StackReorder | null;
+  getChain(): StackChain | null;
   resolveSource(metadata: UnknownRecord): CubeIdentitySource | null;
   refreshSurface(): Promise<void>;
   revealSearchResults(): void;
@@ -95,8 +92,9 @@ export class CubeStackHost {
   #material: CubeStackMaterialMotion | null = null;
   #wheel: CubeStackWheelRouting | null = null;
   #surfaceVisible = true;
-  #reorder: StackReorder | null = null;
-  #unsubscribeReorder: (() => void) | null = null;
+  #chain: StackChain | null = null;
+  #unsubscribeChain: (() => void) | null = null;
+  #mutating = false;
   #selectedId: string | null = null;
   #scrollSelection: CubeStackScrollSelection | null = null;
   #started = false;
@@ -133,8 +131,8 @@ export class CubeStackHost {
       navigate: (id) => this.#navigate(id),
       previewOrder: (order) =>
         this.#view?.previewCubeOrder(order?.map((id) => `cube:${id}`) ?? null),
-      reorder: (id, order) => this.#mutate((service) => service.reorder(id, order)),
-      move: (id, delta) => this.#mutate((service) => service.move(id, delta)),
+      reorder: (_id, order) => this.#mutate((chain) => chain.reorder(order)),
+      move: (id, delta) => this.#mutate((chain) => chain.move(id, delta)),
       openCart: options.openCart,
       setCompact: (compact) =>
         void this.#preferences.setCompact(compact).catch(options.reportError),
@@ -220,9 +218,9 @@ export class CubeStackHost {
   release(): void {
     this.#options.closeTransient();
     this.#unmount();
-    this.#unsubscribeReorder?.();
-    this.#unsubscribeReorder = null;
-    this.#reorder = null;
+    this.#unsubscribeChain?.();
+    this.#unsubscribeChain = null;
+    this.#chain = null;
     this.#view = null;
     this.#selectedId = null;
     this.#scrollSelection?.dispose();
@@ -247,11 +245,11 @@ export class CubeStackHost {
       this.#publishFrame();
       return;
     }
-    const reorder = this.#options.getReorder();
-    if (this.#reorder !== reorder) {
-      this.#unsubscribeReorder?.();
-      this.#reorder = reorder;
-      this.#unsubscribeReorder = reorder?.subscribe(() => this.#reconcile()) ?? null;
+    const chain = this.#options.getChain();
+    if (this.#chain !== chain) {
+      this.#unsubscribeChain?.();
+      this.#chain = chain;
+      this.#unsubscribeChain = chain?.subscribe(() => this.#reconcile()) ?? null;
     }
     if (!this.#stackVisible()) {
       this.#view?.previewCubeOrder(null);
@@ -342,19 +340,18 @@ export class CubeStackHost {
     for (const listener of this.#frameListeners) listener();
   }
 
-  /** Derive all row facts from the current projection and exact canonical analysis snapshot. */
+  /** Derive all row facts from the current masonry projection, which holds the stack order. */
   #state(): CubeStackViewState {
     return {
       rows: projectCubeStackRows(
         this.#view?.sections ?? [],
-        this.#reorder?.analysis ?? null,
         this.#selectedId,
         this.#options.resolveSource,
-        this.#reorder?.available === true,
+        this.#chain?.available === true,
       ),
       compact: this.#preferences.snapshot.compact,
       packed: readMasonryPacked(this.#options.document),
-      pending: this.#reorder?.pending === true,
+      pending: this.#mutating,
       appearance:
         this.#options.appearance.appearance.style !== 'comfy'
           ? this.#options.appearance.appearance.style
@@ -373,14 +370,18 @@ export class CubeStackHost {
     this.#reconcile();
   }
 
-  /** Settle the accepted graph projection before Vue clears its temporary drag permutation. */
-  async #mutate(work: (service: StackReorder) => Promise<void>): Promise<void> {
-    const reorder = this.#reorder;
-    if (!reorder) throw new Error('Cube graph reorder is unavailable.');
-    await work(reorder);
-    await reorder.refresh();
-    await this.#options.refreshSurface();
-    this.#reconcile();
+  /** Change the graph, then settle masonry before Vue clears its temporary drag permutation. */
+  async #mutate(work: (chain: StackChain) => void): Promise<void> {
+    const chain = this.#chain;
+    if (!chain) throw new Error('The Cube stack is unavailable.');
+    this.#mutating = true;
+    try {
+      work(chain);
+      await this.#options.refreshSurface();
+    } finally {
+      this.#mutating = false;
+      this.#reconcile();
+    }
   }
 
   /** Suspend captured drag intent while motion owns geometry and re-enable only the latest entry. */

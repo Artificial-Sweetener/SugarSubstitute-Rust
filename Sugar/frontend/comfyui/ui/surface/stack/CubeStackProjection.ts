@@ -20,21 +20,18 @@ import {
   type CubeIdentitySource,
 } from '../../cube/CubeIdentityPresentation.js';
 import type { UnknownRecord } from '../../types/common.js';
-import type { CubeGraphAnalysis } from '../../workflow/domain/CubeGraphModels.js';
 import type { WorkflowMasonrySection } from '../masonry/WorkflowMasonryProjection.js';
-import { orderCanonicalCubeSections } from '../masonry/WorkflowMasonryProjection.js';
 import { cubeStackRowIdentity } from './CubeStackRowIdentity.js';
 import type { CubeStackNavigationRow } from './CubeStackView.js';
 
-/** Present compact stack identity while retaining canonical section order and full tooltips. */
+/** Present compact stack identity in the masonry's stack order, with full tooltips. */
 export function projectCubeStackRows(
   sections: readonly WorkflowMasonrySection[],
-  analysis: CubeGraphAnalysis | null,
   selectedId: string | null,
   resolveSource: (metadata: UnknownRecord) => CubeIdentitySource | null,
   available: boolean,
 ): readonly CubeStackNavigationRow[] {
-  return orderCanonicalCubeSections(sections, analysis).flatMap((section) => {
+  return sections.flatMap((section) => {
     const node = section.cube;
     if (!node) return [];
     const metadata = requireCubeIdentity(node);

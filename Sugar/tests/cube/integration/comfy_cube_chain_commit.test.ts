@@ -13,44 +13,72 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove complete carts use one native transaction and preserve existing objects on failure. */
+/** Prove a chain change is one undoable step that either fully applies or leaves the graph as it was. */
 import { expect, jest, test } from '@jest/globals';
-import { ComfyCubeStackCommitHost } from '../../../frontend/comfyui/ui/cube/stack/ComfyCubeStackCommitHost.js';
-import type { CubeStackCreation } from '../../../frontend/comfyui/ui/cube/stack/ComfyCubeStackCommitHost.js';
+import {
+  ComfyCubeChainCommitHost,
+  type CubeChainChange,
+  type CubeChainCreation,
+} from '../../../frontend/comfyui/ui/cube/chain/ComfyCubeChainCommitHost.js';
 import type { ConstructedCube } from '../../../frontend/comfyui/ui/cube/CubeConstructionService.js';
 import type { NativeCubeSubgraph } from '../../../frontend/comfyui/ui/cube/ComfyCubeGraphBuilder.js';
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
-import type {
-  CubeGraphAnalysis,
-  CubeGraphInstance,
-} from '../../../frontend/comfyui/ui/workflow/domain/CubeGraphModels.js';
-import type { GraphId } from '../../../frontend/comfyui/ui/types/graph.js';
+import type { ComfyLink, GraphId } from '../../../frontend/comfyui/ui/types/graph.js';
 
-test('adds, removes and moves with one coherent publication and a balanced history boundary', () => {
+test('adds, removes and moves in one step without replacing kept nodes or vectors', () => {
   const f = fixture();
   const vector = f.first.pos;
   const widgets = f.first.widgets;
-  f.host.commit(f.snapshot, plan(['added', 'first']), [f.creation]);
+  f.host.commit(
+    change({
+      creations: [f.creation],
+      removals: ['second'],
+      at: { added: [0, 0], first: [944, 0] },
+    }),
+  );
   expect([...f.root.values()]).toEqual([f.first, f.added]);
   expect(f.catalog.list()).toEqual([f.first, f.added]);
   expect(f.first.pos).toBe(vector);
   expect(f.first.widgets).toBe(widgets);
-  expect([...f.first.pos]).toEqual([244, 0]);
+  expect([...f.first.pos]).toEqual([944, 0]);
   expect(f.construct).toHaveBeenCalledWith(
     f.creation.payload,
-    expect.objectContaining({ instanceId: 'added', instanceAlias: 'added', size: [920, 600] }),
+    expect.objectContaining({ instanceId: 'added', instanceAlias: 'Added', size: [920, 600] }),
   );
-  expect(f.publications).toEqual([['first', 'added']]);
+  expect(f.reconcile).toHaveBeenCalledTimes(1);
   expect(f.before).toHaveBeenCalledTimes(1);
   expect(f.after).toHaveBeenCalledTimes(1);
   expect(f.discard).not.toHaveBeenCalled();
 });
 
-test.each(['construction', 'insertion', 'removal', 'position'] as const)(
-  'compensates %s failure without replacing existing nodes or vectors',
+test('rewires a hardwired Cube in the same step', () => {
+  const f = fixture();
+  f.link('first', 0, 'second', 0);
+  f.host.commit(
+    change({
+      at: { second: [0, 0], first: [944, 0] },
+      links: {
+        remove: [
+          { sourceInstance: 'first', sourceSlot: 0, targetInstance: 'second', targetSlot: 0 },
+        ],
+        add: [{ sourceInstance: 'second', sourceSlot: 0, targetInstance: 'first', targetSlot: 0 }],
+      },
+    }),
+  );
+  expect(f.second.inputs[0]?.link).toBeNull();
+  expect(f.links.get(f.first.inputs[0]?.link ?? -1)).toMatchObject({
+    origin_id: 'second',
+    target_id: 'first',
+  });
+  expect(f.before).toHaveBeenCalledTimes(1);
+});
+
+test.each(['construction', 'insertion', 'removal', 'position', 'wiring'] as const)(
+  'undoes everything after a %s failure, keeping existing nodes and vectors',
   (failure) => {
     const f = fixture();
+    f.link('first', 0, 'second', 0);
     const firstVector = f.first.pos;
     if (failure === 'construction')
       f.construct.mockImplementation(() => {
@@ -64,50 +92,52 @@ test.each(['construction', 'insertion', 'removal', 'position'] as const)(
         f.first.pos[1] = y;
         throw new Error('position failure');
       };
-    expect(() => f.host.commit(f.snapshot, plan(['added', 'first']), [f.creation])).toThrow(
-      `${failure} failure`,
-    );
+    if (failure === 'wiring') f.failConnect();
+    expect(() =>
+      f.host.commit(
+        change({
+          creations: [f.creation],
+          removals: failure === 'removal' ? ['second'] : [],
+          at: { added: [0, 0], first: [944, 0] },
+          links: {
+            remove: [
+              { sourceInstance: 'first', sourceSlot: 0, targetInstance: 'second', targetSlot: 0 },
+            ],
+            add:
+              failure === 'removal'
+                ? []
+                : [
+                    {
+                      sourceInstance: 'added',
+                      sourceSlot: 0,
+                      targetInstance: 'second',
+                      targetSlot: 0,
+                    },
+                  ],
+          },
+        }),
+      ),
+    ).toThrow(failure === 'wiring' ? 'could not be wired' : `${failure} failure`);
     expect(new Set(f.root.values())).toEqual(new Set([f.first, f.second]));
     expect(new Set(f.catalog.list())).toEqual(new Set([f.first, f.second]));
     expect(f.first.pos).toBe(firstVector);
     expect([...f.first.pos]).toEqual([0, 0]);
-    expect([...f.second.pos]).toEqual([244, 0]);
+    expect([...f.second.pos]).toEqual([944, 0]);
+    expect(f.links.get(f.second.inputs[0]?.link ?? -1)).toMatchObject({ origin_id: 'first' });
     expect(f.before).toHaveBeenCalledTimes(1);
     expect(f.after).toHaveBeenCalledTimes(1);
     expect(f.discardDefinitions).toHaveBeenCalledTimes(1);
-    expect(f.publications).toHaveLength(
-      failure === 'construction' || failure === 'insertion' ? 0 : 1,
-    );
   },
 );
 
-test('declines stale, incomplete and duplicate plans before native history begins', () => {
+test('an unchanged chain opens no undo step', () => {
   const f = fixture();
-  const target = plan(['first', 'second']);
-  expect(() => f.host.commit({ ...f.snapshot, revision: 'stale' }, target, [])).toThrow(
-    'Workflow changed',
-  );
-  expect(() =>
-    f.host.commit(
-      f.snapshot,
-      { ...target, placements: [...target.placements, target.placements[0]!] },
-      [],
-    ),
-  ).toThrow('duplicate');
-  expect(() => f.host.commit(f.snapshot, plan(['added', 'first']), [])).toThrow('unprepared');
-  f.retire();
-  expect(() => f.host.commit(f.snapshot, target, [])).toThrow('Workflow changed');
+  f.host.commit(change({ at: { first: [0, 0], second: [944, 0] } }));
   expect(f.before).not.toHaveBeenCalled();
+  expect(f.reconcile).not.toHaveBeenCalled();
 });
 
-test('unchanged carts produce no history transaction or publication', () => {
-  const f = fixture();
-  f.host.commit(f.snapshot, plan(['first', 'second']), []);
-  expect(f.before).not.toHaveBeenCalled();
-  expect(f.publications).toEqual([]);
-});
-
-test('reports both construction and failed definition cleanup', () => {
+test('reports both a construction failure and a failed definition cleanup', () => {
   const f = fixture();
   const original = new Error('construction failure');
   const cleanup = new Error('cleanup failure');
@@ -118,35 +148,78 @@ test('reports both construction and failed definition cleanup', () => {
     throw cleanup;
   });
   try {
-    f.host.commit(f.snapshot, plan(['first', 'added']), [f.creation]);
+    f.host.commit(change({ creations: [f.creation], at: { added: [0, 0] } }));
     throw new Error('Expected construction failure');
   } catch (error: unknown) {
     expect(error).toBeInstanceOf(AggregateError);
-    if (error instanceof AggregateError) expect(error.errors).toEqual([original, cleanup]);
+    if (error instanceof AggregateError) expect(error.errors[0]).toBe(original);
   }
   expect(f.after).toHaveBeenCalledTimes(1);
 });
 
-/** Supply real catalog and mutable native vectors with failure injection only at host APIs. */
+/** Describe one chain change by instance id. */
+function change(parts: {
+  creations?: CubeChainCreation[];
+  removals?: string[];
+  at?: Record<string, [number, number]>;
+  links?: CubeChainChange['links'];
+}): CubeChainChange {
+  return {
+    creations: parts.creations ?? [],
+    additions: [],
+    removals: parts.removals ?? [],
+    positions: new Map(Object.entries(parts.at ?? {})),
+    links: parts.links ?? { remove: [], add: [] },
+  };
+}
+
+/** Supply a real catalog and mutable native vectors with failures injected only at host APIs. */
 function fixture() {
+  const links = new Map<GraphId, ComfyLink>();
+  let nextLink = 1;
+  let connectFailure = false;
   const first = node('first', 0);
-  const second = node('second', 244);
+  const second = node('second', 944);
   const added = node('added', 0);
   const root = new Map<GraphId, CubeNode>([
     [first.id, first],
     [second.id, second],
   ]);
+  for (const value of [first, second, added]) {
+    value.connect = (sourceSlot: number, target: unknown, targetSlot: number) => {
+      if (connectFailure) {
+        connectFailure = false;
+        return null;
+      }
+      const to = target as CubeNode;
+      const id = nextLink++;
+      links.set(id, {
+        id,
+        origin_id: value.id,
+        origin_slot: sourceSlot,
+        target_id: to.id,
+        target_slot: targetSlot,
+      });
+      const input = to.inputs[targetSlot];
+      if (input) input.link = id;
+      return {};
+    };
+    Object.assign(value, {
+      disconnectInput: (slot: number) => {
+        const input = value.inputs[slot];
+        if (input?.link !== null && input?.link !== undefined) links.delete(input.link);
+        if (input) input.link = null;
+      },
+    });
+  }
   const catalog = new CubeNodeCatalog();
   catalog.add(first);
   catalog.add(second);
-  const publications: string[][] = [];
-  catalog.subscribe(() => publications.push(catalog.list().map((value) => String(value.id))));
-  const snapshot = { revision: 'opening', serializedWorkflow: '{}' };
-  let available = true;
   let addFailure = false;
   let removeFailure = false;
   const before = jest.fn();
   const after = jest.fn();
+  const reconcile = jest.fn();
   const construct = jest.fn(
     (): ConstructedCube => ({
       node: added,
@@ -157,18 +230,13 @@ function fixture() {
   );
   const discard = jest.fn();
   const discardDefinitions = jest.fn();
-  const creation: CubeStackCreation = {
+  const creation: CubeChainCreation = {
     instanceId: 'added',
+    alias: 'Added',
     payload: { cube: { cube_id: 'demo' } },
     size: [920, 600],
   };
-  const host = new ComfyCubeStackCommitHost({
-    snapshots: {
-      get available() {
-        return available;
-      },
-      snapshot: () => snapshot,
-    },
+  const host = new ComfyCubeChainCommitHost({
     graph: {
       add(value) {
         root.set(value.id, value);
@@ -185,7 +253,7 @@ function fixture() {
         }
       },
       getNodeById: (id) => root.get(id),
-      getLink: () => null,
+      getLink: (id) => links.get(id) ?? null,
     },
     nodes: catalog,
     history: { beforeChange: before, afterChange: after, setDirtyCanvas: jest.fn() },
@@ -194,6 +262,8 @@ function fixture() {
       stage: (payload) => ({ payload, definitionIds: ['nested'] }),
       discard: discardDefinitions,
     },
+    reconcile,
+    announce: () => undefined,
   });
   return {
     host,
@@ -201,17 +271,19 @@ function fixture() {
     second,
     added,
     root,
+    links,
     catalog,
-    snapshot,
     creation,
     construct,
     discard,
     discardDefinitions,
-    publications,
+    reconcile,
     before,
     after,
-    retire: () => {
-      available = false;
+    link: (source: string, sourceSlot: number, target: string, targetSlot: number) => {
+      const from = root.get(source);
+      const to = root.get(target);
+      if (from && to) from.connect(sourceSlot, to, targetSlot);
     },
     failAfterAdd: () => {
       addFailure = true;
@@ -219,10 +291,13 @@ function fixture() {
     failAfterRemove: () => {
       removeFailure = true;
     },
+    failConnect: () => {
+      connectFailure = true;
+    },
   };
 }
 
-/** Construct a native subgraph-node fixture with stable live widgets and vector identity. */
+/** Construct a native subgraph-node fixture with one image port each way. */
 function node(id: string, x: number): CubeNode {
   const subgraph: NativeCubeSubgraph = {
     id: `definition-${id}`,
@@ -244,38 +319,16 @@ function node(id: string, x: number): CubeNode {
   };
   return {
     id,
+    title: id,
     pos: new Float32Array([x, 0]),
     size: [920, 600],
     properties: { sugarcubes_cube: { instance_id: id } },
-    inputs: [],
-    outputs: [],
+    inputs: [{ name: 'image', type: 'IMAGE', link: null }],
+    outputs: [{ name: 'image', type: 'IMAGE', links: [] }],
     widgets: [{ name: 'prompt', value: 'retained' }],
     subgraph,
     isSubgraphNode: () => true,
     serialize: () => ({}),
     connect() {},
-  };
-}
-
-/** Describe the backend-approved final order without using native numeric identifiers for new instances. */
-function plan(ids: readonly string[]): CubeGraphAnalysis {
-  const instances: CubeGraphInstance[] = ids.map((id) => ({
-    instanceId: id,
-    nodeId: id === 'added' ? 'server-node-id' : id,
-    definitionId: `definition-${id}`,
-    cubeId: 'demo',
-    version: '1',
-    alias: id,
-    executionMode: 0,
-  }));
-  return {
-    semanticHash: 'hash',
-    instances,
-    segments: [{ instanceIds: ids, reorderable: true, boundaryNodeIds: [] }],
-    placements: instances.map((instance, index) => ({
-      instanceId: instance.instanceId,
-      nodeId: instance.nodeId,
-      position: [index * 244, 0],
-    })),
   };
 }

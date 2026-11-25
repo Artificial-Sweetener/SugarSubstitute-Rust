@@ -30,7 +30,6 @@ import {
 import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
 import { projectCubeStackRows } from '../../../frontend/comfyui/ui/surface/stack/CubeStackProjection.js';
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
-import type { CubeGraphAnalysis } from '../../../frontend/comfyui/ui/workflow/domain/CubeGraphModels.js';
 import { CubeStackDrawerMotion } from '../../../frontend/comfyui/ui/surface/stack/CubeStackDrawerMotion.js';
 import { SubstituteFrameMode } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameMode.js';
 import { publishPluginMode } from '../../../frontend/comfyui/ui/core/PluginMode.js';
@@ -41,7 +40,7 @@ import type { InsetMotion } from '../../../frontend/comfyui/ui/surface/appearanc
 test('Plugin Mode compacts the existing rail and removes extra space before the cards', async () => {
   const frame = new SubstituteFrameMode();
   frame.setEnabled(true);
-  const fixture = setup(true, true, frame);
+  const fixture = setup(true, frame);
   fixture.surface.element.className = 'sugarcubes-workflow-masonry';
   ensureWorkflowMasonryStyles(document);
   const style = document.createElement('style');
@@ -69,7 +68,7 @@ test('Plugin Mode compacts the existing rail and removes extra space before the 
 
 test('frame mode changes allocation without replacing the existing rail or accent indicator', async () => {
   const frame = new SubstituteFrameMode();
-  const fixture = setup(true, true, frame);
+  const fixture = setup(true, frame);
   fixture.host.setup();
   fixture.host.ready(fixture.surface, false);
   await nextTick();
@@ -249,7 +248,6 @@ test.each([
   };
   const rows = projectCubeStackRows(
     [{ id: 'cube:first', label: 'first', cube, target: cube, cards: [] }],
-    null,
     'first',
     () => null,
     true,
@@ -300,7 +298,6 @@ test.each([
   };
   const rows = projectCubeStackRows(
     [{ id: 'cube:first', label: title, cube, target: cube, cards: [] }],
-    null,
     'first',
     () => null,
     true,
@@ -477,9 +474,9 @@ test('holds clicked selection during programmatic scroll and resumes whole-cube 
 });
 
 test.each([true, false])(
-  'uses root mutation availability while analysis refreshes (%s)',
+  'lets rows be dragged exactly when the root workflow can change (%s)',
   async (available) => {
-    const fixture = setup(false, available);
+    const fixture = setup(available);
     fixture.host.setup();
     fixture.host.ready(fixture.surface);
     await nextTick();
@@ -490,7 +487,7 @@ test.each([true, false])(
 );
 
 /** Provide existing mounted topology with native-shaped Cube identity and isolated host ports. */
-function setup(analysisAvailable = true, available = true, frame?: SubstituteFrameMode) {
+function setup(available = true, frame?: SubstituteFrameMode) {
   const settings = new Map<string, { onChange(value: unknown): void }>();
   const appearance = new AppearanceState();
   const container = document.createElement('div');
@@ -509,25 +506,7 @@ function setup(analysisAvailable = true, available = true, frame?: SubstituteFra
     scrollToSection: jest.fn<(id: string) => void>(),
   } satisfies CubeStackSurface;
   const listeners = new Set<() => void>();
-  const analysis: CubeGraphAnalysis = {
-    semanticHash: 'a'.repeat(64),
-    instances: ['first', 'second'].map((instanceId) => ({
-      instanceId,
-      nodeId: instanceId,
-      definitionId: instanceId,
-      cubeId: instanceId,
-      version: '1',
-      alias: instanceId,
-      executionMode: 0,
-    })),
-    placements: ['first', 'second'].map((instanceId, index) => ({
-      instanceId,
-      nodeId: instanceId,
-      position: [index * 344, 0],
-    })),
-    segments: [{ instanceIds: ['first', 'second'], reorderable: true, boundaryNodeIds: [] }],
-  };
-  const move = jest.fn(async (_id: string, _delta: -1 | 1) => undefined);
+  const move = jest.fn((_id: string, _delta: -1 | 1) => undefined);
   const revealSearchResults = jest.fn();
   const refreshSurface = jest.fn(async () => undefined);
   const openCart = jest.fn();
@@ -550,13 +529,11 @@ function setup(analysisAvailable = true, available = true, frame?: SubstituteFra
     },
     appearance,
     ...(frame ? { frame } : {}),
-    getReorder: () => ({
-      analysis: analysisAvailable ? analysis : null,
+    getChain: () => ({
       available,
-      pending: false,
+      order: () => ['first', 'second'],
       move,
-      reorder: async () => undefined,
-      refresh: async () => analysis,
+      reorder: () => undefined,
       subscribe(listener) {
         listeners.add(listener);
         return () => listeners.delete(listener);

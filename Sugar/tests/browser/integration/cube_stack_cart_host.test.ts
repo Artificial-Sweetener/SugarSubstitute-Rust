@@ -21,9 +21,7 @@ import { CubeStackCartSession } from '../../../frontend/comfyui/ui/picker/applic
 import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
 import { createFallbackIconModel } from '../../../frontend/comfyui/ui/core/CubeFallbackIconRenderer.js';
 import type { CapturedCubeStackCart } from '../../../frontend/comfyui/ui/picker/infrastructure/CubeStackCartFactory.js';
-import type { CubeGraphStackEntry } from '../../../frontend/comfyui/ui/workflow/domain/CubeGraphStackModels.js';
 import type { CubeStackLibraryRow } from '../../../frontend/comfyui/ui/picker/CubeStackCartView.js';
-import type { CubeGraphAnalysis } from '../../../frontend/comfyui/ui/workflow/domain/CubeGraphModels.js';
 
 const hosts: CubeStackCartHost[] = [];
 beforeEach(() => {
@@ -55,7 +53,9 @@ test('Cancel while opening disposes late capture without mounting or applying it
 
 test('Apply keeps failed edits visible, uses literal error text and permits one successful retry', async () => {
   const f = fixture();
-  f.plan.mockRejectedValueOnce(new Error('<b>Fixed by wiring</b>'));
+  f.commit.mockImplementationOnce(() => {
+    throw new Error('<b>Fixed by wiring</b>');
+  });
   const host = f.host(async () => f.capture);
   const result = host.open();
   await settle();
@@ -71,33 +71,9 @@ test('Apply keeps failed edits visible, uses literal error text and permits one 
   button('Apply').click();
   await result;
   await settle();
-  expect(f.commit).toHaveBeenCalledTimes(1);
+  expect(f.commit).toHaveBeenCalledTimes(2);
   expect(f.applied).toHaveBeenCalledTimes(1);
   expect(f.errors).toHaveBeenCalledTimes(1);
-});
-
-test('renderer/workflow teardown invalidates a pending plan before any native commit', async () => {
-  const f = fixture();
-  let finish: ((analysis: CubeGraphAnalysis) => void) | undefined;
-  f.plan.mockImplementation(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve;
-      }),
-  );
-  const host = f.host(async () => f.capture);
-  const result = host.open();
-  await settle();
-  document.querySelector<HTMLButtonElement>('[aria-label="Cube library"] button')!.click();
-  button('Apply').click();
-  expect(button('Cancel').disabled).toBe(true);
-  expect(button('Reset').disabled).toBe(true);
-  host.close();
-  finish?.(analysis(['new-1']));
-  await result;
-  await settle();
-  expect(f.commit).not.toHaveBeenCalled();
-  expect(f.applied).not.toHaveBeenCalled();
 });
 
 test('Reset restores the captured draft and appearance changes retain search and row controls', async () => {
@@ -239,18 +215,12 @@ async function settle(): Promise<void> {
 }
 /** Bind a real application session while replacing only external planning and native commit. */
 function fixture() {
-  const snapshot = { revision: 'opening', serializedWorkflow: '{}' };
-  const commit = jest.fn();
-  const plan = jest.fn(
-    async (_snapshot: typeof snapshot, entries: readonly CubeGraphStackEntry[]) =>
-      analysis(entries.map((entry) => entry.instanceId)),
-  );
+  const commit = jest.fn((_requested: readonly unknown[]) => []);
   const appearance = new AppearanceState();
   const artifactRows = new Map<string, CubeStackLibraryRow>();
   const capture: CapturedCubeStackCart = {
     session: new CubeStackCartSession({
-      snapshot,
-      analysis: analysis([]),
+      order: [],
       artifacts: [
         {
           catalogKey: 'artifact',
@@ -261,9 +231,8 @@ function fixture() {
           size: [320, 180],
         },
       ],
-      snapshots: { available: true, snapshot: () => snapshot },
-      gateway: { applyStack: plan },
-      commit: { commit },
+      chain: { order: () => [], apply: commit },
+      prepare: () => ({}),
       createId: () => 'new-1',
     }),
     existingRows: new Map(),
@@ -293,7 +262,6 @@ function fixture() {
   return {
     capture,
     commit,
-    plan,
     appearance,
     errors,
     applied,
@@ -308,26 +276,5 @@ function fixture() {
       hosts.push(host);
       return host;
     },
-  };
-}
-/** Return a complete canonical new-instance result for the cart's exact staged order. */
-function analysis(ids: readonly string[]): CubeGraphAnalysis {
-  return {
-    semanticHash: 'hash',
-    instances: ids.map((instanceId) => ({
-      instanceId,
-      nodeId: instanceId,
-      definitionId: instanceId,
-      cubeId: 'cube',
-      version: '1',
-      alias: 'Cube',
-      executionMode: 0,
-    })),
-    segments: [{ instanceIds: ids, reorderable: true, boundaryNodeIds: [] }],
-    placements: ids.map((instanceId, index) => ({
-      instanceId,
-      nodeId: instanceId,
-      position: [index * 344, 0],
-    })),
   };
 }

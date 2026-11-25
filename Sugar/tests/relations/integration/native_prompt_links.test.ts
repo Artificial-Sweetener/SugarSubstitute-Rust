@@ -28,7 +28,8 @@ import {
   CubeRelationPresenter,
   type RelationCardView,
 } from '../../../frontend/comfyui/ui/relations/presentation/CubeRelationPresenter.js';
-import { ComfyCubeGraphReorderHost } from '../../../frontend/comfyui/ui/workflow/infrastructure/ComfyCubeGraphReorderHost.js';
+import { ComfyCubeChainCommitHost } from '../../../frontend/comfyui/ui/cube/chain/ComfyCubeChainCommitHost.js';
+import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js';
 import { ensureRelationStyles } from '../../../frontend/comfyui/ui/relations/presentation/RelationStyles.js';
 import { NativeRelationVisibility } from '../../../frontend/comfyui/ui/relations/infrastructure/NativeRelationVisibility.js';
 import {
@@ -326,6 +327,8 @@ test('a pasted Cube joins linking only once it has an identity of its own', () =
   const a = nativeCube('a', [prompt('positive', 'Positive', 'a positive')], 0);
   const b = nativeCube('b', [prompt('positive', 'Positive', 'b positive')], 800);
   const pasted = nativeCube('b', [prompt('positive', 'Positive', 'b positive')], 1600);
+  // Comfy gives a pasted node an id of its own; only the Cube identity is copied.
+  pasted.id = 'pasted';
   const graph: ComfyGraph = { _nodes: [a, b], extra: {} };
   const port = new NativeRelationWorkflowPort(
     () => graph,
@@ -350,7 +353,7 @@ test('a pasted Cube joins linking only once it has an identity of its own', () =
   });
 });
 
-test('excludes connected prompt widgets and resource inheritance while retaining Cube placement order', () => {
+test('excludes connected prompt widgets and resource inheritance and lists Cubes in the order they run', () => {
   const connected = prompt('connected', 'Positive', 'upstream owns this');
   connected.inputs = [{ name: 'value', widget: { name: 'value' }, link: 0 }];
   const loader: NativeGraphNode = {
@@ -373,9 +376,10 @@ test('excludes connected prompt widgets and resource inheritance while retaining
   expect(inventory.nodes.filter((n) => n.linkable).map((n) => n.cubeId)).toEqual(['b']);
   expect(inventory.fields.some((f) => f.contract.value === 'upstream owns this')).toBe(false);
   expect(inventory.nodes.filter((n) => n.cubeId === 'a').every((n) => !n.linkable)).toBe(true);
+  // b feeds a, so a reads after b wherever the two sit.
   expect(projectWorkflowMasonry(graph, [a, b], connections).map((s) => s.cube?.id)).toEqual([
-    'a',
     'b',
+    'a',
   ]);
 });
 
@@ -415,19 +419,28 @@ test('records prompt promotion and Cube placement in one native history transact
     expect(a.pos?.[0]).toBe(800);
     expect(b.pos?.[0]).toBe(0);
   });
-  const host = new ComfyCubeGraphReorderHost({
-    graph,
-    isCurrentRoot: () => true,
+  const nodes = new CubeNodeCatalog();
+  nodes.add(a as CubeNode);
+  nodes.add(b as CubeNode);
+  const host = new ComfyCubeChainCommitHost({
+    graph: { add() {}, remove() {}, getNodeById: () => null, getLink: () => null },
+    nodes,
     history: { beforeChange: entryBefore, afterChange: entryAfter, setDirtyCanvas() {} },
-    reconcileOrder: () => port.joinTransaction(() => relations.reconcile()),
-    onCommitted() {},
+    construction: { construct: unused, discard: () => undefined },
+    definitions: { stage: unused, discard: () => undefined },
+    reconcile: () => port.joinTransaction(() => relations.reconcile()),
+    announce: () => graph.afterChange?.(),
   });
-  expect(
-    host.commit(host.snapshot(), [
-      { instanceId: 'a', nodeId: 'a', position: [800, 0] },
-      { instanceId: 'b', nodeId: 'b', position: [0, 0] },
+  host.commit({
+    creations: [],
+    additions: [],
+    removals: [],
+    positions: new Map([
+      ['a', [800, 0]],
+      ['b', [0, 0]],
     ]),
-  ).toBe(true);
+    links: { remove: [], add: [] },
+  });
   expect(entryBefore).toHaveBeenCalledTimes(1);
   expect(entryAfter).toHaveBeenCalledTimes(1);
   expect(beforeChange).not.toHaveBeenCalled();
@@ -442,3 +455,8 @@ test('records prompt promotion and Cube placement in one native history transact
   expect(beforeChange).toHaveBeenCalledTimes(1);
   expect(afterChange).toHaveBeenCalledTimes(2);
 });
+
+/** No Cube is constructed in this proof. */
+function unused(): never {
+  throw new Error('No Cube is constructed here.');
+}

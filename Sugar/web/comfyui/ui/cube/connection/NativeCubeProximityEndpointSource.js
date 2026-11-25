@@ -32,7 +32,7 @@ export class NativeCubeProximityEndpointSource {
         this.#boundaryResolver = boundaryResolver;
         this.#portPresentation = portPresentation;
     }
-    /** Discover every currently unlinked root slot that can participate with a Cube. */
+    /** Discover every unlinked Cube boundary slot; only Cubes link by proximity. */
     discover(graphValue) {
         if (!isRecord(graphValue))
             return { outputs: [], inputs: [] };
@@ -40,7 +40,7 @@ export class NativeCubeProximityEndpointSource {
         const outputs = [];
         const inputs = [];
         for (const node of getGraphNodes(graph)) {
-            if (node.id == null)
+            if (node.id == null || !isCubeNode(node))
                 continue;
             const identity = readEndpointIdentity(node);
             for (let slot = 0; slot < (node.outputs?.length ?? 0); slot += 1) {
@@ -115,19 +115,11 @@ export class NativeCubeProximityEndpointSource {
         ].join(';');
         this.#logger.debug(`SugarCubes discovered ${String(outputs.length)} output and ` +
             `${String(inputs.length)} input proximity endpoints` +
-            `${positions ? ` at ${positions}` : ''}.`, {
-            outputs: outputs.length,
-            inputs: inputs.length,
-            cubeOutputs: outputs.filter((endpoint) => endpoint.cube != null).length,
-            cubeInputs: inputs.filter((endpoint) => endpoint.cube != null).length,
-        });
+            `${positions ? ` at ${positions}` : ''}.`, { outputs: outputs.length, inputs: inputs.length });
     }
 }
-/** Read durable Cube identity while keeping ordinary nodes eligible as counterparts. */
+/** Read one Cube's durable identity. */
 function readEndpointIdentity(node) {
-    if (!isCubeNode(node)) {
-        return { cube: null, instanceId: String(node.id ?? '') };
-    }
     const identity = requireCubeIdentity(node);
     const cube = readString(identity.cube_id) ??
         readString(identity.definition_id) ??

@@ -45,6 +45,12 @@ def read_cube_pair(value: object, label: str) -> tuple[float, float]:
     return float(first), float(second)
 
 
+def chain_position_after(left: float, width: float) -> float:
+    """Return where the next Cube of a chain starts after one at ``left`` of ``width``."""
+
+    return left + max(0.0, width) + MINIMUM_CUBE_GAP
+
+
 def cube_position_order(
     workflow: Mapping[str, object], node_ids: Mapping[str, str]
 ) -> tuple[str, ...]:

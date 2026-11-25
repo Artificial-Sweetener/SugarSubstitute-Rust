@@ -245,6 +245,17 @@ export class ProximityOverlay {
     return matches;
   }
 
+  /** The proximity links the graph has right now, recomputed so a move just made counts. */
+  liveMatches(graph?: ProximityGraph | null): readonly ProximityMatch[] {
+    if (!this.settings.enabled) return [];
+    const matches = this.computeMatches(
+      graph ?? this.adapter?.getApp?.()?.canvas?.graph ?? this.adapter?.getApp?.()?.graph,
+      this.settings,
+    );
+    this.updateOverlay(matches);
+    return matches;
+  }
+
   /** Return endpoint-only state for opt-in host diagnostics. */
   executionDebugState(): UnknownRecord {
     return {

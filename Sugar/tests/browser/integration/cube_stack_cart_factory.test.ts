@@ -13,26 +13,17 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove cart capture uses opening catalog/import geometry and rejects changing graph lifetimes. */
+/** Prove cart capture uses opening catalog/import geometry and applies through the Cube chain. */
 import { expect, jest, test } from '@jest/globals';
 import { CubeStackCartFactory } from '../../../frontend/comfyui/ui/picker/infrastructure/CubeStackCartFactory.js';
 import type { CubePickerDescriptor } from '../../../frontend/comfyui/ui/picker/CubePickerDescriptor.js';
-import type { CubeGraphAnalysis } from '../../../frontend/comfyui/ui/workflow/domain/CubeGraphModels.js';
-import type { CubeGraphStackEntry } from '../../../frontend/comfyui/ui/workflow/domain/CubeGraphStackModels.js';
 import type { ImportPayload } from '../../../frontend/comfyui/ui/import/PlacementPayload.js';
+import type { CubeStackRequest } from '../../../frontend/comfyui/ui/picker/application/CubeStackCartSession.js';
 
 test('captures exact opening payloads and renderer-planned sizes without constructing native nodes', async () => {
   const f = fixture();
   const capture = await f.factory.open();
-  expect(f.events).toEqual([
-    'ready',
-    'scope',
-    'snapshot',
-    'analysis',
-    'snapshot',
-    'size',
-    'snapshot',
-  ]);
+  expect(f.events).toEqual(['ready', 'scope', 'size', 'order']);
   expect(capture.library[0]?.role).toBe('Start cubes');
   expect(capture.library[0]?.models).toEqual(['SDXL']);
   expect(capture.library[0]?.targetModel).toBe('SDXL');
@@ -43,9 +34,9 @@ test('captures exact opening payloads and renderer-planned sizes without constru
   f.payload.document = { cube_id: 'cube', version: 'later' };
   capture.session.add(f.descriptor.key);
   capture.session.add(f.descriptor.key);
-  await expect(capture.session.apply()).resolves.toBe(true);
+  expect(capture.session.apply()).toBe(true);
   expect(f.commit).toHaveBeenCalledTimes(1);
-  const creations = f.commit.mock.calls[0]![2];
+  const creations = created(f.commit.mock.calls[0]![0]);
   expect(creations.map((item) => item.instanceId)).toEqual(['new-1', 'new-2']);
   expect(creations.map((item) => item.payload.document)).toEqual([
     { cube_id: 'cube', version: '1' },
@@ -68,8 +59,8 @@ test('refresh preserves staged definitions and captures new catalog generations 
   expect(capture.artifactRows.get(originalKey)?.label).toBe('Cube');
   expect(capture.artifactRows.get(updatedKey)?.label).toBe('Refreshed Cube');
   capture.session.add(updatedKey);
-  await capture.session.apply();
-  expect(f.commit.mock.calls[0]![2].map((item) => item.payload.document)).toEqual([
+  capture.session.apply();
+  expect(created(f.commit.mock.calls[0]![0]).map((item) => item.payload.document)).toEqual([
     { cube_id: 'cube', version: '1' },
     { cube_id: 'cube', version: '1', updated: true },
   ]);
@@ -102,36 +93,16 @@ test('unchanged refresh preserves row identity and skips frame and placement pre
   expect(f.events).not.toContain('size');
   expect(f.events).not.toContain('prepared');
   capture.session.add(row.catalogKey);
-  await capture.session.apply();
+  capture.session.apply();
   expect(f.events.filter((event) => event === 'prepared')).toHaveLength(2);
 });
 
-test.each(['reorder', 'stale', 'disposed', 'portable'] as const)(
-  'rejects %s capture before a cart can edit or commit',
-  async (reason) => {
-    const f = fixture();
-    if (reason === 'reorder') f.runtime.reorder.pending = true;
-    if (reason === 'stale')
-      f.runtime.reorder.refresh = async () => {
-        f.revision = 'changed';
-        return analysis([]);
-      };
-    if (reason === 'disposed')
-      f.runtime.reorder.refresh = async () => {
-        f.runtime.graphSnapshots.available = false;
-        return analysis([]);
-      };
-    if (reason === 'portable') delete f.payload.document;
-    await expect(f.factory.open()).rejects.toThrow(
-      reason === 'reorder'
-        ? 'reordering'
-        : reason === 'portable'
-          ? 'portable document'
-          : 'Workflow changed',
-    );
-    expect(f.commit).not.toHaveBeenCalled();
-  },
-);
+test('rejects a Cube without a portable document before a cart can edit or commit', async () => {
+  const f = fixture();
+  delete f.payload.document;
+  await expect(f.factory.open()).rejects.toThrow('portable document');
+  expect(f.commit).not.toHaveBeenCalled();
+});
 
 /** Bind narrow external ports and keep every captured artifact isolated as the real registry does. */
 function fixture() {
@@ -157,38 +128,19 @@ function fixture() {
     document: { cube_id: 'cube', version: '1' },
     nodes: [],
   };
-  const commit = jest.fn<
-    (
-      opening: typeof snapshot,
-      result: CubeGraphAnalysis,
-      creations: readonly {
-        instanceId: string;
-        payload: ImportPayload;
-        size: readonly [number, number];
-      }[],
-    ) => void
-  >();
-  const snapshot = { revision: 'opening', serializedWorkflow: '{}' };
-  const state = { revision: 'opening' };
+  const commit = jest.fn((_requested: readonly CubeStackRequest<ImportPayload>[]) => []);
   const runtime = {
     graphScope: {
       assertCurrentRoot: () => {
         events.push('scope');
       },
     },
-    reorder: {
-      pending: false,
-      refresh: async () => {
-        events.push('analysis');
-        return analysis([]);
+    chain: {
+      order: () => {
+        events.push('order');
+        return [];
       },
-    },
-    graphSnapshots: {
-      available: true,
-      snapshot: () => {
-        events.push('snapshot');
-        return { ...snapshot, revision: state.revision };
-      },
+      apply: commit,
     },
     construction: {
       previewSize: () => {
@@ -197,7 +149,6 @@ function fixture() {
       },
     },
     nodes: { list: () => [] },
-    stackCommit: { commit },
   };
   const refreshCatalog = jest.fn(async () => {
     events.push('catalog');
@@ -212,10 +163,6 @@ function fixture() {
         events.push('prepared');
         return { descriptor: captured, payload, options: {} };
       },
-    },
-    gateway: {
-      applyStack: async (_snapshot, entries: readonly CubeGraphStackEntry[]) =>
-        analysis(entries.map((entry) => entry.instanceId)),
     },
     getRuntime: () => runtime,
     ensureCatalog: async () => {
@@ -232,32 +179,9 @@ function fixture() {
     commit,
     events,
     refreshCatalog,
-    get revision() {
-      return state.revision;
-    },
-    set revision(value: string) {
-      state.revision = value;
-    },
   };
 }
-/** Return exact canonical opening/new identities while external planning remains a replaceable boundary. */
-function analysis(ids: readonly string[]): CubeGraphAnalysis {
-  return {
-    semanticHash: 'hash',
-    instances: ids.map((instanceId) => ({
-      instanceId,
-      nodeId: instanceId,
-      definitionId: instanceId,
-      cubeId: 'cube',
-      version: '1',
-      alias: 'Cube',
-      executionMode: 0,
-    })),
-    segments: [{ instanceIds: ids, reorderable: true, boundaryNodeIds: [] }],
-    placements: ids.map((instanceId, index) => ({
-      instanceId,
-      nodeId: instanceId,
-      position: [index * 944, 0],
-    })),
-  };
+/** The new Cubes a cart asked the chain to create. */
+function created(requested: readonly CubeStackRequest<ImportPayload>[]) {
+  return requested.flatMap((entry) => (entry.source === 'new' ? [entry] : []));
 }

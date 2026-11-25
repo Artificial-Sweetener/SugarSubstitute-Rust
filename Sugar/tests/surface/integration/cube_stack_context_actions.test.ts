@@ -130,14 +130,8 @@ test('accepts a rename and cancellation without invoking browser-native dialogs'
   expect(native).not.toHaveBeenCalled();
 });
 
-test('disables mutation intent during pending canonical operations and reports failures', async () => {
+test('reports a failed menu action through SugarCubes feedback', async () => {
   const f = fixture();
-  f.runtime.reorder.pending = true;
-  f.open();
-  select('Remove');
-  await settle();
-  expect(f.actions.remove).not.toHaveBeenCalled();
-  f.runtime.reorder.pending = false;
   f.actions.remove.mockImplementation(() => {
     throw new Error('host removal failed');
   });
@@ -205,17 +199,15 @@ function fixture() {
     toggleBypass: jest.fn<(id: string) => void>(),
     toggleOutputPersistence: jest.fn<(id: string) => void>(),
   };
-  const reorder = {
-    analysis: null,
-    refresh: async () => null,
-    pending: false,
-    subscribe: () => () => undefined,
-    move: async () => undefined,
+  const chain = {
     available: true,
-    reorder: async () => undefined,
+    subscribe: () => () => undefined,
+    order: () => ['instance'],
+    move: () => undefined,
+    reorder: () => undefined,
     canMove: () => false,
   };
-  const runtime = { nodes: { get: () => node }, instanceActions: actions, reorder };
+  const runtime = { nodes: { get: () => node }, instanceActions: actions, chain };
   let current: CubeStackCommandRuntime | null = runtime;
   let eligible = true;
   const appearance = new AppearanceState();

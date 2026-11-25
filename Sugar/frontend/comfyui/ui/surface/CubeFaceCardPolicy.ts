@@ -166,8 +166,8 @@ function nodeId(node: ComfyNode, index: number): string {
   return String(node.id ?? index);
 }
 
-/** Return source node identifiers for every resolvable incoming connection on one card. */
-function linkedOriginNodeIds(node: ComfyNode, graph: ComfyGraph | undefined): GraphId[] {
+/** Return source node identifiers for every resolvable incoming connection on one node. */
+export function linkedOriginNodeIds(node: ComfyNode, graph: ComfyGraph | undefined): GraphId[] {
   const ownerGraph = graph ?? node.graph;
   if (!ownerGraph) return [];
   return (node.inputs ?? []).flatMap((input) =>
@@ -188,7 +188,7 @@ function inputLinkIds(input: { link?: GraphId | null; links?: GraphId[] | null }
 }
 
 /** Resolve one host graph link without coupling the ordering policy to a graph implementation. */
-function resolveGraphLink(graph: ComfyGraph, id: GraphId): ComfyLink | null {
+export function resolveGraphLink(graph: ComfyGraph, id: GraphId): ComfyLink | null {
   const fromMethod = graph.getLink?.(id);
   if (fromMethod) return fromMethod;
   const links = graph.links ?? graph._links;

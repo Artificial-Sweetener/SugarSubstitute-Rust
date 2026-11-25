@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
+from typing import cast
 from dataclasses import replace
 from pathlib import Path
 
@@ -26,7 +27,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from sugarcubes.execution.coordinator import CubeExecutionCoordinator
-from sugarcubes.execution.models import CubeExecutionRequest
+from sugarcubes.execution.models import CubeExecutionRequest, JsonValue
 from sugarcubes.nodes import CubeOutput
 from sugarcubes.output_saving.application.settings_service import (
     OutputSavingSettingsService,
@@ -205,7 +206,7 @@ def test_an_image_carries_the_workflow_as_queued_not_the_prepared_copy(
         owners=prepared.node_owners,
         extra_data={
             "sugarcubes_output_saving": {"workflow_name": "Queued"},
-            "extra_pnginfo": {"workflow": queued},
+            "extra_pnginfo": {"workflow": cast(JsonValue, queued)},
         },
     )
     runtime = RuntimeSavingImages(
@@ -235,6 +236,6 @@ def test_an_image_carries_the_workflow_as_queued_not_the_prepared_copy(
     saved = sorted((tmp_path / "output").rglob("*.png"))
     assert saved
     with Image.open(saved[0]) as image:
-        stored = json.loads(image.text["workflow"])
+        stored = json.loads(image.info["workflow"])
     assert stored == queued
     policy.discard("run-b")

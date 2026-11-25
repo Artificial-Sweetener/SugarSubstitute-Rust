@@ -41,8 +41,9 @@ export class CubeStackHost {
     #material = null;
     #wheel = null;
     #surfaceVisible = true;
-    #reorder = null;
-    #unsubscribeReorder = null;
+    #chain = null;
+    #unsubscribeChain = null;
+    #mutating = false;
     #selectedId = null;
     #scrollSelection = null;
     #started = false;
@@ -80,8 +81,8 @@ export class CubeStackHost {
         this.#actions = {
             navigate: (id) => this.#navigate(id),
             previewOrder: (order) => this.#view?.previewCubeOrder(order?.map((id) => `cube:${id}`) ?? null),
-            reorder: (id, order) => this.#mutate((service) => service.reorder(id, order)),
-            move: (id, delta) => this.#mutate((service) => service.move(id, delta)),
+            reorder: (_id, order) => this.#mutate((chain) => chain.reorder(order)),
+            move: (id, delta) => this.#mutate((chain) => chain.move(id, delta)),
             openCart: options.openCart,
             setCompact: (compact) => void this.#preferences.setCompact(compact).catch(options.reportError),
             hide: () => void this.#preferences.setVisible(false).catch(options.reportError),
@@ -154,9 +155,9 @@ export class CubeStackHost {
     release() {
         this.#options.closeTransient();
         this.#unmount();
-        this.#unsubscribeReorder?.();
-        this.#unsubscribeReorder = null;
-        this.#reorder = null;
+        this.#unsubscribeChain?.();
+        this.#unsubscribeChain = null;
+        this.#chain = null;
         this.#view = null;
         this.#selectedId = null;
         this.#scrollSelection?.dispose();
@@ -181,11 +182,11 @@ export class CubeStackHost {
             this.#publishFrame();
             return;
         }
-        const reorder = this.#options.getReorder();
-        if (this.#reorder !== reorder) {
-            this.#unsubscribeReorder?.();
-            this.#reorder = reorder;
-            this.#unsubscribeReorder = reorder?.subscribe(() => this.#reconcile()) ?? null;
+        const chain = this.#options.getChain();
+        if (this.#chain !== chain) {
+            this.#unsubscribeChain?.();
+            this.#chain = chain;
+            this.#unsubscribeChain = chain?.subscribe(() => this.#reconcile()) ?? null;
         }
         if (!this.#stackVisible()) {
             this.#view?.previewCubeOrder(null);
@@ -265,13 +266,13 @@ export class CubeStackHost {
         for (const listener of this.#frameListeners)
             listener();
     }
-    /** Derive all row facts from the current projection and exact canonical analysis snapshot. */
+    /** Derive all row facts from the current masonry projection, which holds the stack order. */
     #state() {
         return {
-            rows: projectCubeStackRows(this.#view?.sections ?? [], this.#reorder?.analysis ?? null, this.#selectedId, this.#options.resolveSource, this.#reorder?.available === true),
+            rows: projectCubeStackRows(this.#view?.sections ?? [], this.#selectedId, this.#options.resolveSource, this.#chain?.available === true),
             compact: this.#preferences.snapshot.compact,
             packed: readMasonryPacked(this.#options.document),
-            pending: this.#reorder?.pending === true,
+            pending: this.#mutating,
             appearance: this.#options.appearance.appearance.style !== 'comfy'
                 ? this.#options.appearance.appearance.style
                 : this.#options.frame?.enabled
@@ -288,15 +289,20 @@ export class CubeStackHost {
         this.#view?.scrollToSection(`cube:${instanceId}`);
         this.#reconcile();
     }
-    /** Settle the accepted graph projection before Vue clears its temporary drag permutation. */
+    /** Change the graph, then settle masonry before Vue clears its temporary drag permutation. */
     async #mutate(work) {
-        const reorder = this.#reorder;
-        if (!reorder)
-            throw new Error('Cube graph reorder is unavailable.');
-        await work(reorder);
-        await reorder.refresh();
-        await this.#options.refreshSurface();
-        this.#reconcile();
+        const chain = this.#chain;
+        if (!chain)
+            throw new Error('The Cube stack is unavailable.');
+        this.#mutating = true;
+        try {
+            work(chain);
+            await this.#options.refreshSurface();
+        }
+        finally {
+            this.#mutating = false;
+            this.#reconcile();
+        }
     }
     /** Suspend captured drag intent while motion owns geometry and re-enable only the latest entry. */
     async #present(visible, animate = true) {

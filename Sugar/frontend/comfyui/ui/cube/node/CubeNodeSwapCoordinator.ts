@@ -13,15 +13,15 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Adapt native face arrows to the canonical Cube reorder application service. */
+/** Adapt native face arrows to the Cube chain. */
 import type {
   CubeFaceChromeMetadata,
   CubeSwapDirection,
 } from '../../surface/CubeFaceChromeActions.js';
-import type { CubeGraphReorderService } from '../../workflow/application/CubeGraphReorderService.js';
+import type { CubeChainService } from '../chain/CubeChainService.js';
 
 interface CubeNodeSwapCoordinatorOptions {
-  reorder: Pick<CubeGraphReorderService, 'canMove' | 'move'>;
+  chain: Pick<CubeChainService, 'canMove' | 'move'>;
   reportError(error: unknown): void;
 }
 
@@ -29,23 +29,23 @@ interface CubeNodeSwapCoordinatorOptions {
 export class CubeNodeSwapCoordinator {
   readonly #options: CubeNodeSwapCoordinatorOptions;
 
-  /** Share exactly the same application owner used by stack dragging and keyboard movement. */
+  /** Share exactly the same chain used by stack dragging and keyboard movement. */
   constructor(options: CubeNodeSwapCoordinatorOptions) {
     this.#options = options;
   }
 
-  /** Reflect native order availability for this stable instance. */
+  /** Whether this Cube can move that way, wiring included. */
   canSwap(metadata: CubeFaceChromeMetadata, direction: CubeSwapDirection): boolean {
     const instanceId = readInstanceId(metadata);
-    return instanceId !== null && this.#options.reorder.canMove(instanceId, delta(direction));
+    return instanceId !== null && this.#options.chain.canMove(instanceId, delta(direction));
   }
 
-  /** Report rejected or stale actions through the existing SugarCubes feedback owner. */
-  async swap(metadata: CubeFaceChromeMetadata, direction: CubeSwapDirection): Promise<void> {
+  /** Report a refused move through the existing SugarCubes feedback owner. */
+  swap(metadata: CubeFaceChromeMetadata, direction: CubeSwapDirection): void {
     const instanceId = readInstanceId(metadata);
     if (!instanceId || !this.canSwap(metadata, direction)) return;
     try {
-      await this.#options.reorder.move(instanceId, delta(direction));
+      this.#options.chain.move(instanceId, delta(direction));
     } catch (error: unknown) {
       this.#options.reportError(error);
     }

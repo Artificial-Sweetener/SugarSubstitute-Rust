@@ -19,7 +19,7 @@ export function createCubeHostExecution(options) {
         api: options.api,
         logger: options.logger,
         getGraph: options.getGraph,
-        getProximityMatches: options.getProximityMatches,
+        getStack: options.getStack,
         ...(options.prepareCanvasInputs ? { prepareInputs: options.prepareCanvasInputs } : {}),
         sceneWorkflow: (payload, workflow) => scenes.workflow(payload, workflow),
         resolveWorkflow: (payload, workflow) => wildcards.workflow(payload, workflow),

@@ -180,6 +180,25 @@ describe('ProximityMatcher', () => {
     expect(matcher.compute({ _nodes: [] }, { radius: 160, strict: true })).toHaveLength(1);
   });
 
+  test('links only Cubes by proximity; a plain node beside a Cube stays unlinked', () => {
+    const cubeNode: ComfyNode = { id: 10, pos: [100, 100], size: [400, 320] };
+    const plainNode: ComfyNode = { id: 20, pos: [540, 100], size: [400, 320] };
+    const output = outputEndpoint(cubeNode, 0, 'IMAGE', [500, 160]);
+    const plainInput = { ...inputEndpoint(plainNode, 0, 'IMAGE', [540, 160]), cube: null };
+    const plainOutput = { ...outputEndpoint(plainNode, 0, 'IMAGE', [940, 160]), cube: null };
+    const laterCube: ComfyNode = { id: 30, pos: [980, 100], size: [400, 320] };
+    const cubeInput = inputEndpoint(laterCube, 0, 'IMAGE', [980, 160]);
+    const matcher = new ProximityMatcher(
+      {
+        discover: () => ({ outputs: [output, plainOutput], inputs: [plainInput, cubeInput] }),
+      },
+      () => ({ isValidConnection: () => true }),
+      console,
+    );
+
+    expect(matcher.compute({ _nodes: [] }, { radius: 160, strict: true })).toEqual([]);
+  });
+
   test('checks compatibility only for horizontally nearby inputs', () => {
     const outputNode: ComfyNode = { id: 10, pos: [0, 0], size: [100, 100] };
     const output = outputEndpoint(outputNode, 0, 'IMAGE', [100, 40]);

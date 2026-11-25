@@ -24,7 +24,11 @@ from typing import cast
 
 import pytest
 
-from sugarcubes.workflow_analysis import CubeGraphAnalysisService
+from sugarcubes.workflow_analysis import (
+    CubeGraphAnalysis,
+    CubeGraphAnalysisService,
+    CubeStackView,
+)
 from sugarcubes.workflow_mutation import (
     CubeGraphDraft,
     CubeGraphMutationError,
@@ -329,11 +333,13 @@ def test_create_cube_workflow_builds_ordered_native_graph_in_one_analysis() -> N
             super().__init__()
             self.calls = 0
 
-        def analyze(self, workflow_value: object):  # type: ignore[no-untyped-def]
+        def analyze(
+            self, workflow_value: object, stack: CubeStackView | None = None
+        ) -> CubeGraphAnalysis:
             """Count and delegate one complete analysis."""
 
             self.calls += 1
-            return super().analyze(workflow_value)
+            return super().analyze(workflow_value, stack)
 
     analysis = _CountingAnalysis()
     identifiers = iter(("node-a", "definition-a", "node-b", "definition-b"))

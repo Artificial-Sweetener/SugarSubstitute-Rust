@@ -27,10 +27,10 @@ from ..execution.portable_boundary_lowering import document_boundary_ports
 from ..workflow_node_pack import current_workflow_node_pack
 from .native_workflow_models import NativeWorkflowImportPlan
 from .workflow_script_state import script_state_metadata
+from ..workflow_cube_placement import chain_position_after
 
 _CUBE_WIDTH = 320.0
 _CUBE_HEIGHT = 200.0
-_CUBE_GAP = 24.0
 
 
 class NativeWorkflowProjectionError(ValueError):
@@ -47,6 +47,7 @@ def project_native_workflow_plan(
     definitions: list[dict[str, object]] = []
     unsaved = frozenset(plan.script_state.unsaved_output_instance_ids)
     instances: dict[str, tuple[int, list[str], list[str]]] = {}
+    left = 0.0
     for index, instance in enumerate(plan.instances, start=1):
         document = _mapping(instance.payload.get("document"), "instance document")
         cube_document = CubeDocument.from_dict(document)
@@ -66,7 +67,7 @@ def project_native_workflow_plan(
                 "id": index,
                 "type": definition_id,
                 "mode": 4 if instance.bypassed else 0,
-                "pos": [(index - 1) * (_CUBE_WIDTH + _CUBE_GAP), 0.0],
+                "pos": [left, 0.0],
                 "size": [_CUBE_WIDTH, _CUBE_HEIGHT],
                 "inputs": deepcopy(list(input_ports)),
                 "outputs": deepcopy(list(output_ports)),
@@ -86,6 +87,7 @@ def project_native_workflow_plan(
                 },
             }
         )
+        left = chain_position_after(left, _CUBE_WIDTH)
         definitions.append(
             {
                 "id": definition_id,

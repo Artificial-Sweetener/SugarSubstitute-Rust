@@ -1,23 +1,6 @@
-//    SugarCubes - composable workflow units for ComfyUI
-//    Copyright (C) 2026  Artificial Sweetener and contributors
-//
-//    This program is free software: you can redistribute it and/or modify
-//    it under the terms of the GNU Affero General Public License as published by
-//    the Free Software Foundation, either version 3 of the License, or
-//    (at your option) any later version.
-//
-//    This program is distributed in the hope that it will be useful,
-//    but WITHOUT ANY WARRANTY; without even the implied warranty of
-//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//    GNU Affero General Public License for more details.
-//
-//    You should have received a copy of the GNU Affero General Public License
-//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Present ComfyUI's queue as the generation queue: a fly-out from its button, or a pinned panel. */
-import { HostSurfaceObserver } from '../../../core/HostSurfaceObserver.js';
 import { ContextMenu } from '../../../menus/ContextMenu.js';
 import { isRecord } from '../../../types/common.js';
-import { GENERATION_QUEUE_DOCK } from '../GenerationQueueDock.js';
+import { findGenerationQueueDock, observeGenerationQueueDock } from '../GenerationQueueDock.js';
 import { applyOwnedTheme } from '../../appearance/ThemeService.js';
 import { ComfyQueueActions } from './ComfyQueueActions.js';
 import { ComfyQueueJobSource, } from './ComfyQueueJobSource.js';
@@ -119,7 +102,7 @@ export class GenerationQueueController {
         }));
         document.addEventListener('click', this.#onButton, true);
         document.addEventListener('contextmenu', this.#onButtonMenu, true);
-        this.#dock = new HostSurfaceObserver(document.body, GENERATION_QUEUE_DOCK, () => this.#mountPanel());
+        this.#dock = observeGenerationQueueDock(document, () => this.#mountPanel());
         this.#stop = this.#source.subscribe(() => this.#render());
         this.#mountPanel();
         this.#render();
@@ -187,8 +170,7 @@ export class GenerationQueueController {
     #mountPanel() {
         if (this.#disposed)
             return;
-        const dock = this.options.document.querySelector(GENERATION_QUEUE_DOCK);
-        const host = dock?.closest('.side-bar-panel') ?? null;
+        const host = findGenerationQueueDock(this.options.document);
         if (!host) {
             this.#panelView.element.remove();
             return;

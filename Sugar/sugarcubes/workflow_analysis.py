@@ -28,6 +28,8 @@ from .execution import (
     CubeBoundaryConnection,
     ProximityConnection,
 )
+from .execution.limits import MAX_PROXIMITY_CONNECTIONS
+from .execution.models import CubeBoundaryEndpoint
 from .execution.topology import CubeTopologyBuilder
 from .workflow import ComposedValueMaterializer, CubeInstance, read_canonical_workflow
 from .workflow import WorkflowNormalizer
@@ -53,6 +55,21 @@ class CubeGraphAnalysis:
     proximity_connections: tuple[ProximityConnection, ...]
     segments: tuple[CubeGraphSegment, ...]
     normalized_workflow: Mapping[str, object]
+    # The stack: every Cube in the order it runs.
+    order: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CubeStackView:
+    """What the SugarCubes page knows about a workflow's stack and sends with it.
+
+    The page's proximity matcher is the one that decides which Cubes link by proximity, and its
+    Cube chain is the one stack order. A client that sends neither (the Python SugarSubstitute
+    app) gets the backend's own matcher and order, kept for it and planned for removal.
+    """
+
+    proximity_connections: tuple[ProximityConnection, ...]
+    order: tuple[str, ...]
 
 
 class CubeGraphAnalysisService:
@@ -63,8 +80,13 @@ class CubeGraphAnalysisService:
 
         self._normalizer = normalizer
 
-    def analyze(self, workflow_value: object) -> CubeGraphAnalysis:
-        """Analyze one complete serialized workflow in a single pass."""
+    def analyze(
+        self, workflow_value: object, stack: CubeStackView | None = None
+    ) -> CubeGraphAnalysis:
+        """Analyze one complete serialized workflow in a single pass.
+
+        With `stack`, the page's proximity links and stack order are used as given.
+        """
 
         normalized = (
             self._normalizer.normalize(workflow_value)
@@ -73,21 +95,88 @@ class CubeGraphAnalysisService:
         )
         materialized = ComposedValueMaterializer().materialize(normalized)
         workflow = read_canonical_workflow(materialized)
-        proximity_matcher = SerializedCubeProximityMatcher()
-        proximity = proximity_matcher.match(workflow.payload)
+        if stack is None:
+            matcher = SerializedCubeProximityMatcher()
+            proximity = matcher.match(workflow.payload)
+            adjacent = matcher.adjacent_instance_pairs(workflow.payload)
+        else:
+            proximity = stack.proximity_connections
+            adjacent = tuple(
+                (connection.source.instance_id, connection.target.instance_id)
+                for connection in proximity
+            )
         topology = CubeTopologyBuilder().project(workflow, proximity)
+        segments = _segments(workflow.payload, topology, adjacent)
+        computed = tuple(
+            identity for segment in segments for identity in segment.instance_ids
+        )
         return CubeGraphAnalysis(
             workflow_semantic_hash=workflow.semantic_hash,
             instances=workflow.instances,
             edges=topology.edges,
             proximity_connections=proximity,
-            segments=_segments(
-                workflow.payload,
-                topology,
-                proximity_matcher.adjacent_instance_pairs(workflow.payload),
-            ),
+            segments=segments,
             normalized_workflow=workflow.payload,
+            order=_given_order(stack, computed),
         )
+
+
+def read_cube_stack_view(value: object) -> CubeStackView | None:
+    """Read the stack a page sent with a workflow; None when it sent none."""
+
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise ValueError("The Cube stack must be an object.")
+    order = value.get("order")
+    if not isinstance(order, list) or not all(
+        isinstance(identity, str) and identity.strip() for identity in order
+    ):
+        raise ValueError("The Cube stack order must list Cube instance ids.")
+    return CubeStackView(
+        proximity_connections=read_proximity_connections(
+            value.get("proximity_connections")
+        ),
+        order=tuple(identity.strip() for identity in order),
+    )
+
+
+def read_proximity_connections(value: object) -> tuple[ProximityConnection, ...]:
+    """Read explicit Cube-to-Cube proximity link records."""
+
+    if not isinstance(value, list):
+        raise ValueError("'proximity_connections' must be an array")
+    if len(value) > MAX_PROXIMITY_CONNECTIONS:
+        raise ValueError(
+            "Proximity connections exceed the execution safety limit of "
+            f"{MAX_PROXIMITY_CONNECTIONS} entries."
+        )
+    result: list[ProximityConnection] = []
+    for entry in value:
+        if not isinstance(entry, Mapping):
+            raise ValueError("Expected a JSON object")
+        result.append(
+            ProximityConnection(
+                source=CubeBoundaryEndpoint(
+                    _required_text(entry, "source_instance_id"),
+                    _required_text(entry, "source_binding"),
+                ),
+                target=CubeBoundaryEndpoint(
+                    _required_text(entry, "target_instance_id"),
+                    _required_text(entry, "target_binding"),
+                ),
+            )
+        )
+    return tuple(result)
+
+
+def _required_text(record: Mapping[object, object], name: str) -> str:
+    """Read one non-empty endpoint identifier."""
+
+    value = record.get(name)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"'{name}' must be a non-empty string")
+    return value.strip()
 
 
 def analyze_cube_graph(workflow_value: object) -> CubeGraphAnalysis:
@@ -163,6 +252,16 @@ def _segments(
             )
         )
     return tuple(result)
+
+
+def _given_order(
+    stack: CubeStackView | None, computed: tuple[str, ...]
+) -> tuple[str, ...]:
+    """Use the page's stack order when it names exactly this workflow's Cubes."""
+
+    if stack is None or sorted(stack.order) != sorted(computed):
+        return computed
+    return stack.order
 
 
 def _segment_components(
@@ -263,5 +362,8 @@ __all__ = [
     "CubeGraphAnalysis",
     "CubeGraphAnalysisService",
     "CubeGraphSegment",
+    "CubeStackView",
+    "read_cube_stack_view",
+    "read_proximity_connections",
     "analyze_cube_graph",
 ]

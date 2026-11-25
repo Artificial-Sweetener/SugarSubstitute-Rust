@@ -29,6 +29,23 @@ export const GENERATION_QUEUE_DOCK = '[data-testid="job-history-sidebar"]';
 export const GENERATION_QUEUE_DOCKED_ATTRIBUTE = 'data-sc-queue-docked';
 const SIDEBAR_TAB = 'job-history';
 
+/** Find Comfy's docked job panel's side panel, when the queue is docked. */
+export function findGenerationQueueDock(document: Document): HTMLElement | null {
+  return (
+    document
+      .querySelector<HTMLElement>(GENERATION_QUEUE_DOCK)
+      ?.closest<HTMLElement>('.side-bar-panel') ?? null
+  );
+}
+
+/** Watch Comfy mount and unmount its docked job panel. */
+export function observeGenerationQueueDock(
+  document: Document,
+  changed: () => void,
+): HostSurfaceObserver {
+  return new HostSurfaceObserver(document.body, GENERATION_QUEUE_DOCK, changed);
+}
+
 /**
  * Present Comfy's docked job panel as the generation queue's pinned sidebar.
  *

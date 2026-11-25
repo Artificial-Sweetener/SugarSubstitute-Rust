@@ -27,9 +27,9 @@ import type { ModalService } from '../../dialogs/ModalService.js';
 /** Expose only the current instance and canonical ordering capabilities consumed by the menu. */
 export interface CubeStackCommandRuntime {
   readonly nodes: Pick<ComfyCubeRuntime['nodes'], 'get'>;
-  readonly reorder: Pick<
-    ComfyCubeRuntime['reorder'],
-    'analysis' | 'available' | 'pending' | 'subscribe' | 'move' | 'reorder' | 'canMove' | 'refresh'
+  readonly chain: Pick<
+    ComfyCubeRuntime['chain'],
+    'available' | 'subscribe' | 'order' | 'move' | 'reorder' | 'canMove'
   >;
   readonly instanceActions: Pick<
     ComfyCubeRuntime['instanceActions'],
@@ -75,7 +75,7 @@ export function createCubeStackCommands(options: {
     appearance: options.appearance,
     ...(options.frame ? { frame: options.frame } : {}),
     closeTransient: () => menu.close(),
-    getReorder: () => options.getRuntime()?.reorder ?? null,
+    getChain: () => options.getRuntime()?.chain ?? null,
     resolveSource: options.resolveSource,
     openCart: () => options.picker.openCart(),
     remove: (id) => {
@@ -92,14 +92,13 @@ export function createCubeStackCommands(options: {
       if (!runtime) return;
       const node = runtime.nodes.get(id);
       if (!node) return;
-      const service = runtime.reorder;
       /** Reject a menu action when its original workflow or Cube has been replaced. */
       const current = () => {
         if (options.getRuntime() !== runtime || runtime.nodes.get(id) !== node)
           throw new Error('The Cube workflow changed while its menu was open.');
         return actions();
       };
-      const disabled = service.pending;
+      const chain = runtime.chain;
       const captureAvailable =
         options.library.classification(id)?.permittedOperations.has('capture') === true;
       menu.open({
@@ -116,13 +115,11 @@ export function createCubeStackCommands(options: {
               node.properties.sugarcubes_save_outputs === false
                 ? 'Save outputs'
                 : "Don't save outputs",
-            disabled,
             select: () => run(() => current().toggleOutputPersistence(id)),
           },
           {
             label: 'Rename',
             icon: icon('pi-pencil'),
-            disabled,
             select: () =>
               run(async () => {
                 current().require(id);
@@ -139,7 +136,6 @@ export function createCubeStackCommands(options: {
           {
             label: 'Duplicate',
             icon: icon('pi-copy'),
-            disabled,
             select: () => run(() => current().duplicate(id)),
           },
           ...(captureAvailable
@@ -147,7 +143,6 @@ export function createCubeStackCommands(options: {
                 {
                   label: 'Capture Cube',
                   icon: icon('pi-save'),
-                  disabled,
                   select: () =>
                     run(() => {
                       current().require(id);
@@ -159,33 +154,31 @@ export function createCubeStackCommands(options: {
           {
             icon: icon('pi-pause'),
             label: node.mode === 4 ? 'Remove bypass' : 'Bypass',
-            disabled,
             select: () => run(() => current().toggleBypass(id)),
           },
           {
             label: 'Remove',
             icon: icon('pi-trash'),
-            disabled,
             select: () => run(() => current().remove(id)),
           },
           { label: '', separator: true },
           {
             label: 'Move up',
-            disabled: !service?.canMove(id, -1),
+            disabled: !chain.canMove(id, -1),
             select: () => {
               run(() => {
                 current().require(id);
-                return service.move(id, -1);
+                chain.move(id, -1);
               });
             },
           },
           {
             label: 'Move down',
-            disabled: !service?.canMove(id, 1),
+            disabled: !chain.canMove(id, 1),
             select: () => {
               run(() => {
                 current().require(id);
-                return service.move(id, 1);
+                chain.move(id, 1);
               });
             },
           },

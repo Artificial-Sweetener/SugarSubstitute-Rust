@@ -116,7 +116,7 @@ export class WorkflowMasonryHostLifecycle {
               graph,
               options.getCubes(),
               options.getConnections(graph),
-              options.stack.getReorder()?.analysis ?? null,
+              options.stack.getChain()?.order() ?? null,
             )
           : [];
       },

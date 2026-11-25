@@ -30,7 +30,7 @@ from .execution.portable_boundary_lowering import document_boundary_ports
 from .workflow_analysis import CubeGraphAnalysis, CubeGraphAnalysisService
 from .workflow_cube_replacement import CubeGraphReplacementService
 from .workflow_cube_placement import (
-    MINIMUM_CUBE_GAP,
+    chain_position_after,
     cube_position_order,
     read_cube_pair,
     reorder_cube_positions,
@@ -371,7 +371,7 @@ def _next_cube_position(nodes: Sequence[Mapping[str, object]]) -> tuple[float, f
     if not geometries:
         return 0.0, 0.0
     left, top, width = max(geometries, key=lambda value: value[0] + value[2])
-    return left + width + MINIMUM_CUBE_GAP, top
+    return chain_position_after(left, width), top
 
 
 def _is_cube_node(node: Mapping[str, object]) -> bool:

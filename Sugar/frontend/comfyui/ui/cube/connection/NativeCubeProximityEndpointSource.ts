@@ -26,7 +26,7 @@ import type {
 import { isRecord } from '../../types/common.js';
 import type { ComfyGraph, ComfyInput, ComfyNode, ComfyOutput } from '../../types/graph.js';
 import type { NativeSubgraphBoundaryResolver } from '../graph/NativeSubgraphBoundaryResolver.js';
-import { isCubeNode, requireCubeIdentity } from '../node/ComfyCubeNodeFactory.js';
+import { isCubeNode, requireCubeIdentity, type CubeNode } from '../node/ComfyCubeNodeFactory.js';
 import type { CubePortPresentationController } from './CubePortPresentationController.js';
 
 interface EndpointIdentity {
@@ -54,14 +54,14 @@ export class NativeCubeProximityEndpointSource implements ProximityEndpointSourc
     this.#portPresentation = portPresentation;
   }
 
-  /** Discover every currently unlinked root slot that can participate with a Cube. */
+  /** Discover every unlinked Cube boundary slot; only Cubes link by proximity. */
   discover(graphValue: unknown): ProximityEndpointSet {
     if (!isRecord(graphValue)) return { outputs: [], inputs: [] };
     const graph = graphValue as ComfyGraph;
     const outputs: ProximityOutputEndpoint[] = [];
     const inputs: ProximityInputEndpoint[] = [];
     for (const node of getGraphNodes(graph)) {
-      if (node.id == null) continue;
+      if (node.id == null || !isCubeNode(node)) continue;
       const identity = readEndpointIdentity(node);
       for (let slot = 0; slot < (node.outputs?.length ?? 0); slot += 1) {
         const output = node.outputs?.[slot];
@@ -144,21 +144,13 @@ export class NativeCubeProximityEndpointSource implements ProximityEndpointSourc
       `SugarCubes discovered ${String(outputs.length)} output and ` +
         `${String(inputs.length)} input proximity endpoints` +
         `${positions ? ` at ${positions}` : ''}.`,
-      {
-        outputs: outputs.length,
-        inputs: inputs.length,
-        cubeOutputs: outputs.filter((endpoint) => endpoint.cube != null).length,
-        cubeInputs: inputs.filter((endpoint) => endpoint.cube != null).length,
-      },
+      { outputs: outputs.length, inputs: inputs.length },
     );
   }
 }
 
-/** Read durable Cube identity while keeping ordinary nodes eligible as counterparts. */
-function readEndpointIdentity(node: ComfyNode): EndpointIdentity {
-  if (!isCubeNode(node)) {
-    return { cube: null, instanceId: String(node.id ?? '') };
-  }
+/** Read one Cube's durable identity. */
+function readEndpointIdentity(node: CubeNode): EndpointIdentity {
   const identity = requireCubeIdentity(node);
   const cube =
     readString(identity.cube_id) ??

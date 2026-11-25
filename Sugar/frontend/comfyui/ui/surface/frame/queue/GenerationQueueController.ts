@@ -14,11 +14,11 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present ComfyUI's queue as the generation queue: a fly-out from its button, or a pinned panel. */
-import { HostSurfaceObserver } from '../../../core/HostSurfaceObserver.js';
+import type { HostSurfaceObserver } from '../../../core/HostSurfaceObserver.js';
 import { ContextMenu } from '../../../menus/ContextMenu.js';
 import { isRecord } from '../../../types/common.js';
 import type { WorkflowTabDropTarget } from '../WorkflowTabGhost.js';
-import { GENERATION_QUEUE_DOCK } from '../GenerationQueueDock.js';
+import { findGenerationQueueDock, observeGenerationQueueDock } from '../GenerationQueueDock.js';
 import { applyOwnedTheme } from '../../appearance/ThemeService.js';
 import { ComfyQueueActions } from './ComfyQueueActions.js';
 import {
@@ -162,9 +162,7 @@ export class GenerationQueueController {
     );
     document.addEventListener('click', this.#onButton, true);
     document.addEventListener('contextmenu', this.#onButtonMenu, true);
-    this.#dock = new HostSurfaceObserver(document.body, GENERATION_QUEUE_DOCK, () =>
-      this.#mountPanel(),
-    );
+    this.#dock = observeGenerationQueueDock(document, () => this.#mountPanel());
     this.#stop = this.#source.subscribe(() => this.#render());
     this.#mountPanel();
     this.#render();
@@ -234,8 +232,7 @@ export class GenerationQueueController {
   /** Put the pinned queue where ComfyUI shows its own pinned panel. */
   #mountPanel(): void {
     if (this.#disposed) return;
-    const dock = this.options.document.querySelector<HTMLElement>(GENERATION_QUEUE_DOCK);
-    const host = dock?.closest<HTMLElement>('.side-bar-panel') ?? null;
+    const host = findGenerationQueueDock(this.options.document);
     if (!host) {
       this.#panelView.element.remove();
       return;

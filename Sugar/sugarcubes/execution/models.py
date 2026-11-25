@@ -407,7 +407,8 @@ class CubeExecutionRequest:
     """Request preparation and queueing from canonical workflow input."""
 
     workflow: object
-    proximity_connections: tuple[ProximityConnection, ...] = ()
+    # None: the client sent no proximity links and the backend matches them itself.
+    proximity_connections: tuple[ProximityConnection, ...] | None = None
     queue: CubeQueueOptions = field(default_factory=CubeQueueOptions)
     optimization: CubeOptimizationOptions = field(
         default_factory=CubeOptimizationOptions

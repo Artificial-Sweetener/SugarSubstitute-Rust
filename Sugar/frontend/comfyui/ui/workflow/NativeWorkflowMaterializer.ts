@@ -24,11 +24,12 @@ import type {
   SugarScriptNativeWorkflowPlan,
 } from '../sugarscript/SugarScriptAuthoringModels.js';
 import { SugarScriptWorkflowCompanion } from '../sugarscript/SugarScriptWorkflowCompanion.js';
+import { planChain } from '../cube/chain/CubeChainPlacement.js';
+import {
+  readNativeCubePosition,
+  writeNativeCubePosition,
+} from '../cube/graph/NativeCubePositions.js';
 import type { WorkflowExtraOwner } from '../sugarscript/SugarScriptWorkflowCompanion.js';
-
-const COLUMN_SPACING = 1000;
-const ROW_SPACING = 700;
-const COLUMNS = 3;
 
 export interface NativeWorkflowMaterializationResult {
   semanticHash: string;
@@ -96,15 +97,29 @@ export class NativeWorkflowMaterializer {
         for (const id of registration.createdIds) createdSubgraphIds.add(id);
       }
       const placed = this.#placement.placeBatch(
-        plan.instances.map((instance, index) => ({
+        plan.instances.map((instance) => ({
           payload: instance.payload,
           options: {
             instanceAlias: instance.alias,
             instanceId: instance.instanceId,
-            position: positionFor(origin, index),
+            position: origin,
           },
         })),
         (items) => {
+          // The imported Cubes form one chain from the drop point, laid out at their real sizes.
+          const positions = planChain(
+            [],
+            items.map((item, index) => ({
+              id: plan.instances[index]?.instanceId ?? String(index),
+              existing: false as const,
+              size: readNativeCubePosition(item.node.size),
+            })),
+            origin,
+          );
+          for (const [index, item] of items.entries()) {
+            const position = positions.get(plan.instances[index]?.instanceId ?? String(index));
+            if (position) writeNativeCubePosition(item.node, position);
+          }
           const byId = new Map<string, MaterializedCube>();
           for (const [index, instance] of plan.instances.entries()) {
             const placed = items[index];
@@ -225,12 +240,4 @@ function uniqueBoundarySlot(
   const slot = matches[0];
   if (slot === undefined) throw new Error(`Cube '${cubeTitle}' boundary '${name}' is unavailable.`);
   return slot;
-}
-
-/** Lay out source-ordered Cubes predictably without encoding execution order. */
-function positionFor(origin: Vec2, index: number): Vec2 {
-  return [
-    origin[0] + (index % COLUMNS) * COLUMN_SPACING,
-    origin[1] + Math.floor(index / COLUMNS) * ROW_SPACING,
-  ];
 }

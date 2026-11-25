@@ -22,8 +22,9 @@ import { CubeDirectExecutionService } from '../../../frontend/comfyui/ui/cube/ex
 import type { CubeExecutionApiClient } from '../../../frontend/comfyui/ui/cube/execution/CubeExecutionApiClient.js';
 import type { ComfyGraph } from '../../../frontend/comfyui/ui/types/graph.js';
 import type { ProximityMatch } from '../../../frontend/comfyui/ui/overlays/proximity/ProximityModel.js';
+import { cubeStackView } from '../../../frontend/comfyui/ui/cube/chain/CubeStackView.js';
 
-test('serializes embedded workflow state and passes only Cube-to-Cube proximity', async () => {
+test('serializes embedded workflow state and sends the stack the page shows', async () => {
   const queue = jest.fn(async () => ({ accepted: true }));
   const acceptedMatches: ProximityMatch[] = [];
   const source = cube('cube-a', ['output.image'], []);
@@ -55,7 +56,7 @@ test('serializes embedded workflow state and passes only Cube-to-Cube proximity'
       apiKey: 'secret-key',
     },
     getGraph: () => graph,
-    getProximityMatches: () => acceptedMatches,
+    getStack: () => cubeStackView(['cube-a', 'cube-b'], acceptedMatches),
   });
 
   await service.queue(
@@ -93,6 +94,17 @@ test('serializes embedded workflow state and passes only Cube-to-Cube proximity'
         auth_token_comfy_org: 'secret-token',
         api_key_comfy_org: 'secret-key',
         preview_method: 'latent2rgb',
+        sugarcubes_stack: {
+          order: ['cube-a', 'cube-b'],
+          proximity_connections: [
+            {
+              source_instance_id: 'cube-a',
+              source_binding: 'output.image',
+              target_instance_id: 'cube-b',
+              target_binding: 'input.image',
+            },
+          ],
+        },
       }),
     }),
   );
@@ -102,7 +114,7 @@ test('claims only persisted Cube workflows and leaves Substitute requests untouc
   const service = new CubeDirectExecutionService({
     client: {} as CubeExecutionApiClient,
     getGraph: () => null,
-    getProximityMatches: () => [],
+    getStack: () => null,
   });
   const cubeWorkflow = {
     workflow: {
@@ -135,7 +147,7 @@ test('forwards frozen prepared mask assets through the normal direct execution r
   const service = new CubeDirectExecutionService({
     client: { queue } as unknown as CubeExecutionApiClient,
     getGraph: () => graph,
-    getProximityMatches: () => [],
+    getStack: () => null,
     prepareInputs: async (payload) => ({ payload, preparedInputs: [asset] }),
   });
   await service.queue(0, {});

@@ -58,7 +58,7 @@ export function createProjects(options) {
         importScript: options.importScript,
         showCubes: options.showCubes,
         captureInputs: async (payload) => (await options.prepareInputs(payload)).payload,
-    }), (workflow) => language.render(workflow), new ProjectMasks(files, new ComfyProjectMaskInputs(fetchApi)));
+    }), (workflow) => language.render(workflow, options.stack()), new ProjectMasks(files, new ComfyProjectMaskInputs(fetchApi)));
     const commands = projectCommands({
         scripts,
         dialogs: options.dialogs,

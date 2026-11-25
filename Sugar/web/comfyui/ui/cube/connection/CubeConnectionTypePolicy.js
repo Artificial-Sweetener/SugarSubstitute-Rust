@@ -51,6 +51,17 @@ export class CubeConnectionTypePolicy {
         return output === '*' || input === '*' || output === input;
     }
 }
+/** Read Comfy's own connection rule from LiteGraph, when LiteGraph offers one. */
+export function comfyConnectionLiteGraph(host) {
+    if (typeof host !== 'object' || host === null)
+        return {};
+    const isValidConnection = Reflect.get(host, 'isValidConnection');
+    return typeof isValidConnection === 'function'
+        ? {
+            isValidConnection: (outputType, inputType) => Boolean(isValidConnection.call(host, outputType, inputType)),
+        }
+        : {};
+}
 /** Normalize one dynamic Comfy slot type for stable comparisons and persistence. */
 export function normalizeCubePortType(type) {
     if (type == null || type === '')

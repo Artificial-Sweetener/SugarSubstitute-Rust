@@ -35,7 +35,9 @@ import { ComfyCanvasSelectionStateAdapter } from '../surface/ComfyCanvasSelectio
 import { createComfyCubeHistoryAdapter } from './ComfyCubeHistoryAdapter.js';
 import { ComfyCubeNodeFactory } from './node/ComfyCubeNodeFactory.js';
 import { CubeNodeCatalog } from './node/CubeNodeCatalog.js';
-import { createComfyCubeReorder } from '../workflow/infrastructure/ComfyCubeReorderComposition.js';
+import { createComfyCubeChain } from './chain/ComfyCubeChainComposition.js';
+import { CubeConnectionTypePolicy, comfyConnectionLiteGraph, } from './connection/CubeConnectionTypePolicy.js';
+import { ComfyCubeChainCommitHost } from './chain/ComfyCubeChainCommitHost.js';
 import { discardNativeCubeDefinition } from './graph/NativeCubeDefinitionRegistry.js';
 import { ComfyCubeNodeLifecycleAdapter } from './node/ComfyCubeNodeLifecycleAdapter.js';
 import { createComfyCubePlacementRuntime, } from './placement/ComfyCubePlacementRuntime.js';
@@ -61,7 +63,6 @@ import { buildCubeRuntimePresentationBindings } from './CubeRuntimePresentationB
 import { buildCubeRuntimeEditorBindings } from './CubeRuntimeEditorBindings.js';
 import { ComfyCubeRootMutationAdapter } from './ComfyCubeRootMutationAdapter.js';
 import { CubeInstanceActions } from './stack/CubeInstanceActions.js';
-import { ComfyCubeStackCommitHost } from './stack/ComfyCubeStackCommitHost.js';
 /** Construct the graph-bound SugarCubes integration around native SubgraphNodes. */
 export function createComfyCubeRuntime(options) {
     const app = requireRecord(options.app, 'Comfy application');
@@ -137,29 +138,16 @@ export function createComfyCubeRuntime(options) {
         nodePackMetadata: options.nodePackMetadata,
     });
     const canvasGraphChanges = new ComfyCanvasGraphChangeAdapter(canvas);
-    const reorder = createComfyCubeReorder({
-        graph,
-        nodes,
-        history,
-        gateway: options.graphGateway,
-        reconcileOrder: options.reconcileCubeMembership,
-        graphChanges: canvasGraphChanges,
-        isCurrentRoot: () => graphScope.isCurrentRoot(),
-        reportError: (error) => {
-            options.logger.error('SugarCubes Cube reorder failed.', { error });
-            options.feedback?.push?.('error', 'Cube reorder unavailable', error instanceof Error ? error.message : String(error));
-        },
+    const connectionPolicy = new CubeConnectionTypePolicy({
+        getLiteGraph: () => comfyConnectionLiteGraph(liteGraph),
+        logger: options.logger,
     });
     const chromeActions = {
-        subscribeAvailability: (listener) => reorder.service.subscribe(listener),
+        subscribeAvailability: (listener) => chain.service.subscribe(listener),
         ...(options.openAddCubeMenu ? { onAddCube: options.openAddCubeMenu } : {}),
-        onSwapLeft: (metadata) => {
-            void reorder.swap.swap(metadata, 'left');
-        },
-        onSwapRight: (metadata) => {
-            void reorder.swap.swap(metadata, 'right');
-        },
-        canSwap: (metadata, direction) => reorder.swap.canSwap(metadata, direction),
+        onSwapLeft: (metadata) => chain.swap.swap(metadata, 'left'),
+        onSwapRight: (metadata) => chain.swap.swap(metadata, 'right'),
+        canSwap: (metadata, direction) => chain.swap.canSwap(metadata, direction),
     };
     const legacyContainerMigration = new LegacyCubeContainerMigrationAdapter({
         graph: runtimeGraph,
@@ -319,16 +307,33 @@ export function createComfyCubeRuntime(options) {
             createId: createUuid,
         }),
     });
-    const stackCommit = new ComfyCubeStackCommitHost({
-        snapshots: reorder.snapshots,
-        graph: rootMutations,
+    const chain = createComfyCubeChain({
+        graph,
         nodes,
-        history,
-        construction,
-        definitions: new CubeEmbeddedDefinitionStager({
-            registrar: subgraphRegistrar,
-            createId: createUuid,
+        graphChanges: canvasGraphChanges,
+        isCurrentRoot: () => graphScope.isCurrentRoot(),
+        matches: options.proximityMatches,
+        accepts: (outputType, inputType) => connectionPolicy.accepts(outputType, inputType, options.isProximityStrict()),
+        commit: new ComfyCubeChainCommitHost({
+            reconcile: options.reconcileCubeMembership,
+            announce: () => {
+                const afterChange = graph.afterChange;
+                if (typeof afterChange === 'function')
+                    afterChange.call(graph);
+            },
+            graph: rootMutations,
+            nodes,
+            history,
+            construction,
+            definitions: new CubeEmbeddedDefinitionStager({
+                registrar: subgraphRegistrar,
+                createId: createUuid,
+            }),
         }),
+        reportError: (error) => {
+            options.logger.error('SugarCubes could not move the Cube.', { error });
+            options.feedback?.push?.('error', 'Cube not moved', error instanceof Error ? error.message : String(error));
+        },
     });
     const placement = new CubePlacementService({
         construction,
@@ -388,16 +393,14 @@ export function createComfyCubeRuntime(options) {
         authoring,
         nodes,
         cardState,
-        reorder: reorder.service,
-        graphSnapshots: reorder.snapshots,
-        stackCommit,
+        chain: chain.service,
         instanceActions: new CubeInstanceActions({
             nodes,
             graph: rootMutations,
             history,
             createId: createUuid,
             scope: graphScope,
-            isReordering: () => reorder.service.pending,
+            chain: chain.service,
         }),
         graphChanges: canvasGraphChanges,
         versionAvailability,
@@ -415,7 +418,7 @@ export function createComfyCubeRuntime(options) {
         restoreLegacy: (batch) => legacyMigration.restore(batch),
         detectLegacyBlueprints: () => blueprintMigration.scan(graph),
         dispose: () => {
-            reorder.dispose();
+            chain.dispose();
             outputSurfaceSynchronizer.dispose();
             editorNavigation.dispose();
             metadataHud?.dispose();

@@ -19,6 +19,7 @@ import type { CubeNodeCatalog } from '../node/CubeNodeCatalog.js';
 import type { ComfyCubeRootMutationAdapter } from '../ComfyCubeRootMutationAdapter.js';
 import type { ComfyCubeHistory } from '../ComfyCubeHistoryAdapter.js';
 import type { ComfyCubePlacementRuntime } from '../placement/ComfyCubePlacementRuntime.js';
+import type { CubeChainService } from '../chain/CubeChainService.js';
 import {
   captureNativeCubeConnections,
   restoreNativeCubeConnections,
@@ -29,7 +30,7 @@ interface InstanceActionOptions {
   readonly graph: Pick<ComfyCubeRootMutationAdapter, 'add' | 'remove' | 'getNodeById' | 'getLink'>;
   readonly history: ComfyCubeHistory;
   readonly scope: Pick<ComfyCubePlacementRuntime['graphScope'], 'assertCurrentRoot'>;
-  isReordering(): boolean;
+  readonly chain: Pick<CubeChainService, 'append'>;
   createId(): string;
 }
 
@@ -44,7 +45,6 @@ export class CubeInstanceActions {
   /** Reject stale menu targets before accepting synchronous or delayed user intent. */
   require(instanceId: string): CubeNode {
     this.#options.scope.assertCurrentRoot('edited');
-    if (this.#options.isReordering()) throw new Error('Wait for Cube reordering to finish.');
     const node = this.#options.nodes.get(instanceId);
     if (!node || this.#options.graph.getNodeById(node.id) !== node)
       throw new Error('The Cube is no longer in the current workflow.');
@@ -114,7 +114,7 @@ export class CubeInstanceActions {
     );
   }
 
-  /** Clone native instance values with independent identity and append without copying external links. */
+  /** Clone native instance values with independent identity and add it at the end of the stack. */
   duplicate(instanceId: string): CubeNode {
     const source = this.require(instanceId);
     if (typeof source.clone !== 'function') throw new Error('Native Cube cloning is unavailable.');
@@ -134,23 +134,7 @@ export class CubeInstanceActions {
     const title = this.#duplicateTitle(source.title ?? source.subgraph.name);
     clone.title = title;
     requireCubeIdentity(clone).instance_alias = title;
-    const x = Math.max(
-      ...this.#options.nodes.list().map((node) => Number(node.pos[0]) + Number(node.size[0])),
-    );
-    if (!Number.isFinite(x)) throw new Error('Cube stack contains invalid native geometry.');
-    clone.pos[0] = x + 24;
-    clone.pos[1] = source.pos[1] ?? 0;
-    this.#change(
-      clone,
-      () => {
-        this.#options.graph.add(clone);
-        this.#options.nodes.add(clone);
-      },
-      () => {
-        if (this.#options.graph.getNodeById(clone.id) === clone) this.#options.graph.remove(clone);
-        this.#options.nodes.remove(id);
-      },
-    );
+    this.#options.chain.append(clone);
     return clone;
   }
 

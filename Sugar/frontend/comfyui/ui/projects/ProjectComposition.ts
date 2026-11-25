@@ -17,6 +17,7 @@
 import { isRecord } from '../types/common.js';
 import type { CubeLibraryApi } from '../core/CubeLibraryApi.js';
 import { SugarScriptAuthoringApi } from '../sugarscript/SugarScriptAuthoringApi.js';
+import type { CubeStackView } from '../cube/chain/CubeStackView.js';
 import { SugarScriptCompileError } from '../sugarscript/SugarScriptImportService.js';
 import { ProjectScripts } from './application/ProjectScripts.js';
 import { ProjectMasks } from './application/ProjectMasks.js';
@@ -46,6 +47,8 @@ export interface ProjectCompositionOptions {
   importScript(source: string): Promise<unknown>;
   /** Present the shown workflow as its Cubes. */
   showCubes(): void;
+  /** The stack the page shows, which a saved script lists its Cubes in. */
+  stack(): CubeStackView | null;
   /** Prepare a queue payload's inputs the way a run does: canvas sources captured into files. */
   prepareInputs(payload: unknown): Promise<{ readonly payload: unknown }>;
   /** The host's own file dialog, used while the page runs in a host that shows one. */
@@ -99,7 +102,7 @@ export function createProjects(options: ProjectCompositionOptions): Projects {
       showCubes: options.showCubes,
       captureInputs: async (payload) => (await options.prepareInputs(payload)).payload,
     }),
-    (workflow) => language.render(workflow),
+    (workflow) => language.render(workflow, options.stack()),
     new ProjectMasks(files, new ComfyProjectMaskInputs(fetchApi)),
   );
   const commands = projectCommands({

@@ -23,7 +23,7 @@ import type { ProximityMatch } from '../../../frontend/comfyui/ui/overlays/proxi
 import type { ComfyGraph, ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 
 describe('NativeCubeProximityEndpointSource', () => {
-  test('discovers real root slots and recursively resolves nested Cube execution endpoints', () => {
+  test('discovers only Cube boundary slots and recursively resolves nested Cube execution endpoints', () => {
     const producer = node('producer', [], [{ name: 'image', type: 'IMAGE', links: [1] }]);
     const outputBoundary = boundaryNode(-20);
     const outputGraph = graph([producer], [link(1, producer.id, 0, outputBoundary.id, 0)]);
@@ -83,13 +83,6 @@ describe('NativeCubeProximityEndpointSource', () => {
           slotName: 'image',
           slotPos: [110, 25],
         }),
-        expect.objectContaining({
-          endpointId: 'ordinary-output',
-          cube: null,
-          originId: 'ordinary-output',
-          originSlot: 0,
-          slotName: 'mask',
-        }),
       ]),
     );
     expect(endpoints.inputs).toEqual(
@@ -108,23 +101,32 @@ describe('NativeCubeProximityEndpointSource', () => {
           slotName: 'image',
           slotPos: [200, 25],
         }),
-        expect.objectContaining({
-          endpointId: 'ordinary-input',
-          cube: null,
-          promptTargets: [{ nodeId: 'ordinary-input', inputSlot: 0, inputName: 'mask' }],
-          slotName: 'mask',
-        }),
       ]),
     );
-    expect(endpoints.outputs).toHaveLength(2);
-    expect(endpoints.inputs).toHaveLength(2);
+    // Only Cubes link by proximity: a plain node's free slots are never endpoints.
+    expect(endpoints.outputs.map((endpoint) => endpoint.endpointId)).toEqual(['cube-output']);
+    expect(endpoints.inputs.map((endpoint) => endpoint.endpointId)).toEqual(['cube-input']);
   });
 
   test('uses Comfy unified slot geometry before the legacy connection-position fallback', () => {
-    const output = node('native-output', [], [{ name: 'image', type: 'IMAGE', links: null }]);
+    const producer = node('producer', [], [{ name: 'image', type: 'IMAGE', links: [1] }]);
+    const output = subgraphNode('native-output', [], [{ name: 'image', type: 'IMAGE' }], {
+      graph: graph([producer], [link(1, producer.id, 0, boundaryNode(-20).id, 0)]),
+      inputLinks: [],
+      outputLink: resolvedOutput(producer, 0),
+      cubeId: 'definition-output',
+      instanceId: 'instance-output',
+    });
     output.getSlotPosition = jest.fn(() => [340, 275]);
     output.getConnectionPos = jest.fn(() => [100, 25]);
-    const input = node('native-input', [{ name: 'image', type: 'IMAGE', link: null }], []);
+    const consumer = node('consumer', [{ name: 'image', type: 'IMAGE', link: 2 }], []);
+    const input = subgraphNode('native-input', [{ name: 'image', type: 'IMAGE' }], [], {
+      graph: graph([consumer], [link(2, boundaryNode(-10).id, 0, consumer.id, 0)]),
+      inputLinks: [resolvedInput(consumer, 0)],
+      outputLink: undefined,
+      cubeId: 'definition-input',
+      instanceId: 'instance-input',
+    });
     input.getSlotPosition = jest.fn(() => [380, 290]);
     input.getConnectionPos = jest.fn(() => [0, 25]);
 

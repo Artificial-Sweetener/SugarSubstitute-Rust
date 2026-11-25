@@ -28,6 +28,7 @@ from sugarcubes.output_saving.domain.saver_contract import ImageSaverContract
 from sugarcubes.output_saving.infrastructure.source_inventory import (
     ComfySavingSourceInventory,
 )
+from sugarcubes.workflow_analysis import CubeStackView
 from tests.execution.support.execution_fixtures import cube_workflow, provider_document
 
 
@@ -71,6 +72,34 @@ def test_source_inventory_uses_shared_stack_projection_not_prompt_or_node_array_
     assert cubes["c"].cube_number == 3
     assert not cubes["c"].enabled
     assert workflow == original
+
+
+def test_source_inventory_numbers_cubes_by_the_stack_the_page_sent() -> None:
+    """A Cube wired ahead of another on the graph is numbered as the page's stack shows it."""
+    workflow = cube_workflow({"a": provider_document("A"), "b": provider_document("B")})
+    nodes = workflow["nodes"]
+    assert isinstance(nodes, list)
+    for index, node in enumerate(nodes):
+        assert isinstance(node, dict)
+        node["pos"] = [index * 500, 0]
+    prepared = CubeExecutionCoordinator().prepare(
+        CubeExecutionRequest(workflow=workflow, proximity_connections=())
+    )
+    inventory = ComfySavingSourceInventory(
+        qualified_class=lambda _: None, image_output_class=lambda _: False
+    ).collect(
+        prepared.prompt,
+        workflow=workflow,
+        owners=prepared.node_owners,
+        stack=CubeStackView(proximity_connections=(), order=("b", "a")),
+    )
+    numbers = {
+        source.cube_id: source.cube_number
+        for source in inventory.sources
+        if source.kind is SourceKind.CUBE
+    }
+    assert numbers == {"b": 1, "a": 2}
+    assert inventory.active_cube_ids == ("b", "a")
 
 
 def test_custom_image_output_remains_unmanaged_and_ordinary_labels_are_literal() -> (

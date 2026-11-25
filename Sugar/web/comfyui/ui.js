@@ -143,7 +143,7 @@ const { queue: promptQueueBridge, prepareAnalysisPrompt } = createCubeHostExecut
     boundaryResolver: nativeBoundaryResolver,
     getGraph: () => appRef?.graph,
     getCubes: () => cubeRuntimeLifecycle.current()?.nodes.list() ?? [],
-    getProximityMatches: () => overlayManager.proximity.resolveExecutionMatches(appRef?.canvas?.graph ?? appRef?.graph),
+    getStack: () => cubeRuntimeLifecycle.current()?.chain.view() ?? null,
     applyProximity: (payload) => overlayManager.proximity.applyProximityToPrompt(payload),
     prepareCanvasInputs: (payload) => canvasInputs.preparation.prepare(payload),
     prepareRelations: (payload) => {
@@ -204,7 +204,8 @@ function createCubeRuntime() {
         app: appRef,
         api,
         caches: ui.runtimeCaches,
-        graphGateway: ui.workflowGraphAnalyses,
+        proximityMatches: () => overlayManager.proximity.liveMatches(appRef.graph),
+        isProximityStrict: () => Boolean(overlayManager.proximity.settings.strict),
         reconcileCubeMembership: () => relations.reconcileCubeMembership(),
         liteGraph,
         document: documentRef,
@@ -373,6 +374,7 @@ const projects = createProjects({
     describe: readErrorMessage,
     importScript: (source) => importHostCoordinator.importSugarScript(source),
     showCubes: () => workflowWorkspace.masonry.show(),
+    stack: () => cubeRuntimeLifecycle.current()?.chain.view() ?? null,
     prepareInputs: (payload) => canvasInputs.preparation.prepare(payload),
     hostDialog: workflowFields.fileChoice,
 });

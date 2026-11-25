@@ -13,51 +13,41 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Place one picker Cube after a live Cube without creating persisted links. */
-
+/** Add a picked Cube right after another, through the same chain the Add cubes dialog uses. */
 import type { ComfyCubeRuntime } from '../cube/ComfyCubeRuntime.js';
-import { CubeNodeInsertAfterCoordinator } from '../cube/node/CubeNodeInsertAfterCoordinator.js';
 import type { CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
 import type { CubePickerPlacementAdapter } from './CubePickerPlacementAdapter.js';
 
 export interface CubePickerInsertAfterServiceOptions {
-  placement: CubePickerPlacementAdapter;
-  getRuntime(): ComfyCubeRuntime;
+  placement: Pick<CubePickerPlacementAdapter, 'prepare'>;
+  getRuntime(): Pick<ComfyCubeRuntime, 'chain' | 'construction'>;
+  createId(): string;
 }
 
-/** Own picker preparation, atomic insertion, downstream displacement, and rollback. */
+/** Turn one picked catalog type into a new Cube after the source in the stack. */
 export class CubePickerInsertAfterService {
-  readonly #placement: CubePickerPlacementAdapter;
-  readonly #getRuntime: () => ComfyCubeRuntime;
+  readonly #options: CubePickerInsertAfterServiceOptions;
 
-  /** Bind picker preparation to the current root-graph runtime. */
+  /** Bind the picker's prepared payloads to the live chain. */
   constructor(options: CubePickerInsertAfterServiceOptions) {
-    this.#placement = options.placement;
-    this.#getRuntime = options.getRuntime;
+    this.#options = options;
   }
 
-  /** Insert one Cube after the source instance and return its graph-owned node. */
+  /** Insert one Cube after the source instance and return its node. */
   insert(sourceInstanceId: string, type: string): CubeNode {
-    const runtime = this.#getRuntime();
-    const source = runtime.nodes.get(sourceInstanceId);
-    if (!source) throw new Error(`Cube instance '${sourceInstanceId}' is no longer available.`);
-    const positions = new CubeNodeInsertAfterCoordinator(runtime.nodes);
-    const prepared = this.#placement.prepare(type, positions.insertionOrigin(source));
-    const registration = runtime.registerSubgraphs(prepared.payload);
-    try {
-      const placed = runtime.placement.placeBatch(
-        [{ payload: prepared.payload, options: prepared.options }],
-        ([inserted]) => {
-          if (!inserted) throw new Error('SugarCube insertion did not produce a node.');
-          positions.insertAfter(source, inserted.node);
-        },
-      )[0];
-      if (!placed) throw new Error('SugarCube insertion did not produce a node.');
-      this.#placement.reportWarnings(prepared.descriptor.cubeId, registration, placed);
-      return placed.node;
-    } catch (error: unknown) {
-      runtime.discardSubgraphs(registration.createdIds);
-      throw error;
-    }
+    const runtime = this.#options.getRuntime();
+    const prepared = this.#options.placement.prepare(type);
+    const instanceId = this.#options.createId();
+    const size = runtime.construction.previewSize(
+      prepared.payload,
+      prepared.descriptor.inputs.length > 0,
+      { instanceId },
+    );
+    return runtime.chain.insertAfter(sourceInstanceId, {
+      instanceId,
+      alias: prepared.descriptor.displayName,
+      payload: prepared.payload,
+      size: [size[0], size[1]],
+    });
   }
 }

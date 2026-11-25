@@ -14,14 +14,6 @@ export class CubeStackCartFactory {
         await this.#options.ensureCatalog();
         const runtime = this.#options.getRuntime();
         runtime.graphScope.assertCurrentRoot('edited');
-        if (runtime.reorder.pending)
-            throw new Error('Wait for Cube reordering to finish before opening the cart.');
-        const snapshot = runtime.graphSnapshots.snapshot();
-        const analysis = await runtime.reorder.refresh();
-        if (!analysis ||
-            !runtime.graphSnapshots.available ||
-            runtime.graphSnapshots.snapshot().revision !== snapshot.revision)
-            throw new Error('Workflow changed while the Cube cart was opening.');
         const catalog = new CubeStackCartCatalog(this.#options.registry);
         const initial = catalog.capture(runtime.construction, 0);
         let library = initial.library;
@@ -33,24 +25,16 @@ export class CubeStackCartFactory {
             .list()
             .map((node) => [String(requireCubeIdentity(node).instance_id), existingRow(node)]));
         const session = new CubeStackCartSession({
-            snapshot,
-            analysis,
+            order: runtime.chain.order(),
             artifacts: initial.artifacts,
-            snapshots: runtime.graphSnapshots,
-            gateway: this.#options.gateway,
+            chain: runtime.chain,
             createId: this.#options.createId,
-            commit: {
-                commit: (opening, entries, result) => runtime.stackCommit.commit(opening, result, entries.flatMap((entry) => {
-                    if (entry.source === 'existing')
-                        return [];
-                    const captured = payloads.get(entry.catalogKey);
-                    if (!captured)
-                        throw new Error('Captured Cube cart artifact is unavailable.');
-                    const prepared = this.#options.placement.prepareCaptured(captured.descriptor, captured.payload);
-                    return [
-                        { instanceId: entry.instanceId, payload: prepared.payload, size: entry.size },
-                    ];
-                })),
+            prepare: (catalogKey) => {
+                const captured = payloads.get(catalogKey);
+                if (!captured)
+                    throw new Error('Captured Cube cart artifact is unavailable.');
+                return this.#options.placement.prepareCaptured(captured.descriptor, captured.payload)
+                    .payload;
             },
         });
         return {

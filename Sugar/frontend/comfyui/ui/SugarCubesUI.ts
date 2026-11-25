@@ -53,8 +53,6 @@ import { RendererGeometryCoordinator } from './geometry/RendererGeometryCoordina
 import type { CubeDefinitionEntry } from './graph/CubeDefinitionStore.js';
 import type { UnknownRecord } from './types/common.js';
 import { CubeWorkflowLibraryState } from './workflow/CubeWorkflowLibraryState.js';
-import { CubeGraphAnalysisCache } from './workflow/application/CubeGraphAnalysisCache.js';
-import { CubeGraphApi } from './workflow/infrastructure/CubeGraphApi.js';
 import { MemoryBudgetRegistry } from './core/memory/MemoryBudgetRegistry.js';
 import { ComfyCubeRuntimeCaches } from './cube/ComfyCubeRuntimeCaches.js';
 import { CubeWorkflowLibraryActions } from './workflow/CubeWorkflowLibraryActions.js';
@@ -113,7 +111,6 @@ export class SugarCubesUI {
   readonly rendererGeometry: RendererGeometryCoordinator;
   readonly workflowLibraryState: CubeWorkflowLibraryState;
   /** Share canonical workflow analyses across runtimes so unchanged switches issue no request. */
-  readonly workflowGraphAnalyses: CubeGraphAnalysisCache;
   /** Enforce one page allowance across every SugarCubes in-memory cache. */
   readonly memory = new MemoryBudgetRegistry();
   /** Keep workflow-independent Cube runtime caches across workflow switches. */
@@ -141,7 +138,6 @@ export class SugarCubesUI {
       this.api,
       this.adapter.getConsole?.() ?? console,
     );
-    this.workflowGraphAnalyses = new CubeGraphAnalysisCache(new CubeGraphApi(this.api));
     this.runtimeCaches = new ComfyCubeRuntimeCaches(
       this.memory,
       this.api,
@@ -361,7 +357,6 @@ export class SugarCubesUI {
   /** Retire workflow results derived from a catalog that a local mutation just changed. */
   retireWorkflowCatalogResults(): void {
     this.workflowLibraryState.invalidateCatalog();
-    this.workflowGraphAnalyses.invalidate();
     this.runtimeCaches.invalidateLibrary();
   }
 
