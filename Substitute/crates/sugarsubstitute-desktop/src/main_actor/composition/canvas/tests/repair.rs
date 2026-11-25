@@ -70,11 +70,8 @@ fn present(
         Some(frame.target)
     );
     let cost = canvas.timings.latest.ok_or("Presentation cost absent")?;
-    let captured = canvas
-        .active
-        .as_mut()
-        .and_then(|allocation| allocation.capture.take())
-        .unwrap_or_default();
+    let captured =
+        canvas.active.as_mut().and_then(|allocation| allocation.capture.take()).unwrap_or_default();
     Ok(Shown { cost, captured })
 }
 
@@ -124,7 +121,10 @@ fn a_frame_based_on_the_retained_frame_repairs_only_what_changed() -> TestResult
     assert!(edited.pixels() < extent.pixels() / 4);
     let second = present(&mut canvas, 2, Some(1), &edit, &frame(2))?;
     assert_eq!(second.cost.reach, Reach::Repaired { scrolled: false, regions: 1 });
-    assert_eq!((second.cost.source, second.cost.source_bytes), (Source::Updated, edited.pixels() * 4));
+    assert_eq!(
+        (second.cost.source, second.cost.source_bytes),
+        (Source::Updated, edited.pixels() * 4)
+    );
     assert_eq!(second.captured, cut(&frame(2), edited));
 
     // A frame that changes no pixel draws and copies nothing; the retained surface is the frame.
@@ -154,7 +154,10 @@ fn a_frame_based_on_the_retained_frame_repairs_only_what_changed() -> TestResult
     assert_eq!(exposed.len(), 2);
     let slid = present(&mut canvas, 6, Some(5), &diagonal, &frame(6))?;
     assert_eq!(slid.cost.reach, Reach::Repaired { scrolled: true, regions: 2 });
-    assert_eq!(slid.cost.source_bytes, exposed.iter().map(|region| region.pixels() * 4).sum::<u64>());
+    assert_eq!(
+        slid.cost.source_bytes,
+        exposed.iter().map(|region| region.pixels() * 4).sum::<u64>()
+    );
     assert_eq!(slid.captured, cut(&frame(6), exposed[0]));
 
     // The pans moved pixels on the surface only, so the bitmap no longer holds a whole frame.
@@ -184,7 +187,12 @@ fn a_frame_based_on_the_retained_frame_repairs_only_what_changed() -> TestResult
     // the changed region copied: the bitmap followed the frames in between.
     let ninth = present(&mut canvas, 9, Some(8), &edit, &frame(9))?;
     assert_eq!(ninth.cost.source_bytes, edited.pixels() * 4);
-    assert!(canvas.active.as_ref().is_some_and(|active| active.holds() == (stamp(9).ok(), stamp(9).ok())));
+    assert!(
+        canvas
+            .active
+            .as_ref()
+            .is_some_and(|active| active.holds() == (stamp(9).ok(), stamp(9).ok()))
+    );
 
     assert!(!canvas.hide()?);
     execution

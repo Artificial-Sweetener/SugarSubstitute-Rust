@@ -212,12 +212,12 @@ impl Allocation {
                     })
                     .then_some(bytes)
             }
-            // SAFETY: Frame validation proves the complete immutable pixel storage and stride;
-            // the retained bitmap has this surface's extent and format.
-            Some(bitmap) => unsafe {
-                bitmap.CopyFromMemory(None, frame.pixels.as_ptr().cast(), stride).is_ok()
+            Some(bitmap) => {
+                // SAFETY: Frame validation proves the complete immutable pixel storage and
+                // stride; the retained bitmap has this surface's extent and format.
+                unsafe { bitmap.CopyFromMemory(None, frame.pixels.as_ptr().cast(), stride).is_ok() }
+                    .then_some(complete)
             }
-            .then_some(complete),
             None => None,
         };
         self.upload_holds = None;
@@ -287,9 +287,8 @@ impl Allocation {
                 .map_err(|cause| DesktopError::new("scroll_canvas_surface", cause))?;
         }
         // The bitmap follows the frame only when it held the plan's base and nothing moved.
-        let follows = self.upload.is_some()
-            && self.upload_holds == frame.base
-            && plan.blit().is_none();
+        let follows =
+            self.upload.is_some() && self.upload_holds == frame.base && plan.blit().is_none();
         let extent = self.extent;
         let mut open = started.elapsed();
         let mut fill = Duration::ZERO;
@@ -304,8 +303,7 @@ impl Allocation {
             let offset = self.begin(Some(region))?;
             open += opening.elapsed();
             let filling = Instant::now();
-            let context =
-                self.context.clone().ok_or_else(|| missing("canvas_draw_context"))?;
+            let context = self.context.clone().ok_or_else(|| missing("canvas_draw_context"))?;
             if self.upload.is_none() {
                 // The first repair after a shared frame has no bitmap yet: it starts complete.
                 (source, source_bytes) = self.fill_complete(&context, frame)?;
@@ -337,8 +335,12 @@ impl Allocation {
             self.capture.prefill(&context, &target);
             paint(&context, bitmap, &target, Some(&from), wash);
             #[cfg(test)]
-            self.capture.copy(&context, offset, Extent::new(region.width(), region.height())
-                .map_err(|cause| DesktopError::new("capture_canvas_surface", cause))?)?;
+            self.capture.copy(
+                &context,
+                offset,
+                Extent::new(region.width(), region.height())
+                    .map_err(|cause| DesktopError::new("capture_canvas_surface", cause))?,
+            )?;
             drop(context);
             self.end_draw()?;
             draw += drawing.elapsed();
@@ -502,7 +504,9 @@ fn copy_region(
     // SAFETY: Plan regions are clipped to this extent and frame validation proves `pixels` is the
     // complete extent, so every row of the region, read at the frame's stride from its first
     // pixel, lies inside the slice; the bitmap has this extent and format.
-    unsafe { bitmap.CopyFromMemory(Some(&area), pixels[first..].as_ptr().cast(), extent.width() * 4) }
+    unsafe {
+        bitmap.CopyFromMemory(Some(&area), pixels[first..].as_ptr().cast(), extent.width() * 4)
+    }
 }
 
 /// Replace `target` of the open surface update with the desktop body wash under `bitmap`.

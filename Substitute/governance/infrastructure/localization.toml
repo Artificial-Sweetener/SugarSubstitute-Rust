@@ -738,7 +738,7 @@ rationale = "Main caption contracts borrow localized labels from the host. They 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_caption_tests.rs"
-source_sha256 = "sha256:7e4909a98cfaa83618e19a89109872a1f67f0cddaa8f829f3fa68c89c8478748"
+source_sha256 = "sha256:8f5d208b34efe5692d7a5c59905f71c2c017c5ffa09e752352b0de39b0ac2f0a"
 kind = "fixture"
 rationale = "Layout fixtures use short stand-in labels to check geometry; no product copy is defined here."
 [[records]]

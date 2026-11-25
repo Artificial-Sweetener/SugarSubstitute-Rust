@@ -108,6 +108,7 @@ consumers = [
   "crates/sugarsubstitute-contracts/src/presentation/wash.rs",
   "crates/sugarsubstitute-contracts/tests/desktop_session.rs",
   "crates/sugarsubstitute-contracts/tests/desktop_session_bounds.rs",
+  "crates/sugarsubstitute-desktop/src/main_caption_tests.rs",
   "crates/sugarsubstitute-desktop/src/main_panel_ingress_vectors_tests.rs",
   "crates/sugarsubstitute-desktop/src/main_session_contract/tests.rs",
   "crates/sugarsubstitute-desktop/src/main_session_ingress/tests.rs",
