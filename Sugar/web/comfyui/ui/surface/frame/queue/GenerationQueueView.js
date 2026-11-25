@@ -44,7 +44,6 @@ export class GenerationQueueView {
         this.#empty = this.#make('p', 'sc-generation-queue-empty');
         this.#rows = this.#make('div', 'sc-generation-queue-rows');
         this.#rows.setAttribute('role', 'list');
-        this.#rows.setAttribute('data-sc-scrollbar-managed', '');
         this.#rows.addEventListener('click', this.#onClick);
         this.#rows.addEventListener('dblclick', this.#onOpen);
         this.#rows.addEventListener('contextmenu', this.#onMenu);

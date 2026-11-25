@@ -15,13 +15,25 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Hold the generation queue as a callout that points at the queue button. */
 import { FloatingSurface } from '../../../menus/FloatingSurface.js';
-import { GENERATION_QUEUE_ARROW_HEIGHT, GENERATION_QUEUE_FLYOUT_WIDTH, } from './GenerationQueueViewStyles.js';
+import { GENERATION_QUEUE_ARROW_HEIGHT, GENERATION_QUEUE_FLYOUT_MAX_HEIGHT, GENERATION_QUEUE_FLYOUT_WIDTH, } from './GenerationQueueViewStyles.js';
+/** The space kept between the fly-out and the window's bottom edge. */
+const WINDOW_MARGIN = 8;
+/**
+ * The fly-out's greatest height under a button whose bottom edge is at `bottom` in a window
+ * `windowHeight` tall: its own greatest height, or the room below the button when that is less,
+ * so it always hangs below its button and a longer list scrolls inside it.
+ */
+export function generationQueueFlyoutMaxHeight(bottom, windowHeight) {
+    const below = windowHeight - bottom - GENERATION_QUEUE_ARROW_HEIGHT - WINDOW_MARGIN;
+    return Math.max(0, Math.min(GENERATION_QUEUE_FLYOUT_MAX_HEIGHT, below));
+}
 /**
  * Own where the queue's fly-out sits and when it leaves.
  *
  * The fly-out hangs centred under the queue button, over the toolbar and the canvas, with an arrow
- * on its top edge pointing back at the button. The shared floating surface keeps it inside the
- * window, so the arrow is placed from where the surface actually landed. A press anywhere outside
+ * on its top edge pointing back at the button. It is never taller than the room below the button,
+ * so it never turns upwards over the button; a longer list scrolls inside it. The shared floating
+ * surface keeps it inside the window, so the arrow is placed from where the surface landed. A press anywhere outside
  * the fly-out and its button puts it away; the button itself toggles it.
  */
 export class GenerationQueueFlyout {
@@ -58,6 +70,7 @@ export class GenerationQueueFlyout {
                 closed();
             },
             containsTarget: (target) => button.contains(target),
+            maxHeight: generationQueueFlyoutMaxHeight(bounds.bottom, button.ownerDocument.defaultView?.innerHeight ?? 0),
         });
         const placed = this.content.getBoundingClientRect();
         this.content.style.setProperty('--sc-gq-arrow', `${String(centre - placed.left)}px`);
