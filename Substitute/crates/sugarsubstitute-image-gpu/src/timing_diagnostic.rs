@@ -8,6 +8,10 @@
 //! its authenticated stderr, where the parent's bounded decoder relays it as its own event.
 
 /// One phase window of one selected device, in whole microseconds, bytes and counts.
+///
+/// A window spans about a second, so its counts and microsecond sums fit 32 bits (sums saturate);
+/// only bytes need 64. The relay carries the record inline in its observation, which this keeps
+/// within the size of the relay's original metadata.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Record {
     /// The phase's fixed name, one of the device's closed phase inventory.
@@ -17,25 +21,25 @@ pub struct Record {
     /// The adapter's PCI device identifier.
     pub device: u32,
     /// Since the device's previous report.
-    pub window_us: u64,
+    pub window_us: u32,
     /// Calls that returned in the window.
-    pub completed: u64,
+    pub completed: u32,
     /// Wall time of the calls that returned.
-    pub total_us: u64,
+    pub total_us: u32,
     /// The longest call that returned.
-    pub max_us: u64,
+    pub max_us: u32,
     /// Bytes the returned calls moved.
     pub bytes: u64,
     /// Work items the returned calls carried.
-    pub work_items: u64,
+    pub work_items: u32,
     /// Native polls that timed out before completion.
-    pub wait_timeouts: u64,
+    pub wait_timeouts: u32,
     /// Calls still outstanding at the report.
-    pub active: u64,
+    pub active: u32,
     /// The most calls outstanding at once in the window.
-    pub peak_active: u64,
+    pub peak_active: u32,
     /// How long the outstanding calls have been continuously busy.
-    pub busy_us: u64,
+    pub busy_us: u32,
 }
 
 /// The exact producer target, which the parser requires before the closed fields.
@@ -121,20 +125,21 @@ impl Record {
             peak_active,
             busy_us,
         ] = values;
+        let narrow = |value: u64| u32::try_from(value).ok();
         Some(Self {
             phase,
-            vendor: u32::try_from(vendor).ok()?,
-            device: u32::try_from(device).ok()?,
-            window_us,
-            completed,
-            total_us,
-            max_us,
+            vendor: narrow(vendor)?,
+            device: narrow(device)?,
+            window_us: narrow(window_us)?,
+            completed: narrow(completed)?,
+            total_us: narrow(total_us)?,
+            max_us: narrow(max_us)?,
             bytes,
-            work_items,
-            wait_timeouts,
-            active,
-            peak_active,
-            busy_us,
+            work_items: narrow(work_items)?,
+            wait_timeouts: narrow(wait_timeouts)?,
+            active: narrow(active)?,
+            peak_active: narrow(peak_active)?,
+            busy_us: narrow(busy_us)?,
         })
     }
 }
@@ -191,6 +196,7 @@ mod tests {
             LINE.replace("phase=\"display_draw\"", "phase=display_draw"),
             LINE.replace("vendor=4318", "vendor=4294967296"),
             LINE.replace("completed=58", "completed=058"),
+            LINE.replace("completed=58", "completed=4294967296"),
             LINE.replace(" bytes=0", ""),
             format!("{LINE} extra=1"),
             format!("operation=\"spoof\" {LINE}"),

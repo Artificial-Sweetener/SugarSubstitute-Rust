@@ -9,42 +9,46 @@
 //! its own structured event.
 
 /// One window of committed canvas frames, in whole microseconds, bytes, counts and pixels.
+///
+/// A window spans about a second, so its counts, microsecond sums and pixel sizes fit 32 bits
+/// (sums saturate); only the bytes handed over need 64. The relay carries the record inline in
+/// its observation, which this keeps within the size of the relay's original metadata.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Record {
     /// From the window's first frame to its last.
-    pub window_us: u64,
+    pub window_us: u32,
     /// Frames committed.
-    pub presents: u64,
+    pub presents: u32,
     /// CPU frames that allocated a new device bitmap.
-    pub created: u64,
+    pub created: u32,
     /// CPU frames that refilled the surface's retained bitmap.
-    pub updated: u64,
+    pub updated: u32,
     /// Shared GPU frames wrapped without copying.
-    pub wrapped: u64,
+    pub wrapped: u32,
     /// Frames shown by redrawing only their changed regions of the retained surface.
-    pub repaired: u64,
+    pub repaired: u32,
     /// Repaired frames that first moved the surface's retained pixels.
-    pub scrolled: u64,
+    pub scrolled: u32,
     /// Repaired frames that changed no pixel.
-    pub unchanged: u64,
+    pub unchanged: u32,
     /// Regions the repaired frames redrew.
-    pub regions: u64,
+    pub regions: u32,
     /// CPU pixel bytes handed to Direct2D.
     pub source_bytes: u64,
     /// Opening surface updates and handing pixels over (for shared frames: wrapping the texture).
-    pub fill_us: u64,
+    pub fill_us: u32,
     /// Clearing, drawing and closing surface updates.
-    pub draw_us: u64,
+    pub draw_us: u32,
     /// Queuing the shared texture's read fence and flushing the device.
-    pub signal_us: u64,
+    pub signal_us: u32,
     /// Binding, placing and committing to composition.
-    pub commit_us: u64,
+    pub commit_us: u32,
     /// The slowest single frame, fill through commit.
-    pub slowest_us: u64,
+    pub slowest_us: u32,
     /// The last frame's viewport width in physical pixels.
-    pub width: u64,
+    pub width: u32,
     /// The last frame's viewport height in physical pixels.
-    pub height: u64,
+    pub height: u32,
 }
 
 /// The exact producer target, which the parser requires before the closed fields.
@@ -142,24 +146,25 @@ impl Record {
             width,
             height,
         ] = values;
+        let narrow = |value: u64| u32::try_from(value).ok();
         Some(Self {
-            window_us,
-            presents,
-            created,
-            updated,
-            wrapped,
-            repaired,
-            scrolled,
-            unchanged,
-            regions,
+            window_us: narrow(window_us)?,
+            presents: narrow(presents)?,
+            created: narrow(created)?,
+            updated: narrow(updated)?,
+            wrapped: narrow(wrapped)?,
+            repaired: narrow(repaired)?,
+            scrolled: narrow(scrolled)?,
+            unchanged: narrow(unchanged)?,
+            regions: narrow(regions)?,
             source_bytes,
-            fill_us,
-            draw_us,
-            signal_us,
-            commit_us,
-            slowest_us,
-            width,
-            height,
+            fill_us: narrow(fill_us)?,
+            draw_us: narrow(draw_us)?,
+            signal_us: narrow(signal_us)?,
+            commit_us: narrow(commit_us)?,
+            slowest_us: narrow(slowest_us)?,
+            width: narrow(width)?,
+            height: narrow(height)?,
         })
     }
 }
@@ -223,6 +228,7 @@ mod tests {
             LINE.replace("schema=2", "schema=1"),
             LINE.replace("presents=60", "presents=060"),
             LINE.replace("presents=60", "presents=-1"),
+            LINE.replace("presents=60", "presents=4294967296"),
             LINE.replace(" created=1", ""),
             LINE.replace(" signal_us=310", ""),
             format!("{LINE} extra=1"),

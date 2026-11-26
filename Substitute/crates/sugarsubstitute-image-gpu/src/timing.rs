@@ -220,20 +220,21 @@ impl Drop for Span {
 impl State {
     /// Emit only after releasing bookkeeping; fields are bounded numeric quantities and fixed names.
     fn emit(&self, phase: Phase, sample: Sample, elapsed: Duration, now: Duration) {
-        let micros = |value: Duration| u64::try_from(value.as_micros()).unwrap_or(u64::MAX);
+        let narrow = |value: u64| u32::try_from(value).unwrap_or(u32::MAX);
+        let micros = |value: Duration| u32::try_from(value.as_micros()).unwrap_or(u32::MAX);
         crate::timing_diagnostic::Record {
             phase: phase.name(),
             vendor: self.vendor,
             device: self.device,
             window_us: micros(elapsed),
-            completed: sample.count,
-            total_us: sample.total_us,
-            max_us: sample.maximum_us,
+            completed: narrow(sample.count),
+            total_us: narrow(sample.total_us),
+            max_us: narrow(sample.maximum_us),
             bytes: sample.bytes,
-            work_items: sample.items,
-            wait_timeouts: sample.timeouts,
-            active: sample.active,
-            peak_active: sample.peak_active,
+            work_items: narrow(sample.items),
+            wait_timeouts: narrow(sample.timeouts),
+            active: narrow(sample.active),
+            peak_active: narrow(sample.peak_active),
             busy_us: if sample.active == 0 {
                 0
             } else {

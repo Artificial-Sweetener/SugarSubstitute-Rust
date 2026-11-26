@@ -72,14 +72,14 @@ impl CommitCost {
 
 #[derive(Default)]
 struct Window {
-    presents: u64,
-    bitmap_creations: u64,
-    bitmap_updates: u64,
-    wrapper_creations: u64,
-    repaired: u64,
-    scrolled: u64,
-    unchanged: u64,
-    regions: u64,
+    presents: u32,
+    bitmap_creations: u32,
+    bitmap_updates: u32,
+    wrapper_creations: u32,
+    repaired: u32,
+    scrolled: u32,
+    unchanged: u32,
+    regions: u32,
     source_bytes: u64,
     fill: Duration,
     draw: Duration,
@@ -107,17 +107,18 @@ impl PresentTimings {
         let now = Instant::now();
         let opened = *self.opened.get_or_insert(now);
         let window = &mut self.window;
-        window.presents += 1;
-        match cost.source {
-            Source::Created => window.bitmap_creations += 1,
-            Source::Updated => window.bitmap_updates += 1,
-            Source::Wrapped => window.wrapper_creations += 1,
-        }
+        window.presents = window.presents.saturating_add(1);
+        let source = match cost.source {
+            Source::Created => &mut window.bitmap_creations,
+            Source::Updated => &mut window.bitmap_updates,
+            Source::Wrapped => &mut window.wrapper_creations,
+        };
+        *source = source.saturating_add(1);
         if let Reach::Repaired { scrolled, regions } = cost.reach {
-            window.repaired += 1;
-            window.scrolled += u64::from(scrolled);
-            window.unchanged += u64::from(regions == 0);
-            window.regions += u64::from(regions);
+            window.repaired = window.repaired.saturating_add(1);
+            window.scrolled = window.scrolled.saturating_add(u32::from(scrolled));
+            window.unchanged = window.unchanged.saturating_add(u32::from(regions == 0));
+            window.regions = window.regions.saturating_add(regions);
         }
         window.source_bytes = window.source_bytes.saturating_add(cost.source_bytes);
         window.fill += cost.open + cost.fill;
@@ -151,7 +152,7 @@ impl PresentTimings {
         if window.presents == 0 {
             return None;
         }
-        let micros = |value: Duration| u64::try_from(value.as_micros()).unwrap_or(u64::MAX);
+        let micros = |value: Duration| u32::try_from(value.as_micros()).unwrap_or(u32::MAX);
         Some(Record {
             window_us: micros(elapsed),
             presents: window.presents,
@@ -168,8 +169,8 @@ impl PresentTimings {
             signal_us: micros(window.signal),
             commit_us: micros(window.commit),
             slowest_us: micros(window.slowest),
-            width: u64::from(window.width),
-            height: u64::from(window.height),
+            width: window.width,
+            height: window.height,
         })
     }
 }
