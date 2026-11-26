@@ -73,6 +73,8 @@ interface Painted {
   height: number;
   /** The black glyph ink inside the box, in pixels of full coverage. */
   ink: number;
+  /** The ink's vertical centre, in device pixels. */
+  inkCentre: number;
 }
 
 /**
@@ -107,19 +109,22 @@ async function painted(row: string, colour: string): Promise<Painted | null> {
           count++;
         }
       if (!count) return null;
-      let ink = 0;
+      let [ink, rows] = [0, 0];
       const lit = channels.map((channel, index) => [channel, index] as const).filter(([c]) => c);
       for (let y = top; y <= bottom; y++)
         for (let x = left; x <= right; x++) {
           const at = (y * image.width + x) * 4;
-          ink +=
+          const coverage =
             lit.reduce(
               (sum, [channel, index]) =>
                 sum + Math.min(1, Math.max(0, (channel - (pixels[at + index] ?? 0)) / channel)),
               0,
             ) / lit.length;
+          ink += coverage;
+          rows += coverage * y;
         }
-      return { left, top, width: right - left + 1, height: bottom - top + 1, ink };
+      const inkCentre = ink ? rows / ink : 0;
+      return { left, top, width: right - left + 1, height: bottom - top + 1, ink, inkCentre };
     },
     { data: shot.toString('base64'), colour },
   );
@@ -150,9 +155,11 @@ for (const [row, ordinal, about] of [
     if (!highlighted || !selected) throw new Error('Nothing was painted');
     // The same box to the device pixel: the highlight stands on the selected glyphs. Inside it the
     // same glyphs are drawn, as much ink as the selection's (a letter missing or drawn twice
-    // changes it by over a sixth); only how their edges are antialiased may differ.
+    // changes it by over a sixth), at the same height (a glyph a device pixel low moves its ink a
+    // whole pixel); only how their edges are antialiased may differ.
     const box = ({ left, top, width, height }: Painted): number[] => [left, top, width, height];
     expect(box(highlighted)).toEqual(box(selected));
     expect(Math.abs(highlighted.ink - selected.ink)).toBeLessThan(selected.ink / 10);
+    expect(Math.abs(highlighted.inkCentre - selected.inkCentre)).toBeLessThan(0.25);
     expect(await painted(row, PROOF_SELECTION)).toBeNull();
   });

@@ -269,17 +269,27 @@ export class SearchHighlights {
     /**
      * A text box paints its selection as tall as its line, and a run of text only as tall as its
      * glyphs. Each marked run is padded by the difference, so it covers what a selection covers.
+     * The box sets its glyphs a whole pixel from the line's top and leaves an odd pixel of the
+     * difference below them, where block layout would split it in halves; the copy's text is raised
+     * by that half pixel, and its runs padded around it, so its glyphs stand on the box's own.
      */
     #fill(binding) {
         const run = binding.text.querySelector('[data-sc-search]');
         if (!run)
             return;
         binding.filled = true;
-        binding.layer.style.setProperty('--sc-search-line-fill', '0px');
+        const { style } = binding.layer;
+        for (const property of ['above', 'below', 'raise'])
+            style.setProperty(`--sc-search-line-${property}`, '0px');
         const line = parseFloat(getComputedStyle(binding.control).lineHeight);
         const glyphs = run.getClientRects()[0]?.height ?? 0;
-        if (Number.isFinite(line) && glyphs > 0 && line > glyphs)
-            binding.layer.style.setProperty('--sc-search-line-fill', `${String((line - glyphs) / 2)}px`);
+        if (!Number.isFinite(line) || glyphs <= 0 || line <= glyphs)
+            return;
+        const half = (line - glyphs) / 2;
+        const above = Math.floor(half);
+        style.setProperty('--sc-search-line-above', `${String(above)}px`);
+        style.setProperty('--sc-search-line-below', `${String(line - glyphs - above)}px`);
+        style.setProperty('--sc-search-line-raise', `${String(half - above)}px`);
     }
     /** Coalesce geometry changes independently of query matching and native field lookup. */
     #schedule() {

@@ -55,8 +55,8 @@ export function ensureFinderStyles(documentRef: Document): void {
        box's own selection is, in the box's ink; their colours are the search highlights', set
        once beside the selection they share a look with (the accent theme). */
     .sc-search-highlight { position:absolute; pointer-events:none; overflow:hidden; color:transparent !important; z-index:1; }
-    .sc-search-highlight__text { color:transparent !important; }
-    .sc-search-highlight [data-sc-search] { padding-block:var(--sc-search-line-fill,0px); color:var(--sc-search-mirror-ink); }
+    .sc-search-highlight__text { position:relative; top:calc(0px - var(--sc-search-line-raise,0px)); color:transparent !important; }
+    .sc-search-highlight [data-sc-search] { padding-top:var(--sc-search-line-above,0px); padding-bottom:var(--sc-search-line-below,0px); color:var(--sc-search-mirror-ink); }
     .sc-search-highlight [data-sc-search="current"] { color:var(--sc-selection-ink,var(--sc-search-mirror-ink)); }
     @supports not (backdrop-filter:blur(1px)) {
       .sc-masonry-finder { background:var(--sc-surface-secondary); }
