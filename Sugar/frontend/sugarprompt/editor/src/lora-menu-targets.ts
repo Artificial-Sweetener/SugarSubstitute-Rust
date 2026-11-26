@@ -33,7 +33,6 @@ import { richProjection } from './rich-projection.js';
 import { LoraWidget } from './lora-widget.js';
 import { nativeLoraSchedule, type NativeLoraSchedule } from './lora-schedule.js';
 import type { ContextMenuItem } from './context-menu-contracts.js';
-import { loraNameKey } from '../../services/src/lora/names.js';
 
 /** Prepared logical-document UTF-16 bounds and canonical external intent; the original authored name is only an index key. */
 export interface LoraModelTarget {
@@ -85,13 +84,11 @@ export function loraModelTargetAt(state: EditorState, position: number): LoraMod
         ? actions.byName.get(name)
         : undefined;
     const metadata = prepared?.items ?? [];
+    // An installed LoRA is a target whether or not the editor has rows of its own for it: the
+    // host adds the model's rows to the banner's menu.
     if (
-      ((page && state.facet(loraPageHost)) ||
-        (!state.readOnly &&
-          widget.resource.resolution === 'found' &&
-          state
-            .field(nativeLoraSchedule, false)
-            ?.hasTriggersAt(position, loraNameKey(widget.resource.model.backendValue))) ||
+      (widget.resource.resolution === 'found' ||
+        (page && state.facet(loraPageHost)) ||
         (metadata.length && state.facet(loraMetadataHost))) &&
       (!target || from === position)
     )

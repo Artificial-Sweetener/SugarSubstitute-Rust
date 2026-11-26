@@ -30,6 +30,10 @@ import {
   type ContextMenu,
 } from '../../../../../../frontend/sugarprompt/editor/src/context-menu-state.ts';
 import { loraModelTargetAt } from '../../../../../../frontend/sugarprompt/editor/src/lora-menu-targets.ts';
+import {
+  contextMenuTargetAt,
+  prepareContextMenu,
+} from '../../../../../../frontend/sugarprompt/editor/src/context-menu-preparation.ts';
 import { prepareTextMenu } from '../../../../../../frontend/sugarprompt/editor/src/text-menu.ts';
 import { prepareSavedSegmentMenu } from '../../../../../../frontend/sugarprompt/editor/src/saved-segment-menu.ts';
 import {
@@ -255,4 +259,17 @@ test('actual metadata trees and enabled leaf sets are reused through selection a
   }).state;
   state = state.update({ effects: installLoraMetadataActions.of(fresh) }).state;
   assert.equal(loraModelTargetAt(state, 3), null);
+});
+
+test('an installed LoRA is a menu target when the editor has no rows of its own for it', () => {
+  const { state: hosted, capability } = prepared();
+  // No page host, no metadata actions and no scheduled trigger words: the host's model rows are
+  // the banner's whole menu, so the banner must still name its LoRA.
+  const state = hosted.update({ effects: capability.reconfigure([]) }).state;
+  const target = loraModelTargetAt(state, 3);
+  assert.equal(target?.name, 'alias');
+  assert.equal(target?.resource.resolution, 'found');
+  assert.equal(target?.metadata.length, 0);
+  const menu = prepareContextMenu(state, contextMenuTargetAt(state, 3)!, 'local');
+  assert.equal(menu?.actions?.kind, 'inline');
 });

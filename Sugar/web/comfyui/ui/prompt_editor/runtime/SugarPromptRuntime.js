@@ -22037,7 +22037,7 @@ function loraModelTargetAt(state, position) {
     const name2 = widget.resource.name, page = presentation2.pages.get(name2) ?? null;
     const prepared4 = actions?.presentation === presentation2 && actions.host === state.facet(loraMetadataHost) ? actions.byName.get(name2) : void 0;
     const metadata = prepared4?.items ?? [];
-    if ((page && state.facet(loraPageHost) || !state.readOnly && widget.resource.resolution === "found" && state.field(nativeLoraSchedule, false)?.hasTriggersAt(position, loraNameKey(widget.resource.model.backendValue)) || metadata.length && state.facet(loraMetadataHost)) && (!target || from === position))
+    if ((widget.resource.resolution === "found" || page && state.facet(loraPageHost) || metadata.length && state.facet(loraMetadataHost)) && (!target || from === position))
       target = {
         from,
         to,
