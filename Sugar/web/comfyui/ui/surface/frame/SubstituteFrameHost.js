@@ -22,6 +22,7 @@ import { ComfyFrameWorkflowAdapter } from './ComfyFrameWorkflowAdapter.js';
 import { ClosedWorkflowHistory } from './ClosedWorkflowHistory.js';
 import { SubstituteFrameView } from './SubstituteFrameView.js';
 import { substituteFrameCss } from './SubstituteFrameStyles.js';
+import { chromeTextSelectionCss } from './ChromeTextSelectionStyles.js';
 import { graphToolbarCss } from './GraphToolbarStyles.js';
 import { comfyMenuCss, comfyMenuThemeCss } from './ComfyMenuStyles.js';
 import { readOwnedVisualStyle } from '../appearance/VisualStyleBoundary.js';
@@ -86,7 +87,8 @@ export class SubstituteFrameHost {
                 desktopFrameCss +
                 pluginFrameCss +
                 graphToolbarCss +
-                comfyMenuCss;
+                comfyMenuCss +
+                chromeTextSelectionCss;
         this.#menuStyle = options.document.createElement('style');
         this.#menuStyle.id = 'sugarcubes-substitute-frame-menus';
     }
