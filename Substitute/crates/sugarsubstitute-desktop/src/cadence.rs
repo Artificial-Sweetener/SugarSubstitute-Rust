@@ -15,7 +15,9 @@ pub(crate) fn closing_wait(now: Instant) -> ControlFlow {
 
 /// Wait for the next native step: at once when the last one did work, since a step that makes
 /// another runnable (a queued reply, a returned transport credit, a further queued event) raises
-/// no event of its own; otherwise poll again after the bounded native deadline.
+/// no event of its own; otherwise poll again after the bounded native deadline. Only the Windows
+/// startup loop steps this way.
+#[cfg(target_os = "windows")]
 pub(crate) fn progress_wait(advanced: bool, now: Instant) -> ControlFlow {
     if advanced { ControlFlow::Poll } else { closing_wait(now) }
 }
@@ -62,6 +64,7 @@ mod tests {
 
     /// A step that did work runs the next one at once; an idle step keeps the bounded poll, so
     /// work blocked on an outside completion never spins the loop.
+    #[cfg(target_os = "windows")]
     #[test]
     fn a_native_step_that_did_work_runs_the_next_one_at_once() {
         let now = sugarsubstitute_execution::qualification_time::anchor();
