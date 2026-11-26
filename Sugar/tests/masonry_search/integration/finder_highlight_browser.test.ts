@@ -71,10 +71,16 @@ interface Painted {
   top: number;
   width: number;
   height: number;
-  pixels: number;
+  /** The black glyph ink inside the box, in pixels of full coverage. */
+  ink: number;
 }
 
-/** The bounding box, in device pixels, of everything painted in `colour` inside one row. */
+/**
+ * The bounding box, in device pixels, of everything painted in `colour` inside one row, and the
+ * glyph ink drawn on that colour inside it. Ink is measured per channel against the background,
+ * so it does not depend on how the platform antialiases text: Chromium draws text in a composited
+ * layer without subpixel antialiasing, and a box that scrolls natively composites what lies over it.
+ */
 async function painted(row: string, colour: string): Promise<Painted | null> {
   const shot = await page.locator(`#row-${row}`).screenshot();
   return page.evaluate(
@@ -100,9 +106,20 @@ async function painted(row: string, colour: string): Promise<Painted | null> {
           bottom = Math.max(bottom, y);
           count++;
         }
-      return count
-        ? { left, top, width: right - left + 1, height: bottom - top + 1, pixels: count }
-        : null;
+      if (!count) return null;
+      let ink = 0;
+      const lit = channels.map((channel, index) => [channel, index] as const).filter(([c]) => c);
+      for (let y = top; y <= bottom; y++)
+        for (let x = left; x <= right; x++) {
+          const at = (y * image.width + x) * 4;
+          ink +=
+            lit.reduce(
+              (sum, [channel, index]) =>
+                sum + Math.min(1, Math.max(0, (channel - (pixels[at + index] ?? 0)) / channel)),
+              0,
+            ) / lit.length;
+        }
+      return { left, top, width: right - left + 1, height: bottom - top + 1, ink };
     },
     { data: shot.toString('base64'), colour },
   );
@@ -131,10 +148,11 @@ for (const [row, ordinal, about] of [
     expect(await painted(row, PROOF_MATCH)).toBeNull();
     await page.evaluate(() => window.finderHighlightProof.clear());
     if (!highlighted || !selected) throw new Error('Nothing was painted');
-    // The same box to the device pixel: the highlight stands on the selected glyphs. Inside it
-    // only the glyphs' antialiased edges may differ, by where the text sits within a pixel.
+    // The same box to the device pixel: the highlight stands on the selected glyphs. Inside it the
+    // same glyphs are drawn, as much ink as the selection's (a letter missing or drawn twice
+    // changes it by over a sixth); only how their edges are antialiased may differ.
     const box = ({ left, top, width, height }: Painted): number[] => [left, top, width, height];
     expect(box(highlighted)).toEqual(box(selected));
-    expect(Math.abs(highlighted.pixels - selected.pixels)).toBeLessThan(selected.pixels / 50);
+    expect(Math.abs(highlighted.ink - selected.ink)).toBeLessThan(selected.ink / 10);
     expect(await painted(row, PROOF_SELECTION)).toBeNull();
   });
