@@ -1,3 +1,13 @@
+## [0.38.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.37.0...sugarcubes-v0.38.0) (2026-11-26)
+
+### Features
+
+* **prompt-editor:** prompt editing settings, spellcheck, file editors for wildcards and tag lists, and Danbooru link paste ([fe4f7a7](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/fe4f7a7da39fb711154f6abb4682f74b9fb4cdd0))
+
+### Bug Fixes
+
+* **output-canvas:** a job queued behind another workflow's job, or started right after one, shows its live previews and all its outputs ([8dd6aa2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/8dd6aa23972f7c44ac77b3d262641fb7955a27a2))
+
 ## [0.37.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.36.1...sugarcubes-v0.37.0) (2026-11-26)
 
 ### Features
