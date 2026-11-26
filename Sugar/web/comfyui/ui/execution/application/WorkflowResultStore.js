@@ -17,6 +17,7 @@
 import { outputResultId, snapshotOutputResultId, } from '../domain/ExecutionIdentity.js';
 import { combineWorkflowMedia, freezeWorkflowMedia } from '../domain/WorkflowMedia.js';
 import { WorkflowSceneOutputs } from './WorkflowSceneOutputs.js';
+import { WorkflowRunTimeline } from './WorkflowRunTimeline.js';
 import { restoredWorkflowOutput, } from './WorkflowResultRestoration.js';
 /** Retain bounded source descriptors and a monotonic visual handoff for each workflow. */
 export class WorkflowResultStore {
@@ -44,7 +45,7 @@ export class WorkflowResultStore {
                 outputs: new Map(),
                 scenes: new WorkflowSceneOutputs(),
                 liveRun: false,
-                executing: null,
+                timeline: new WorkflowRunTimeline(),
                 snapshot: Object.freeze({
                     context: Object.freeze({ ...context }),
                     revision: (previous?.snapshot.revision ?? 0) + 1,
@@ -75,38 +76,37 @@ export class WorkflowResultStore {
         return this.#sessions.get(sessionId)?.outputs.get(sourceId)?.output.provenance.revision ?? 0;
     }
     /**
-     * Publish a known run without allowing an older delayed job to displace the execution frontier.
+     * Publish a known run's status as the workflow's timeline places it.
      *
-     * The frontier follows the prompt that is executing: a job queued behind it is only waiting, so
-     * accepting it changes nothing here until it starts. Otherwise the running job's preview would be
-     * withdrawn and every later preview of it refused as older than the queued one.
+     * Only a run ComfyUI started moves the frontier, withdraws the previous run's preview and hands
+     * scenes over. A waiting run changes the reported status alone, however many wait and whatever
+     * other workflow's job is executing meanwhile.
      */
     updateRun(run) {
         const session = this.#session(run.session);
-        if (!session || run.order < session.snapshot.runOrder)
+        if (!session)
             return;
-        if (run.status === 'queued' && session.executing !== null && session.executing !== run.promptId)
-            return;
-        if (run.status === 'running')
-            session.executing = run.promptId;
-        else if (session.executing === run.promptId && run.status !== 'queued')
-            session.executing = null;
-        session.liveRun = true;
         const previous = session.snapshot;
-        if (run.order === previous.runOrder &&
-            ['complete', 'cancelled', 'error'].includes(previous.runStatus))
+        const step = session.timeline.follow(run);
+        if (step === 'ignored')
             return;
-        const terminal = run.status === 'complete' || run.status === 'cancelled' || run.status === 'error';
-        // A run stopped early or failed keeps its last preview: it is the newest image the run made,
-        // and the outputs it replaced never come back.
-        const keepsPreview = (run.status === 'cancelled' || run.status === 'error') &&
-            run.order === previous.runOrder &&
-            previous.preview?.promptId === run.promptId;
-        const preview = keepsPreview || (!terminal && run.order <= previous.runOrder) ? previous.preview : null;
-        session.scenes.follow(run, session.snapshot.runOrder);
-        const scenes = session.scenes.snapshot(session.snapshot.scenes);
+        session.liveRun = true;
+        const runStatus = session.timeline.status;
+        if (step === 'status') {
+            if (previous.runStatus !== runStatus)
+                this.#publish(session, { ...previous, runStatus });
+            return;
+        }
+        // Only a run that completes withdraws its own preview: its finals replace it. A run stopped
+        // early or failed keeps its last preview, the newest image it made, and that preview stays
+        // through the next run's start until that run shows content of its own.
+        const preview = run.status === 'complete' && previous.preview?.promptId === run.promptId
+            ? null
+            : previous.preview;
+        session.scenes.follow(run, previous.runOrder);
+        const scenes = session.scenes.snapshot(previous.scenes);
         if (previous.runOrder === run.order &&
-            previous.runStatus === run.status &&
+            previous.runStatus === runStatus &&
             previous.preview === preview &&
             previous.scenes === scenes)
             return;
@@ -114,7 +114,7 @@ export class WorkflowResultStore {
             ...previous,
             scenes,
             runOrder: run.order,
-            runStatus: run.status,
+            runStatus,
             preview,
             recovery: run.order > previous.runOrder
                 ? Object.freeze({ state: 'idle', message: '' })
@@ -217,6 +217,7 @@ export class WorkflowResultStore {
         for (const output of retained)
             session.outputs.set(output.output.source.id, output);
         session.scenes.restore(scenes, imported.runOrder);
+        session.timeline.restore(imported.runOrder);
         this.#publish(session, {
             ...session.snapshot,
             outputs: Object.freeze(retained.map((output) => output.output)),
@@ -230,23 +231,21 @@ export class WorkflowResultStore {
         return true;
     }
     /**
-     * Publish only the executing run's newest source preview; bytes are never retained here.
+     * Publish only the frontier run's newest source preview; bytes are never retained here.
      *
-     * A preview from any other prompt, including a late one from the previous run or one from a job
-     * still waiting in the queue, and any preview not newer than the one shown, is refused.
+     * A late preview of an earlier run, one of a run that already ended, one for a source whose
+     * final has arrived, and any preview not newer than the one shown are refused.
      */
     publishPreview(preview) {
         const session = this.#sessions.get(preview.sessionId);
         if (!session ||
-            (session.executing !== null && preview.promptId !== session.executing) ||
             (session.outputs.get(preview.sourceId)?.completedPreviewRunOrder ?? -1) >= preview.runOrder ||
             session.snapshot.context.generation !== preview.generation ||
-            preview.runOrder < session.snapshot.runOrder ||
-            (preview.runOrder === session.snapshot.runOrder &&
-                ['complete', 'cancelled', 'error'].includes(session.snapshot.runStatus)) ||
+            !session.timeline.admits(preview.promptId, preview.runOrder) ||
             (session.snapshot.preview?.promptId === preview.promptId &&
                 session.snapshot.preview.sequence >= preview.sequence))
             return false;
+        session.timeline.previewed(preview.promptId, preview.runOrder);
         this.#publish(session, {
             ...session.snapshot,
             preview: Object.freeze({
@@ -314,12 +313,16 @@ export class WorkflowResultStore {
             .map((retained) => retained.output)
             .sort((a, b) => a.source.order - b.source.order));
         const preview = session.snapshot.preview;
+        const presentedRunOrder = items.reduce((latest, item) => item.file.type === 'input' ? latest : Math.max(latest, item.provenance.runOrder), session.snapshot.presentedRunOrder);
         this.#publish(session, {
             ...session.snapshot,
             outputs,
             scenes: session.scenes.snapshot(session.snapshot.scenes),
-            presentedRunOrder: items.reduce((latest, item) => item.file.type === 'input' ? latest : Math.max(latest, item.provenance.runOrder), session.snapshot.presentedRunOrder),
-            preview: preview?.sourceId === source.id && completedPreviewRunOrder >= preview.runOrder
+            presentedRunOrder,
+            // A preview ends with its own source's final, or once a newer run shows content.
+            preview: preview &&
+                ((preview.sourceId === source.id && completedPreviewRunOrder >= preview.runOrder) ||
+                    preview.runOrder < presentedRunOrder)
                 ? null
                 : preview,
         }, provenance.kind === 'execution' ? 'output' : 'restore');

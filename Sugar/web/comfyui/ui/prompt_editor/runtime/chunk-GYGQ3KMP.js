@@ -1,3 +1,7 @@
+import {
+  promptLineGutterCss
+} from "./chunk-Y4LK4XAU.js";
+
 // frontend/comfyui/ui/prompt_editor/runtime/SugarPromptStyles.ts
 var installed = /* @__PURE__ */ new WeakSet();
 function installSugarPromptStyles(document) {
@@ -31,6 +35,7 @@ function installSugarPromptStyles(document) {
 }
 .sugarprompt-editor .sp-reorder-empty { border:none; outline:none; background:transparent; }
 `;
+  style.textContent += promptLineGutterCss;
   document.head.append(style);
   installed.add(document);
 }

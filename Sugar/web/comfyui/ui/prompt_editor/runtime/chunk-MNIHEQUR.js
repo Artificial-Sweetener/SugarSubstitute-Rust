@@ -1,6 +1,7 @@
 import {
+  bundledPromptTags,
   preparePromptTagCatalog
-} from "./chunk-7HZRXFKR.js";
+} from "./chunk-OPYQ5QEZ.js";
 
 // frontend/comfyui/ui/prompt_editor/assets/danbooru-tags.txt
 var danbooru_tags_default = `1girl,5889398 (danbooru:General)
@@ -157522,14 +157523,22 @@ dutch_commentary,20 (danbooru:Meta)
 `;
 
 // frontend/comfyui/ui/prompt_editor/runtime/BundledPromptTags.ts
-var catalog;
-function bundledPromptTagCatalog() {
-  return catalog ??= preparePromptTagCatalog(
-    danbooru_tags_default,
-    "sha256:38a5b8d1ff959d927d47423191575ea1281ee0c5e1a77e5773967ca1dfab5f82"
+var BUNDLED_REVISION = "sha256:38a5b8d1ff959d927d47423191575ea1281ee0c5e1a77e5773967ca1dfab5f82";
+var bundled;
+var prepared;
+function promptTagCatalog(lists) {
+  if (prepared?.lists === lists) return prepared.catalog;
+  bundled ??= bundledPromptTags(danbooru_tags_default);
+  const catalog = preparePromptTagCatalog(
+    bundled,
+    lists ? `${BUNDLED_REVISION}:lists:${lists.revision}` : BUNDLED_REVISION,
+    lists?.custom ?? [],
+    lists?.censored ?? []
   );
+  prepared = { lists, catalog };
+  return catalog;
 }
 
 export {
-  bundledPromptTagCatalog
+  promptTagCatalog
 };

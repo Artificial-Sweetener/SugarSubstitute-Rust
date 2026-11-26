@@ -62,6 +62,12 @@ export class ComfyWorkflowEventAdapter {
             progress: (event) => this.#progress(event),
             progress_state: (event) => this.#progressState(event),
             b_preview_with_metadata: (event) => this.#enhancedPreview(event),
+            status: (event) => {
+                const info = comfyEventDetail(event)?.exec_info;
+                const remaining = isRecord(info) ? info.queue_remaining : null;
+                if (typeof remaining === 'number' && Number.isSafeInteger(remaining) && remaining >= 0)
+                    this.options.queue(remaining);
+            },
             disconnected: () => this.#disconnect(),
             reconnecting: () => this.#disconnect(),
             reconnected: () => {
@@ -165,12 +171,15 @@ export class ComfyWorkflowEventAdapter {
         const id = decodeComfyPreviewPromptId(detail);
         if (!id)
             return;
-        const source = this.options.ingestor.resolveSource(id, decodeComfyExecutionPaths([
+        const paths = decodeComfyExecutionPaths([
             detail.nodeId,
             detail.realNodeId,
             detail.displayNodeId,
             detail.parentNodeId,
-        ]));
+        ]);
+        // A preview proves ComfyUI is running the job, even when its start notice never arrived.
+        this.options.ingestor.executing(id, paths);
+        const source = this.options.ingestor.resolveSource(id, paths);
         if (source && !['complete', 'cancelled', 'error'].includes(source.run.status))
             this.options.preview(source, detail.blob);
     }

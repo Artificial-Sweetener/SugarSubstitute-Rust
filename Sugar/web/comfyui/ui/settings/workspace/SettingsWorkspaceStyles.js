@@ -79,7 +79,7 @@ export const settingsWorkspaceCss = `
   .sc-sw-rail { position:absolute; left:12px; top:0; width:3px; height:16px; border-radius:1.5px;
     background:var(--sc-sw-accent); pointer-events:none; }
   .sc-sw-rail[hidden] { display:none; }
-  .sc-sw-main { min-height:0; overflow-y:auto; scrollbar-width:thin; }
+  .sc-sw-main { min-height:0; overflow-y:auto; scrollbar-width:thin; scrollbar-gutter:stable; }
   .sc-sw[data-mode="frame"][data-panel] .sc-sw-main { overflow:hidden; pointer-events:none; }
   .sc-sw-column { width:min(1000px,100%); margin:0 auto; padding:24px; }
   .sc-sw[data-mode="frame"] .sc-sw-column { width:min(1048px,100%); }

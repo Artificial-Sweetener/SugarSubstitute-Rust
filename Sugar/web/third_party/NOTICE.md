@@ -23,6 +23,16 @@ under the MIT license. Source Sans 3 Regular and Semibold are distributed
 unmodified under the SIL Open Font License 1.1. The pinned source revision,
 paths, asset hashes, and license texts are recorded in `manifest.toml`.
 
+## Prompt editor spellchecker
+
+The prompt editor checks spelling with [spellbook](https://github.com/helix-editor/spellbook)
+0.4.2 (MPL-2.0), compiled unmodified with its dependencies hashbrown 0.17.2 (MIT OR Apache-2.0)
+and foldhash 0.1.5 (Zlib) into `web/spellcheck/sugarcubes-spellcheck.wasm` from the SugarCubes
+crate in `spellcheck/`. spellbook's source is available from its repository and from crates.io
+at the version recorded in `spellcheck/Cargo.lock`. The American English dictionary is the SCOWL
+en_US Hunspell dictionary, version 2020.12.07, copied unmodified; its copyright and permission
+notices are in `licenses/scowl-en_US.README.txt`.
+
 ## SugarSubstitute bundled prompt tags
 
 The complete Danbooru prompt-tag snapshot from SugarSubstitute is included in

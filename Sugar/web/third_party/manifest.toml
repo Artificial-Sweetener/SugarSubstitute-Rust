@@ -662,6 +662,66 @@ runtime_file = "web/icons/settings/wand.svg"
 sha256 = "2d0c2875204dfc2940e7373bb4f52e2242481acfe1108e67d7624ed9c943687a"
 
 [[component.asset]]
+source_path = "assets/Link Edit/SVG/ic_fluent_link_edit_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/link-edit.svg"
+runtime_file = "web/icons/settings/link-edit.svg"
+sha256 = "ae34728b8b4ac92f14cf665546cafc0ae8e311c43f17a33ae6c1c33e27a8bf91"
+
+[[component.asset]]
+source_path = "assets/Text Bullet List Square Sparkle/SVG/ic_fluent_text_bullet_list_square_sparkle_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/text-bullet-list-square-sparkle.svg"
+runtime_file = "web/icons/settings/text-bullet-list-square-sparkle.svg"
+sha256 = "545268fab4ad7999edf06331e2294867ef1e1653a3dc9a74a71bf60c0747c587"
+
+[[component.asset]]
+source_path = "assets/Text Field/SVG/ic_fluent_text_field_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/text-field.svg"
+runtime_file = "web/icons/settings/text-field.svg"
+sha256 = "e32737629d5af8b88ffa9c8cfb98604c5f0def8f37b5d733222fb2aa681ae628"
+
+[[component.asset]]
+source_path = "assets/Tag Multiple/SVG/ic_fluent_tag_multiple_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/tag-multiple.svg"
+runtime_file = "web/icons/settings/tag-multiple.svg"
+sha256 = "78bff06607e03fb2fdd79d2ffde4d3777a2ef572f9ed5c0cb6264010cfe3791a"
+
+[[component.asset]]
+source_path = "assets/Tag Search/SVG/ic_fluent_tag_search_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/tag-search.svg"
+runtime_file = "web/icons/settings/tag-search.svg"
+sha256 = "ee1fe1d9e5352106280106110fbeeffe58db0198dc994a121de5170646c97415"
+
+[[component.asset]]
+source_path = "assets/Panel Right Cursor/SVG/ic_fluent_panel_right_cursor_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/panel-right-cursor.svg"
+runtime_file = "web/icons/settings/panel-right-cursor.svg"
+sha256 = "e75e4d1a1f6575f36bea72389593191fecfaf9520177ac7be4a765f536d8d2df"
+
+[[component.asset]]
+source_path = "assets/Text Asterisk/SVG/ic_fluent_text_asterisk_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/text-asterisk.svg"
+runtime_file = "web/icons/settings/text-asterisk.svg"
+sha256 = "654dae6920e74464d06f35de1781394d1d2edc21ea4783797118cfb7962958f5"
+
+[[component.asset]]
+source_path = "assets/Reorder/SVG/ic_fluent_reorder_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/reorder.svg"
+runtime_file = "web/icons/settings/reorder.svg"
+sha256 = "d62a1ae975eb23f9e98936132f935d5713b2b658983874805b6a7839cae1f04d"
+
+[[component.asset]]
+source_path = "assets/Text Grammar Checkmark/SVG/ic_fluent_text_grammar_checkmark_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/text-grammar-checkmark.svg"
+runtime_file = "web/icons/settings/text-grammar-checkmark.svg"
+sha256 = "7e7603d73c75cc8fbb224bbf551916c2465ce53971f79defd51652218386376a"
+
+[[component.asset]]
+source_path = "assets/Text Bullet List Square Warning/SVG/ic_fluent_text_bullet_list_square_warning_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/text-bullet-list-square-warning.svg"
+runtime_file = "web/icons/settings/text-bullet-list-square-warning.svg"
+sha256 = "f08cd459cb9e1abf11475307c5cf46146ee765f5d27fdfaa484315d5d64f96c4"
+
+[[component.asset]]
 source_path = "assets/Ram/SVG/ic_fluent_ram_20_regular.svg"
 vendored_file = "frontend/static/icons/settings/ram.svg"
 runtime_file = "web/icons/settings/ram.svg"
@@ -1940,3 +2000,58 @@ vendored_file = "integrations/contracts/ui/icons/app-icon.ico"
 runtime_file = "web/icons/shared/app-icon-256.png"
 sha256 = "c611ddb77ce719d48f28df28e21463d3ae00d94c442ddf4cb2a1fecf6fdde334"
 generated_derivatives = [{ runtime_file = "web/icons/shared/app-icon-256.png", sha256 = "c6e1e822fbe3fe67fe00eefffb678b52f41ac734bea25f62a048a7aa1414d0f3", modification = "The ICO's 256 px PNG image, extracted unmodified for the page." }]
+
+[[component]]
+name = "SCOWL en_US Hunspell dictionary"
+license = "LicenseRef-SCOWL"
+license_file = "third_party/licenses/scowl-en_US.README.txt"
+source = "https://github.com/LibreOffice/dictionaries"
+revision = "79195b017e6d70151337856c59e7d13d311d6630"
+version = "2020.12.07"
+modifications = "None; the affix and word files are copied verbatim. The prompt editor's spellchecker loads them in a Web Worker."
+source_paths = ["en/en_US.aff", "en/en_US.dic", "en/README_en_US.txt"]
+
+[[component.asset]]
+source_path = "en/en_US.aff"
+vendored_file = "frontend/static/spellcheck/en_US.aff"
+runtime_file = "web/spellcheck/en_US.aff"
+sha256 = "e746c882dd6f303c2c46e7452804b9201115a6942cfeb15f18f8edf774d2e24e"
+
+[[component.asset]]
+source_path = "en/en_US.dic"
+vendored_file = "frontend/static/spellcheck/en_US.dic"
+runtime_file = "web/spellcheck/en_US.dic"
+sha256 = "f0b1a234bd178bdd01875b2a392a9647f888b8fe879f79c52aae62c2759b3647"
+
+[[component]]
+name = "spellbook"
+license = "MPL-2.0"
+license_file = "third_party/licenses/spellbook.LICENSE.txt"
+source = "https://github.com/helix-editor/spellbook"
+revision = "crates.io:spellbook@0.4.2"
+version = "0.4.2"
+modifications = "None; compiled unmodified into the spellchecker module built from spellcheck/ (scripts/spellcheck/build.ts). Exact crate checksums are pinned in spellcheck/Cargo.lock."
+source_paths = ["src"]
+runtime_files = ["web/spellcheck/sugarcubes-spellcheck.wasm"]
+
+[[component]]
+name = "hashbrown"
+license = "MIT OR Apache-2.0"
+license_file = "third_party/licenses/hashbrown.LICENSE-MIT.txt"
+source = "https://github.com/rust-lang/hashbrown"
+revision = "crates.io:hashbrown@0.17.2"
+version = "0.17.2"
+modifications = "None; compiled unmodified into the spellchecker module as a spellbook dependency. The Apache-2.0 text is in third_party/licenses/hashbrown.LICENSE-APACHE.txt."
+source_paths = ["src"]
+runtime_files = ["web/spellcheck/sugarcubes-spellcheck.wasm"]
+
+[[component]]
+name = "foldhash"
+license = "Zlib"
+license_file = "third_party/licenses/foldhash.LICENSE.txt"
+source = "https://github.com/orlp/foldhash"
+revision = "crates.io:foldhash@0.1.5"
+version = "0.1.5"
+modifications = "None; compiled unmodified into the spellchecker module as its fixed-seed hasher."
+source_paths = ["src"]
+runtime_files = ["web/spellcheck/sugarcubes-spellcheck.wasm"]

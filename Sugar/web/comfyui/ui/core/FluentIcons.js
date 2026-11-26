@@ -70,6 +70,16 @@ const FLUENT_ICON_FILES = {
     'text-effects-sparkle': 'settings/text-effects-sparkle.svg',
     wand: 'settings/wand.svg',
     'window-brush': 'settings/window-brush.svg',
+    'link-edit': 'settings/link-edit.svg',
+    'text-bullet-list-square-sparkle': 'settings/text-bullet-list-square-sparkle.svg',
+    'text-field': 'settings/text-field.svg',
+    'tag-multiple': 'settings/tag-multiple.svg',
+    'tag-search': 'settings/tag-search.svg',
+    'panel-right-cursor': 'settings/panel-right-cursor.svg',
+    'text-asterisk': 'settings/text-asterisk.svg',
+    reorder: 'settings/reorder.svg',
+    'text-grammar-checkmark': 'settings/text-grammar-checkmark.svg',
+    'text-bullet-list-square-warning': 'settings/text-bullet-list-square-warning.svg',
 };
 /** The deployed URL of a vendored Fluent icon. */
 export function fluentIconUrl(name) {

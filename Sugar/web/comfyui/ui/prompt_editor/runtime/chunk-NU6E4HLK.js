@@ -3,7 +3,7 @@ import {
 } from "./chunk-UGQLUC67.js";
 import {
   prepareLoraSchedulingContext
-} from "./chunk-3C7BSY7Q.js";
+} from "./chunk-HOER6HVA.js";
 
 // frontend/comfyui/ui/prompt_editor/runtime/PromptLoraScheduling.ts
 var PromptLoraScheduling = class {

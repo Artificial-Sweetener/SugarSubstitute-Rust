@@ -14,7 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose workflow execution, native fields and optional canvas inputs at their shared host boundary. */
-import { wildcardFile } from '../wildcards/domain/WildcardSource.js';
+import { PromptEditorPreferences } from '../prompt_editor/PromptEditorPreferences.js';
+import { AutocompleteListLibrary } from '../autocomplete_lists/application/AutocompleteListLibrary.js';
+import { AUTOCOMPLETE_LIST_FOLDER } from '../autocomplete_lists/domain/AutocompleteList.js';
+import { ComfyUserFolder } from '../core/user_files/ComfyUserFolder.js';
+import { isRecord } from '../types/common.js';
+import { DanbooruRoutes } from '../danbooru/infrastructure/DanbooruRoutes.js';
 import { createComfyWorkflowExecutionRuntime } from '../execution/infrastructure/ComfyWorkflowExecutionRuntime.js';
 import { createWorkflowFieldHost, } from './WorkflowFieldComposition.js';
 import { createCanvasInputs } from '../input_canvas/infrastructure/CanvasInputComposition.js';
@@ -23,12 +28,26 @@ import { OwnReleaseNotesSource, comfyReleaseNotesBackend, } from '../core/releas
 import { ComfyWorkflowWorkspace } from '../surface/ComfyWorkflowWorkspace.js';
 /** Bind peer canvas capabilities without teaching the web output viewer about native document editing. */
 export function createWorkflowCanvasComposition(options) {
+    const promptPreferences = new PromptEditorPreferences(options.app, options.reportPresentationError);
     const workflowExecution = createComfyWorkflowExecutionRuntime({
         app: options.app,
         api: options.api,
         logger: options.logger,
         notify: options.notify,
+        resolveWildcards: () => promptPreferences.current().resolveOnGeneration,
     });
+    const danbooru = new DanbooruRoutes((path, init) => {
+        const api = options.api;
+        if (!isRecord(api) || typeof api.fetchApi !== 'function')
+            throw new Error('The Comfy API is unavailable for Danbooru lookups.');
+        return api.fetchApi.call(api, path, init);
+    });
+    const autocompleteLists = new AutocompleteListLibrary(new ComfyUserFolder((path, init) => {
+        const api = options.api;
+        if (!isRecord(api) || typeof api.fetchApi !== 'function')
+            throw new Error('The Comfy API is unavailable for autocomplete lists.');
+        return api.fetchApi.call(api, path, init);
+    }, AUTOCOMPLETE_LIST_FOLDER, 'autocomplete list'), (error) => options.logger.error('SugarCubes could not read the autocomplete lists.', { error }));
     const workflowFields = createWorkflowFieldHost({
         ...options,
         sessions: workflowExecution.sessions,
@@ -37,15 +56,7 @@ export function createWorkflowCanvasComposition(options) {
         progress: workflowExecution.progress,
         connected: () => workflowExecution.connected,
         subscribeConnection: (listener) => workflowExecution.subscribeConnection(listener),
-        wildcards: {
-            files: () => workflowExecution.wildcardLibrary.files,
-            refresh: () => workflowExecution.wildcardLibrary.refresh(),
-            admit: (path) => wildcardFile(path, ''),
-            create: (path, text) => workflowExecution.wildcardFiles.create(path, text),
-            rename: (from, to) => workflowExecution.wildcardFiles.rename(from, to),
-            openFolder: () => workflowExecution.wildcardFiles.openFolder(),
-            report: (error) => options.notify('error', 'Wildcards', error instanceof Error ? error.message : 'The wildcard folder is unavailable.'),
-        },
+        promptPreferences,
     });
     const selfUpdate = comfySelfUpdateTransport(options.api);
     // SugarCubes updates itself only on a page whose host does not; the page lives as long as this.
@@ -90,7 +101,14 @@ export function createWorkflowCanvasComposition(options) {
     });
     return {
         workflowExecution,
-        prompts: { scenes: workflowExecution.scenes, wildcards: workflowExecution.wildcardLibrary },
+        prompts: {
+            scenes: workflowExecution.scenes,
+            wildcards: workflowExecution.wildcardLibrary,
+            preferences: promptPreferences,
+            tagLists: autocompleteLists,
+            wildcardFiles: workflowExecution.wildcardFiles,
+            booruPostLookup: (key, signal) => danbooru.pastedPost(key, signal),
+        },
         workflowFields,
         canvasInputs,
         workspace: (canvas, masonry) => new ComfyWorkflowWorkspace({

@@ -4,6 +4,8 @@ import { preparePromptLoraCatalog, promptLoraMediaRevision, promptLoraModel, pro
 import { feedsPromptControl, promptUpstreamLoras } from './PromptControlSupport.js';
 import { promptModelCompletions } from './PromptModelCompletions.js';
 import { registerPromptEditorSurfaceOwner } from './PromptEditorSurface.js';
+import { defaultPreferenceSource, } from './PromptEditorPreferences.js';
+import { noTagLists } from './PromptTagListSource.js';
 import { ComfyAdapter } from '../core/ComfyAdapter.js';
 import { ToastService } from '../core/ToastService.js';
 import { SURFACE_INPUT_HELD_ATTRIBUTE } from '../surface/motion/SurfaceInputHold.js';
@@ -29,6 +31,10 @@ export class CubePromptEditorHost {
     #canvasKeys = null;
     #sceneQueue = null;
     #wildcards = null;
+    #preferences = defaultPreferenceSource;
+    #spellcheck = null;
+    #tagLists = noTagLists;
+    #booruPostLookup = null;
     #stopWildcards = null;
     #modelCompletions = null;
     #models = null;
@@ -58,6 +64,13 @@ export class CubePromptEditorHost {
                 return () => this.#catalogWatchers.delete(changed);
             })
             : null;
+        const preferences = canvas?.preferences;
+        if (preferences)
+            this.#preferences = preferences;
+        this.#spellcheck ??= canvas?.spellcheck ?? null;
+        if (canvas?.tagLists)
+            this.#tagLists = canvas.tagLists;
+        this.#booruPostLookup ??= canvas?.booruPostLookup ?? null;
         const wildcards = canvas?.prompts?.wildcards;
         if (wildcards && !this.#wildcards) {
             this.#wildcards = wildcards;
@@ -261,8 +274,11 @@ export class CubePromptEditorHost {
         const { SugarPromptEditor } = await import('./runtime/SugarPromptRuntime.js');
         if (session.disposed || !session.active)
             return;
+        const textarea = session.active.textarea;
         session.editor = new SugarPromptEditor(this.#document, {
-            anchor: session.active.textarea,
+            ...this.#services(),
+            place: (element) => textarea.before(element),
+            document: null,
             source: session.binding.read(),
             label: surface.node.title ?? 'Cube prompt',
             readOnly: this.#readOnly(session.active),
@@ -271,19 +287,9 @@ export class CubePromptEditorHost {
                 if (setCubePromptWidgetHeight(surface.widget, height + 20))
                     session.active?.geometryChanged();
             },
-            report: this.#report,
-            clipboardRefused: () => this.#clipboardRefused(),
-            appearance: this.appearance,
             regionAccent: this.#regions?.accent.current() ?? null,
             sceneQueue: this.#sceneQueue,
-            wildcardCatalog: this.#wildcards?.catalog ?? null,
             promptControl: feedsPromptControl(session.node),
-            modelCompletions: this.#modelCompletions,
-            pickLora: this.#models ? (anchor) => this.#pickLora(anchor) : null,
-            loraMenu: (backendValue) => {
-                const item = this.#loraCatalog ? promptLoraModel(this.#loraCatalog, backendValue) : null;
-                return item && this.#models ? this.#models.modelMenu(item) : [];
-            },
             loraUpstream: () => promptUpstreamLoras(session.node, this.#loraCatalog),
             regionHover: (ordinal) => {
                 try {
@@ -297,6 +303,52 @@ export class CubePromptEditorHost {
         if (session.active)
             this.#present(session, session.active);
         void this.#loadCatalog(session).catch(this.#report);
+    }
+    /**
+     * Mount a prompt editor showing a whole text file in `parent`, as the full-window wildcard and
+     * list editor does, with every service a field's editor has.
+     */
+    async mountDocument(parent, file) {
+        const { SugarPromptEditor } = await import('./runtime/SugarPromptRuntime.js');
+        const editor = new SugarPromptEditor(this.#document, {
+            ...this.#services(),
+            place: (element) => parent.append(element),
+            document: file.document,
+            source: file.source,
+            label: file.label,
+            readOnly: false,
+            commit: file.changed,
+            layout: () => undefined,
+            regionAccent: null,
+            sceneQueue: null,
+            promptControl: false,
+            loraUpstream: () => [],
+            regionHover: () => undefined,
+        });
+        if (!this.#loraCatalog)
+            this.#publishCatalog(await this.#catalog.load());
+        if (this.#loraCatalog)
+            editor.setLoraCatalog(this.#loraCatalog);
+        return editor;
+    }
+    /** What every editor of this page shares: its services and the person's settings. */
+    #services() {
+        return {
+            report: this.#report,
+            clipboardRefused: () => this.#clipboardRefused(),
+            appearance: this.appearance,
+            wildcardCatalog: this.#wildcards?.catalog ?? null,
+            modelCompletions: this.#modelCompletions,
+            pickLora: this.#models ? (anchor) => this.#pickLora(anchor) : null,
+            loraMenu: (backendValue) => {
+                const item = this.#loraCatalog ? promptLoraModel(this.#loraCatalog, backendValue) : null;
+                return item && this.#models ? this.#models.modelMenu(item) : [];
+            },
+            preferences: this.#preferences,
+            spellcheck: this.#spellcheck,
+            tagLists: this.#tagLists,
+            booruPostLookup: this.#booruPostLookup,
+        };
     }
     /** Open the model picker over the installed LoRAs and name the chosen one as a prompt writes it. */
     async #pickLora(anchor) {

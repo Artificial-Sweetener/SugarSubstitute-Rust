@@ -60,6 +60,7 @@ import { ModelProviderCacheClient } from './ui/model_library/ModelProviderCacheC
 import { ModelProviderPreferenceClient } from './ui/model_library/ModelProviderPreferences.js';
 import { ModelCatalogClient } from './ui/model_library/ModelCatalogClient.js';
 import { CubePromptEditorHost } from './ui/prompt_editor/CubePromptEditorHost.js';
+import { setupPromptEditing } from './ui/prompt_editor/PromptEditingSetup.js';
 import { OwnedSurfaceAppearance } from './ui/surface/appearance/OwnedSurfaceAppearance.js';
 import { ModelDetectorClient } from './ui/model_library/ModelDetectorClient.js';
 import { refreshComfyModelChoices } from './ui/model_library/ComfyModelChoices.js';
@@ -410,9 +411,12 @@ export const sugarCubesExtension = {
         return canvasInputs.surfaces.withNodeMenuItems(node, cubeAffordances.getNodeMenuItems(node));
     },
     setup: announcedSetup(documentRef ?? document, async () => {
-        promptEditors.setup(canvasInputs.surfaces.regions, {
+        setupPromptEditing({
             app: appRef,
+            document: documentRef ?? document,
             logger,
+            editors: promptEditors,
+            regions: canvasInputs.surfaces.regions,
             prompts,
             models: modelPickers,
         });

@@ -1,9 +1,9 @@
 import {
   prepareTagCompletionCatalog
-} from "./chunk-3C7BSY7Q.js";
+} from "./chunk-HOER6HVA.js";
 
 // frontend/comfyui/ui/prompt_editor/runtime/PromptTagCatalog.ts
-function preparePromptTagCatalog(source, revision) {
+function bundledPromptTags(source) {
   const bundled = [];
   for (const [index, line] of source.split(/\r?\n/u).entries()) {
     if (!line.trim()) continue;
@@ -15,9 +15,18 @@ function preparePromptTagCatalog(source, revision) {
     bundled.push({ tag, popularity });
   }
   if (!bundled.length) throw new TypeError("The bundled prompt tag catalog is empty.");
-  return prepareTagCompletionCatalog({ revision, bundled, customTags: [], censoredTags: [] });
+  return Object.freeze(bundled);
+}
+function preparePromptTagCatalog(bundled, revision, customTags, censoredTags) {
+  return prepareTagCompletionCatalog({
+    revision,
+    bundled: [...bundled],
+    customTags: [...customTags],
+    censoredTags: [...censoredTags]
+  });
 }
 
 export {
+  bundledPromptTags,
   preparePromptTagCatalog
 };

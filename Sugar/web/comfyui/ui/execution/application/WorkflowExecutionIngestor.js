@@ -88,7 +88,12 @@ export class WorkflowExecutionIngestor {
             return false;
         if (this.options.runs.isClosed(event.promptId))
             return false;
-        const attributed = this.resolveSource(event.promptId, event.executionPaths);
+        let attributed = this.resolveSource(event.promptId, event.executionPaths);
+        // An output proves ComfyUI ran the job, even when its start notice never arrived.
+        if (attributed?.run.status === 'queued') {
+            this.started(event.promptId);
+            attributed = this.resolveSource(event.promptId, event.executionPaths);
+        }
         if (attributed?.source.transientOnly)
             return false;
         if (!attributed) {

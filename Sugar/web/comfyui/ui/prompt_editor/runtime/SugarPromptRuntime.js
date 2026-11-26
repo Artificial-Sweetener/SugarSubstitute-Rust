@@ -1,15 +1,19 @@
 import {
+  spellcheckSessionFor
+} from "./chunk-GCJDHKL5.js";
+import {
   SugarPromptMenu
 } from "./chunk-H66FF5P6.js";
 import {
   installSugarPromptStyles
-} from "./chunk-4OATFCQX.js";
+} from "./chunk-GYGQ3KMP.js";
 import {
   SugarPromptTooltip
 } from "./chunk-5N7RXSME.js";
 import {
-  bundledPromptTagCatalog
-} from "./chunk-EHOQVTQC.js";
+  promptTagCatalog
+} from "./chunk-MNIHEQUR.js";
+import "./chunk-OPYQ5QEZ.js";
 import {
   clipboardRefusalObserver
 } from "./chunk-BHDD52XD.js";
@@ -20,15 +24,16 @@ import {
   PromptCatalogAdmission
 } from "./chunk-E5NG5543.js";
 import {
+  PromptLineGutter,
+  promptDocumentKind,
+  promptDocumentPreferences
+} from "./chunk-Y4LK4XAU.js";
+import {
   PromptLoraScheduling
-} from "./chunk-ZDLZGPHD.js";
+} from "./chunk-NU6E4HLK.js";
 import {
   PromptCompletionCatalog
 } from "./chunk-UGQLUC67.js";
-import {
-  PromptSearchPainter
-} from "./chunk-3Y3NCOJU.js";
-import "./chunk-7HZRXFKR.js";
 import {
   ClipboardSession,
   ConditioningTopology,
@@ -139,7 +144,10 @@ import {
   wildcardDelimiters,
   wildcardGhostText,
   wildcardReplacement
-} from "./chunk-3C7BSY7Q.js";
+} from "./chunk-HOER6HVA.js";
+import {
+  PromptSearchPainter
+} from "./chunk-3Y3NCOJU.js";
 
 // node_modules/@marijn/find-cluster-break/src/index.js
 var rangeFrom = [];
@@ -20316,119 +20324,6 @@ function normalizedAuthorship(state, target, provenance, postScopes, changes, en
   return preparedAuthorship(uniqueGenerated, uniqueLiterals);
 }
 
-// frontend/sugarprompt/editor/src/paste-import-history.ts
-var receipts = /* @__PURE__ */ new WeakMap();
-var pasteImportContinuation = Annotation.define();
-function preparePasteImportHistory(state) {
-  const handle = Object.freeze({ identity: Symbol() });
-  receipts.set(handle, {
-    origin: state,
-    selection: selectionContents(state.selection),
-    originDocument: state.doc,
-    originEndings: state.field(lineEndings),
-    originEndingContents: Object.freeze(Array.from(state.field(lineEndings))),
-    outputDocument: null,
-    outputEndings: null,
-    endings: null,
-    changes: null,
-    changeContents: "",
-    outputSelection: null,
-    effects: [],
-    effectValues: [],
-    current: state,
-    initial: null,
-    time: null,
-    accepted: false,
-    retired: false
-  });
-  return handle;
-}
-function pasteImportAnnotations(state, intent) {
-  const receipt = receipts.get(intent.handle);
-  if (!receipt || !historyReceiptCurrent(intent.handle) || state.readOnly)
-    throw new Error("paste-import-history-retired");
-  if (intent.phase === "initial") {
-    if (receipt.initial || state.field(editorFreshness) !== receipt.origin.field(editorFreshness) || state.doc !== receipt.originDocument || state.field(lineEndings) !== receipt.originEndings || !selectionMatches(state.selection, receipt.selection))
-      throw new Error("paste-import-history-initial");
-    return [isolateHistory.of("before"), pasteImportContinuation.of(intent.handle)];
-  }
-  if (!receipt.initial || receipt.current !== state || !historyReceiptCurrent(intent.handle))
-    throw new Error("paste-import-history-current");
-  return [
-    isolateHistory.of(changesExactSource(receipt.initial) ? "after" : "full"),
-    pasteImportContinuation.of(intent.handle),
-    Transaction.time.of(requireValue(receipt.time, "paste-import-history"))
-  ];
-}
-function capturePasteImportHistory(handle, transaction) {
-  const receipt = receipts.get(handle);
-  if (!receipt || !historyReceiptCurrent(handle) || receipt.initial || transaction.annotation(pasteImportContinuation) !== handle || transaction.annotation(isolateHistory) !== "before" || transaction.annotation(Transaction.userEvent) !== "input.paste" || transaction.startState.field(editorFreshness) !== receipt.origin.field(editorFreshness) || transaction.startState.doc !== receipt.originDocument || transaction.startState.field(lineEndings) !== receipt.originEndings || !selectionMatches(transaction.startState.selection, receipt.selection))
-    return false;
-  receipt.initial = transaction;
-  receipt.outputDocument = transaction.state.doc;
-  receipt.outputEndings = transaction.state.field(lineEndings);
-  receipt.changes = transaction.changes;
-  receipt.changeContents = JSON.stringify(transaction.changes.toJSON());
-  receipt.outputSelection = selectionContents(transaction.newSelection);
-  receipt.effects = Object.freeze([...transaction.effects]);
-  receipt.effectValues = Object.freeze(transaction.effects.map((effect) => effect.value));
-  receipt.endings = Object.freeze(Array.from(transaction.state.field(lineEndings)));
-  receipt.time = requireValue(transaction.annotation(Transaction.time), "paste-import-history");
-  return true;
-}
-function acceptPasteImportHistory(handle, transaction, state) {
-  const receipt = receipts.get(handle);
-  if (!receipt || receipt.accepted || receipt.initial !== transaction || transaction.state !== state || !historyReceiptCurrent(handle))
-    return false;
-  receipt.accepted = true;
-  receipt.current = state;
-  return true;
-}
-function followPasteImportHistory(handle, transaction) {
-  const receipt = receipts.get(handle);
-  if (!receipt || receipt.retired || !receipt.initial || !receipt.accepted) return false;
-  if (!historyReceiptCurrent(handle) || transaction.startState !== receipt.current || transaction.state.doc !== receipt.outputDocument || transaction.state.field(lineEndings) !== receipt.outputEndings || changesExactSource(transaction) || transaction.selection || transaction.reconfigured || transaction.state.readOnly || transaction.annotation(Transaction.addToHistory) !== false || transaction.annotation(Transaction.userEvent) !== void 0 || transaction.startState.field(authorship) !== transaction.state.field(authorship) || transaction.startState.field(editorFreshness) !== transaction.state.field(editorFreshness)) {
-    receipt.retired = true;
-    return false;
-  }
-  receipt.current = transaction.state;
-  return true;
-}
-function joinsPasteImportHistory(transaction) {
-  const handle = transaction.annotation(pasteImportContinuation), receipt = handle && receipts.get(handle);
-  return !!receipt && !receipt.retired && !!receipt.initial && receipt.accepted && receipt.current === transaction.startState && transaction.annotation(isolateHistory) === "after" && transaction.annotation(Transaction.userEvent) === void 0 && Object.is(transaction.annotation(Transaction.time), receipt.time) && historyReceiptCurrent(requireValue(handle, "paste-import-history"));
-}
-function retirePasteImportHistory(handle) {
-  receipts.delete(handle);
-}
-function pasteImportUserEvent(intent) {
-  const receipt = receipts.get(intent.handle);
-  if (!receipt || !historyReceiptCurrent(intent.handle))
-    throw new Error("paste-import-history-retired");
-  return intent.phase === "initial" || !receipt.initial || !changesExactSource(receipt.initial) ? "input.paste" : void 0;
-}
-function historyReceiptCurrent(handle) {
-  const receipt = receipts.get(handle), initial = receipt?.initial;
-  if (!receipt || receipt.retired) return false;
-  const current6 = receipt.origin.doc === receipt.originDocument && receipt.origin.field(lineEndings) === receipt.originEndings && receipt.originEndings.length === receipt.originEndingContents.length && receipt.originEndingContents.every(
-    (ending, index) => Object.hasOwn(receipt.originEndings, index) && receipt.originEndings[index] === ending
-  ) && selectionMatches(receipt.origin.selection, receipt.selection) && (!initial || initial.startState.doc === receipt.originDocument && initial.startState.field(lineEndings) === receipt.originEndings && selectionMatches(initial.startState.selection, receipt.selection) && initial.state.doc === receipt.outputDocument && initial.state.field(lineEndings) === receipt.outputEndings && (!receipt.accepted || receipt.current.doc === receipt.outputDocument && receipt.current.field(lineEndings) === receipt.outputEndings && receipt.outputSelection !== null && selectionMatches(receipt.current.selection, receipt.outputSelection)) && initial.annotation(pasteImportContinuation) === handle && initial.annotation(isolateHistory) === "before" && initial.annotation(Transaction.userEvent) === "input.paste" && Object.is(initial.annotation(Transaction.time), receipt.time) && initial.changes === receipt.changes && JSON.stringify(initial.changes.toJSON()) === receipt.changeContents && receipt.outputSelection !== null && selectionMatches(initial.newSelection, receipt.outputSelection) && initial.effects.length === receipt.effects.length && receipt.effects.every(
-    (effect, index) => Object.hasOwn(initial.effects, index) && initial.effects[index] === effect && Object.is(effect.value, receipt.effectValues[index])
-  ) && receipt.endings !== null && receipt.endings.length === initial.state.field(lineEndings).length && receipt.endings.every(
-    (ending, index) => Object.hasOwn(initial.state.field(lineEndings), index) && initial.state.field(lineEndings)[index] === ending
-  ));
-  if (!current6) receipt.retired = true;
-  return current6;
-}
-function currentPasteImportHistory(handle, state) {
-  const receipt = receipts.get(handle);
-  return !!receipt && receipt.accepted && receipt.current === state && historyReceiptCurrent(handle);
-}
-function pasteImportOriginalSelection(transaction) {
-  const handle = transaction.annotation(pasteImportContinuation), receipt = handle && receipts.get(handle);
-  return receipt && receipt.accepted && receipt.initial && !changesExactSource(receipt.initial) && receipt.current === transaction.startState && transaction.annotation(isolateHistory) === "full" && transaction.annotation(Transaction.userEvent) === "input.paste" && Object.is(transaction.annotation(Transaction.time), receipt.time) && historyReceiptCurrent(requireValue(handle, "paste-import-history")) ? receipt.origin.selection : null;
-}
-
 // frontend/sugarprompt/editor/src/input-descriptor.ts
 var normalizationJoin = Annotation.define();
 function inputEdit(transaction) {
@@ -20466,19 +20361,10 @@ function authoredNesting(normalization) {
 }
 
 // frontend/sugarprompt/editor/src/document-value-edit-publication.ts
-function prepareDocumentValuePublication(publication2, state) {
+function prepareDocumentValuePublication(publication2) {
   const effect = publication2?.authorship;
   if (effect && !effect.is(installAuthorship))
     throw new Error("decoded-edit-authorship-effect-mismatch");
-  if (publication2?.pasteHistory) {
-    if (publication2.purpose !== "paste" || !state) throw new Error("decoded-edit-paste-history");
-    return {
-      effects: effect ? [effect] : [],
-      userEvent: pasteImportUserEvent(publication2.pasteHistory),
-      scrollIntoView: false,
-      annotations: pasteImportAnnotations(state, publication2.pasteHistory)
-    };
-  }
   if (publication2?.purpose === "typed") {
     const input = publication2.input, normalization = publication2.normalization?.normalization;
     if (!normalization || !Number.isFinite(input.time) || !/^(?:input\.type|delete)(?:\.[A-Za-z]+)*$/u.test(input.userEvent) || input.authoredImplicitDepth !== null && (!Number.isSafeInteger(input.authoredImplicitDepth) || input.authoredImplicitDepth < 2))
@@ -20652,7 +20538,7 @@ function prepareDocumentValueEditInput(state, intent) {
 
 // frontend/sugarprompt/editor/src/reorder-provenance.ts
 var plans = /* @__PURE__ */ new WeakMap();
-var receipts2 = /* @__PURE__ */ new WeakMap();
+var receipts = /* @__PURE__ */ new WeakMap();
 function prepareNativeReorderPlan(state, context, target) {
   if (currentNativeDocumentValue(state, context, target).status !== "ready") return null;
   const prepared4 = nativeReorderRecipe(context.values, target.entry)?.prepared;
@@ -20672,7 +20558,7 @@ function prepareReorderProvenance(state, plan, order) {
   const output = serializeValueReorder(plan.prepared, order);
   if (!output) return null;
   const provenance = Object.freeze({ identity: Symbol() });
-  receipts2.set(
+  receipts.set(
     provenance,
     Object.freeze({
       state,
@@ -20687,9 +20573,9 @@ function prepareReorderProvenance(state, plan, order) {
   return Object.freeze({ output, provenance });
 }
 function reorderProvenanceSource(state, target, provenance, replacement) {
-  const receipt = receipts2.get(provenance);
+  const receipt = receipts.get(provenance);
   if (!receipt || receipt.state !== state || receipt.target !== target || state.field(authorship) !== receipt.authored || receipt.prepared.scope !== target.scope || replacement.range.from !== 0 || replacement.range.to !== target.scope.document.sourceText.length || replacement.text !== receipt.output.text) {
-    if (receipt) receipts2.delete(provenance);
+    if (receipt) receipts.delete(provenance);
     return null;
   }
   const generatedNow = generatedShells(receipt.authored), literalsNow = literalIntents(receipt.authored);
@@ -20699,7 +20585,7 @@ function reorderProvenanceSource(state, target, provenance, replacement) {
   }) || literalsNow.some(
     (r, i) => r.from !== requireValue(receipt.literals[i], "reorder-provenance").from || r.to !== requireValue(receipt.literals[i], "reorder-provenance").to
   )) {
-    receipts2.delete(provenance);
+    receipts.delete(provenance);
     return null;
   }
   return receipt;
@@ -20894,7 +20780,7 @@ function isIssuedDocumentValueEdit(state, profileKey, edit, semantics) {
       effect,
       requireValue(issuance.effectValues[index], "document-value-edit-issuance")
     )
-  ) && issuance.transaction.scrollIntoView === issuance.scrollIntoView && issuance.transaction.annotation(Transaction.addToHistory) === issuance.history && issuance.transaction.annotation(isolateHistory) === issuance.historyIsolation && issuance.transaction.annotation(Transaction.userEvent) === issuance.userEvent && issuance.transaction.annotation(pasteImportContinuation) === issuance.pasteHistory && Object.is(issuance.transaction.annotation(Transaction.time), issuance.time) && issuance.transaction.annotation(normalizationJoin) === issuance.normalizationJoin && issuance.transaction.annotation(authoredImplicitDepth) === issuance.authoredImplicitDepth) && selectionMatches(issuance.postState.selection, issuance.selectionContents) && issuance.postState.doc === issuance.document && effectContentsMatch(issuance.postState.field(lineEndings), issuance.endings);
+  ) && issuance.transaction.scrollIntoView === issuance.scrollIntoView && issuance.transaction.annotation(Transaction.addToHistory) === issuance.history && issuance.transaction.annotation(isolateHistory) === issuance.historyIsolation && issuance.transaction.annotation(Transaction.userEvent) === issuance.userEvent && Object.is(issuance.transaction.annotation(Transaction.time), issuance.time) && issuance.transaction.annotation(normalizationJoin) === issuance.normalizationJoin && issuance.transaction.annotation(authoredImplicitDepth) === issuance.authoredImplicitDepth) && selectionMatches(issuance.postState.selection, issuance.selectionContents) && issuance.postState.doc === issuance.document && effectContentsMatch(issuance.postState.field(lineEndings), issuance.endings);
   if (!matches && issuance && state === issuance.postState && profileKey === edit.postValues.scopes.profileKey)
     issuedEdits.delete(edit);
   return matches && semantics === issuance?.semantics;
@@ -20923,7 +20809,6 @@ function registerDocumentValueEdit(edit, semantics) {
     historyIsolation: transaction?.annotation(isolateHistory),
     userEvent: transaction?.annotation(Transaction.userEvent),
     time: transaction?.annotation(Transaction.time),
-    pasteHistory: transaction?.annotation(pasteImportContinuation),
     normalizationJoin: transaction?.annotation(normalizationJoin),
     authoredImplicitDepth: transaction?.annotation(authoredImplicitDepth)
   });
@@ -20973,8 +20858,7 @@ function prepareDocumentValueEdit(state, intent) {
   if (reordered?.status === "rejected") return reordered;
   const authored = provenance && normalized !== state.field(authorship) ? installAuthorship.of(requireValue(normalized, "document-value-edit-issuance")) : reordered?.status === "ready" ? installAuthorship.of(reordered.value) : intent.publication?.authorship;
   const publication2 = prepareDocumentValuePublication(
-    intent.publication ? { ...intent.publication, ...authored ? { authorship: authored } : {} } : void 0,
-    state
+    intent.publication ? { ...intent.publication, ...authored ? { authorship: authored } : {} } : void 0
   );
   const authoredPaste = intent.publication?.purpose === "paste" && publication2.effects.length > 0;
   if (exact) delete exact.userEvent;
@@ -20991,7 +20875,7 @@ function prepareDocumentValueEdit(state, intent) {
     ...retainedSelection && intent.publication?.purpose === "typed" ? {} : { selection: retainedSelection ? state.selection : selection },
     ...nativePublication,
     ...event,
-    annotations: intent.publication?.purpose === "typed" ? publication2.annotations ?? [] : intent.publication?.pasteHistory ? [...publication2.annotations ?? [], Transaction.addToHistory.of(false)] : authoredPaste ? isolateHistory.of("full") : [...publication2.annotations ?? [], Transaction.addToHistory.of(false)]
+    annotations: intent.publication?.purpose === "typed" ? publication2.annotations ?? [] : authoredPaste ? isolateHistory.of("full") : [...publication2.annotations ?? [], Transaction.addToHistory.of(false)]
   });
   const postState = transaction?.state ?? state;
   if (readExactSource(postState) !== preparedValues.source || !selectionMatches(postState.selection, selectedContents))
@@ -22400,11 +22284,11 @@ function prepareNativeIngestionState(state) {
     })
   ];
 }
-function enteredTextInsertion(state, from, to, text, lexicon, history2) {
+function enteredTextInsertion(state, from, to, text, lexicon, intoValue = false) {
   const logical = state.doc.toString(), endings = state.field(lineEndings);
   const start = sourceToDocument(logical, endings, from), end = sourceToDocument(logical, endings, to);
   if (from > to) throw new RangeError("Reversed insertion range");
-  const canonical = state.facet(richRendering) || history2?.phase === "replacement";
+  const canonical = state.facet(richRendering) || intoValue;
   const transactions = canonical ? [...prepareNativeIngestionState(state)] : [];
   const current6 = transactions.at(-1)?.state ?? state;
   const native = current6.field(semanticStructures, false)?.native;
@@ -22432,11 +22316,7 @@ function enteredTextInsertion(state, from, to, text, lexicon, history2) {
         target,
         range: { from: changed.from, to: changed.beforeTo },
         text: normal.text.slice(changed.from, changed.afterTo),
-        publication: {
-          purpose: "paste",
-          normalization: provenance,
-          ...history2 ? { pasteHistory: history2 } : {}
-        },
+        publication: { purpose: "paste", normalization: provenance },
         selection: {
           ranges: [{ kind: "decoded", anchor: caret2, head: caret2 }],
           mainIndex: 0
@@ -22444,18 +22324,10 @@ function enteredTextInsertion(state, from, to, text, lexicon, history2) {
       });
       if (outcome.status === "rejected") throw new Error("decoded-ingestion-command-refused");
       transactions.push(...outcome.edit.transactions);
-      const padding = target.scope.container.valueRange.from;
-      const mapping = outcome.edit.preparedValues.containersById[target.scope.container.id]?.mapping;
-      const acceptedRange = history2 && mapping ? decodedRangeToSource(mapping, {
-        from: padding + requireValue(normal.boundaryPositions[range.from], "ingestion"),
-        to: padding + mapped
-      }) : null;
-      if (history2 && !acceptedRange) throw new Error("paste-import-insertion-boundary");
       return Object.freeze({
         startState: state,
         transactions: Object.freeze(transactions),
-        edit: outcome.edit,
-        ...acceptedRange ? { acceptedRange: Object.freeze(acceptedRange) } : {}
+        edit: outcome.edit
       });
     }
   }
@@ -22467,69 +22339,10 @@ function enteredTextInsertion(state, from, to, text, lexicon, history2) {
   };
   const source = minimalSourceReplacement(current6, proposed);
   if (source) delete source.userEvent;
-  const userEvent = history2 ? pasteImportUserEvent(history2) : "input.paste";
-  transactions.push(
-    current6.update({
-      ...source,
-      selection,
-      ...userEvent ? { userEvent } : {},
-      ...history2 ? {
-        annotations: [
-          ...pasteImportAnnotations(current6, history2),
-          ...original === proposed ? [Transaction.addToHistory.of(false)] : []
-        ]
-      } : {}
-    })
-  );
+  transactions.push(current6.update({ ...source, selection, userEvent: "input.paste" }));
   return Object.freeze({
     startState: state,
     transactions: Object.freeze(transactions),
-    edit: null,
-    ...history2 ? { acceptedRange: Object.freeze({ from, to: insertedEnd }) } : {}
-  });
-}
-
-// frontend/sugarprompt/editor/src/clipboard.ts
-var exactClipboardMime = "application/x-sugarprompt-source";
-function eventClipboardTransfer(data) {
-  const exact = [exactClipboardMime, `web ${exactClipboardMime}`].find(
-    (type) => data.types.includes(type)
-  );
-  return {
-    kind: exact ? "exact" : "plain",
-    text: exact ? data.getData(exact) : data.types.includes("text/plain") ? data.getData("text/plain") : ""
-  };
-}
-function clipboardSelection(state) {
-  const selection = state.selection.main;
-  if (selection.empty) return void 0;
-  const logical = state.doc.toString(), endings = state.field(lineEndings);
-  const from = documentToSource(logical, endings, selection.from), to = documentToSource(logical, endings, selection.to);
-  return { from, to, text: readExactSource(state).slice(from, to) };
-}
-function clipboardCut(state) {
-  if (state.readOnly) return null;
-  const selected = clipboardSelection(state);
-  return selected ? {
-    ...exactReplacement(state, selected.from, selected.to, ""),
-    annotations: isolateHistory.of("full"),
-    userEvent: "delete.cut"
-  } : null;
-}
-function clipboardPaste(state, transfer, lexicon, history2) {
-  if (state.readOnly || !transfer.text) return null;
-  const logical = state.doc.toString(), endings = state.field(lineEndings), selection = state.selection.main;
-  const from = documentToSource(logical, endings, selection.from), to = documentToSource(logical, endings, selection.to);
-  if (transfer.kind === "plain")
-    return enteredTextInsertion(state, from, to, transfer.text, lexicon, history2);
-  const transaction = state.update({
-    ...exactReplacement(state, from, to, transfer.text),
-    annotations: isolateHistory.of("full"),
-    userEvent: "input.paste"
-  });
-  return Object.freeze({
-    startState: state,
-    transactions: Object.freeze([transaction]),
     edit: null
   });
 }
@@ -23174,28 +22987,80 @@ var BooruPasteImport = class {
   view;
   lookup;
   lexicon;
-  /** Capture actual native view and injected current host lookup/knowledge; no networking is implemented here. */
+  /** Capture the native view and the host's current lookup and tag knowledge. */
   constructor(view, lookup, lexicon) {
     this.view = view;
     this.lookup = lookup;
     this.lexicon = lexicon;
   }
-  /** Accept supported ordinary plain paste synchronously; unsupported or disabled requests stay with the ordinary clipboard owner. */
+  /**
+   * Take a plain paste that is a supported link, or return null to leave it to ordinary paste.
+   * The returned promise settles when the tags, or the link, have been pasted or the paste was
+   * dropped.
+   */
   start(text) {
-    const state = this.view.state;
     this.cancel();
-    if (this.view.state !== state) return Promise.resolve();
+    const state = this.view.state;
     if (!featureEnabled(state.facet(featureProfile), "danbooru_url_import")) return null;
     const lookup = this.lookup();
-    if (this.view.state !== state) return Promise.resolve();
-    if (this.disposed || !lookup || !classifyBooruLink(text) || this.view.state.readOnly || this.view.composing || this.view.compositionStarted)
+    if (this.disposed || !lookup || !classifyBooruLink(text) || state.readOnly || this.view.composing || this.view.compositionStarted)
       return null;
-    const lexicon = this.lexicon();
-    if (this.view.state !== state) return Promise.resolve();
-    const preparation = prepareNativeIngestionState(state);
-    const prepared4 = preparation.at(-1)?.state ?? state;
-    const native = requireValue(prepared4.field(semanticStructures).native, "booru-paste-import");
-    const admitted = nativeDocumentValueAt(
+    const selection = state.selection.main;
+    if (!this.withinOneValue(state)) return null;
+    const pending = {
+      abort: new AbortController(),
+      text,
+      from: selection.from,
+      to: selection.to
+    };
+    this.pending = pending;
+    return this.resolve(pending, lookup);
+  }
+  /** Move the paste point with edits made while waiting; leaving the field drops the paste. */
+  update(update) {
+    const pending = this.pending;
+    if (!pending) return;
+    if (update.focusChanged && !this.view.hasFocus) {
+      this.cancel();
+      return;
+    }
+    for (const transaction of update.transactions) {
+      if (!transaction.docChanged) continue;
+      pending.from = transaction.changes.mapPos(pending.from, -1);
+      pending.to = Math.max(pending.from, transaction.changes.mapPos(pending.to, -1));
+    }
+  }
+  /** Drop the waiting paste, if any. */
+  cancel() {
+    const pending = this.pending;
+    this.pending = null;
+    pending?.abort.abort();
+  }
+  /** Release the mounted view's only paste owner. */
+  destroy() {
+    this.disposed = true;
+    this.cancel();
+  }
+  /** Paste the tags, or the link when the lookup found none, while the paste is still wanted. */
+  async resolve(pending, lookup) {
+    try {
+      const result2 = await importBooruLink(pending.text, lookup, pending.abort.signal);
+      if (result2.status === "cancelled" || !this.wanted(pending)) return;
+      this.paste(pending, result2.status === "ready" && result2.text ? result2.text : pending.text);
+    } finally {
+      if (this.pending === pending) this.pending = null;
+    }
+  }
+  /**
+   * Whether the selection lies inside one prompt value. A paste into a CSV header or across two
+   * values is no prompt text, so it stays an ordinary paste and nothing is looked up.
+   */
+  withinOneValue(state) {
+    const prepared4 = prepareNativeIngestionState(state).at(-1)?.state ?? state;
+    const native = prepared4.field(semanticStructures).native;
+    if (!native) return false;
+    const selection = prepared4.selection.main;
+    return nativeDocumentValueAt(
       prepared4,
       {
         values: native.nativeValues,
@@ -23203,159 +23068,22 @@ var BooruPasteImport = class {
         enabled: true,
         composing: false
       },
-      { from: prepared4.selection.main.from, to: prepared4.selection.main.to }
-    );
-    const history2 = preparePasteImportHistory(state);
-    let initial;
-    try {
-      const command2 = clipboardPaste(prepared4, { kind: "plain", text }, lexicon, {
-        handle: history2,
-        phase: "initial"
-      });
-      initial = command2 ? Object.freeze({
-        ...command2,
-        startState: state,
-        transactions: Object.freeze([...preparation, ...command2.transactions])
-      }) : null;
-    } catch (cause) {
-      retirePasteImportHistory(history2);
-      throw cause;
-    }
-    const transaction = initial?.edit?.transactions[0] ?? initial?.transactions.at(-1);
-    const range = initial?.acceptedRange;
-    if (!initial || !transaction || !range || !capturePasteImportHistory(history2, transaction)) {
-      retirePasteImportHistory(history2);
-      return Promise.resolve();
-    }
-    const postState = transaction.state;
-    const pending = {
-      abort: new AbortController(),
-      history: history2,
-      initial,
-      transaction,
-      accepted: false,
-      range,
-      literal: readExactSource(postState).slice(range.from, range.to),
-      freshness: postState.field(editorFreshness),
-      selection: selectionContents(postState.selection),
-      state: postState
-    };
-    this.pending = pending;
-    try {
-      if (!dispatchNativeIngestion(this.view, initial)) {
-        if (this.pending === pending) this.cancel();
-        return Promise.resolve();
-      }
-    } catch (cause) {
-      if (this.pending === pending) this.cancel();
-      throw cause;
-    }
-    if (admitted.status !== "ready" || !pending.accepted || !this.current(pending)) {
-      if (this.pending === pending) this.cancel();
-      return Promise.resolve();
-    }
-    return this.resolve(pending, text, lookup);
+      { from: selection.from, to: selection.to }
+    ).status === "ready";
   }
-  /** Observe actual continuous native transactions; source/context/navigation/composition/focus retirement cannot be reversed by equal bytes. */
-  update(update) {
-    if (!this.pending) return;
-    if (update.focusChanged && !this.view.hasFocus || this.view.composing || this.view.compositionStarted) {
-      this.cancel();
-      return;
-    }
-    for (const transaction of update.transactions) {
-      const pending = this.pending;
-      if (!pending) return;
-      if (!pending.accepted) {
-        if (transaction === pending.transaction) {
-          if (!acceptPasteImportHistory(pending.history, transaction, transaction.state)) {
-            this.cancel();
-            return;
-          }
-          pending.accepted = true;
-        } else {
-          const index = pending.initial.transactions.indexOf(transaction), command2 = pending.initial.transactions.indexOf(pending.transaction);
-          if (index < 0 || index >= command2) {
-            this.cancel();
-            return;
-          }
-          continue;
-        }
-      } else if (!followPasteImportHistory(pending.history, transaction)) {
-        this.cancel();
-        return;
-      }
-      pending.state = transaction.state;
-    }
+  /** Whether the paste can still land: not dropped, and the field still editable and focused. */
+  wanted(pending) {
+    return !this.disposed && this.pending === pending && !pending.abort.signal.aborted && this.view.hasFocus && !this.view.state.readOnly && !this.view.composing && !this.view.compositionStarted && featureEnabled(this.view.state.facet(featureProfile), "danbooru_url_import");
   }
-  /** Retire one request and its history capability; ignored-abort providers are still prevented from publishing. */
-  cancel() {
-    const pending = this.pending;
-    this.pending = null;
-    if (pending) {
-      pending.abort.abort();
-      retirePasteImportHistory(pending.history);
-    }
-  }
-  /** Release the mounted view's only request owner. */
-  destroy() {
-    this.disposed = true;
-    this.cancel();
-  }
-  /** Compare all live native premises and original issued payload before preparing any replacement. */
-  current(pending) {
+  /** Paste `text` over the paste range as one ordinary paste. */
+  paste(pending, text) {
     const state = this.view.state;
-    return !this.disposed && featureEnabled(state.facet(featureProfile), "danbooru_url_import") && this.view.hasFocus && this.pending === pending && !pending.abort.signal.aborted && state === pending.state && currentPasteImportHistory(pending.history, state) && state.field(editorFreshness) === pending.freshness && !state.readOnly && !this.view.composing && !this.view.compositionStarted && selectionMatches(state.selection, pending.selection) && (!pending.initial.edit || isIssuedDocumentValueEdit(
-      pending.initial.edit.transactions[0]?.state ?? pending.initial.edit.startState,
-      pending.initial.edit.postValues.scopes.profileKey,
-      pending.initial.edit,
-      requireValue(
-        pending.initial.edit.startState.field(semanticStructures).native,
-        "booru-paste-import"
-      ).documentSemantics
-    )) && readExactSource(state).slice(pending.range.from, pending.range.to) === pending.literal;
-  }
-  /** External causes remain observable; every typed unavailability keeps the literal and every terminal path releases native receipts. */
-  async resolve(pending, text, lookup) {
-    try {
-      const result2 = await importBooruLink(text, lookup, pending.abort.signal);
-      if (result2.status !== "ready" || !result2.text || !this.current(pending)) return;
-      for (const transaction of prepareNativeIngestionState(this.view.state)) {
-        if (!this.current(pending)) return;
-        this.view.dispatch(transaction);
-      }
-      if (!this.current(pending)) return;
-      const state = this.view.state, native = state.field(semanticStructures).native;
-      if (!native) return;
-      const logical = state.doc.toString(), endings = state.field(lineEndings);
-      const admission = nativeDocumentValueAt(
-        state,
-        {
-          values: native.nativeValues,
-          semantics: native.documentSemantics,
-          enabled: true,
-          composing: false
-        },
-        {
-          from: sourceToDocument(logical, endings, pending.range.from),
-          to: sourceToDocument(logical, endings, pending.range.to)
-        }
-      );
-      if (admission.status !== "ready") return;
-      const lexicon = this.lexicon();
-      if (!this.current(pending)) return;
-      const plan = enteredTextInsertion(
-        state,
-        pending.range.from,
-        pending.range.to,
-        result2.text,
-        lexicon,
-        { handle: pending.history, phase: "replacement" }
-      );
-      if (this.current(pending)) dispatchNativeIngestion(this.view, plan);
-    } finally {
-      if (this.pending === pending) this.cancel();
-    }
+    const logical = state.doc.toString(), endings = state.field(lineEndings);
+    const from = documentToSource(logical, endings, Math.min(pending.from, state.doc.length)), to = documentToSource(logical, endings, Math.min(pending.to, state.doc.length));
+    dispatchNativeIngestion(
+      this.view,
+      enteredTextInsertion(state, from, to, text, this.lexicon(), true)
+    );
   }
 };
 
@@ -23366,6 +23094,51 @@ var booruPostLookup = Facet.define({
     return values[0] ?? null;
   }
 });
+
+// frontend/sugarprompt/editor/src/clipboard.ts
+var exactClipboardMime = "application/x-sugarprompt-source";
+function eventClipboardTransfer(data) {
+  const exact = [exactClipboardMime, `web ${exactClipboardMime}`].find(
+    (type) => data.types.includes(type)
+  );
+  return {
+    kind: exact ? "exact" : "plain",
+    text: exact ? data.getData(exact) : data.types.includes("text/plain") ? data.getData("text/plain") : ""
+  };
+}
+function clipboardSelection(state) {
+  const selection = state.selection.main;
+  if (selection.empty) return void 0;
+  const logical = state.doc.toString(), endings = state.field(lineEndings);
+  const from = documentToSource(logical, endings, selection.from), to = documentToSource(logical, endings, selection.to);
+  return { from, to, text: readExactSource(state).slice(from, to) };
+}
+function clipboardCut(state) {
+  if (state.readOnly) return null;
+  const selected = clipboardSelection(state);
+  return selected ? {
+    ...exactReplacement(state, selected.from, selected.to, ""),
+    annotations: isolateHistory.of("full"),
+    userEvent: "delete.cut"
+  } : null;
+}
+function clipboardPaste(state, transfer, lexicon) {
+  if (state.readOnly || !transfer.text) return null;
+  const logical = state.doc.toString(), endings = state.field(lineEndings), selection = state.selection.main;
+  const from = documentToSource(logical, endings, selection.from), to = documentToSource(logical, endings, selection.to);
+  if (transfer.kind === "plain")
+    return enteredTextInsertion(state, from, to, transfer.text, lexicon);
+  const transaction = state.update({
+    ...exactReplacement(state, from, to, transfer.text),
+    annotations: isolateHistory.of("full"),
+    userEvent: "input.paste"
+  });
+  return Object.freeze({
+    startState: state,
+    transactions: Object.freeze([transaction]),
+    edit: null
+  });
+}
 
 // frontend/sugarprompt/editor/src/browser-clipboard-write.ts
 var BrowserClipboardWriter = class {
@@ -24046,11 +23819,11 @@ var refused = Object.freeze({
   reason: "continuation-refused"
 });
 var retired = Object.freeze({ status: "retired" });
-var receipts3 = /* @__PURE__ */ new WeakMap();
+var receipts2 = /* @__PURE__ */ new WeakMap();
 var mutatedTips = /* @__PURE__ */ new WeakSet();
 function issue(receipt) {
   const handle = Object.freeze({});
-  receipts3.set(handle, receipt);
+  receipts2.set(handle, receipt);
   return handle;
 }
 function prepareNativeEditContinuation(state, context, edit) {
@@ -24075,7 +23848,7 @@ function valid(receipt, state) {
   return intact && !mutatedTips.has(receipt) && !state.readOnly && authentic(receipt.recipe);
 }
 function followNativeEditContinuation(handle, transaction) {
-  const previous = receipts3.get(handle);
+  const previous = receipts2.get(handle);
   if (!(transaction instanceof Transaction) || !previous || !valid(previous, transaction.startState))
     return retired;
   const state = transaction.state, before = transaction.startState.field(editorFreshness), after = state.field(editorFreshness);
@@ -24092,7 +23865,7 @@ function followNativeEditContinuation(handle, transaction) {
   };
 }
 function nativeEditContinuationTransaction(state, handle) {
-  const receipt = receipts3.get(handle);
+  const receipt = receipts2.get(handle);
   return receipt && valid(receipt, state) ? { status: "ready", value: compileNativeRecipe(state, receipt.origin, receipt.recipe) } : refused;
 }
 
@@ -25614,8 +25387,7 @@ var currentKeyEdit = StateField.define({
 });
 function joinsCurrentEdit(transaction) {
   if (transaction.reconfigured && !preservesConfigurationHistory(transaction)) return false;
-  if (transaction.annotation(normalizationJoin) || joinsPasteImportHistory(transaction))
-    return true;
+  if (transaction.annotation(normalizationJoin)) return true;
   const isolation = transaction.annotation(isolateHistory);
   if (isolation === "full" || isolation === "before") return false;
   const previous = transaction.startState.field(currentKeyEdit), current6 = keyEdit(transaction);
@@ -25646,11 +25418,7 @@ function historyTransactions(transactions) {
 function invertSelection(transaction) {
   if (!changesExactSource(transaction) || transaction.annotation(normalizationJoin) || transaction.isUserEvent("input.type.compose") && !transaction.isUserEvent("input.type.compose.start") || joinsCurrentEdit(transaction))
     return [];
-  return [
-    restoreHistorySelection.of(
-      pasteImportOriginalSelection(transaction) ?? transaction.startState.selection
-    )
-  ];
+  return [restoreHistorySelection.of(transaction.startState.selection)];
 }
 function historyBoundary(state) {
   return state.field(currentKeyEdit) ? state.update({
@@ -48026,6 +47794,9 @@ var SugarPromptEditor = class {
   #api;
   #options;
   #stopAppearance;
+  #stopPreferences;
+  #stopTagLists;
+  #gutter;
   #content;
   #readiness;
   #field = null;
@@ -48067,13 +47838,15 @@ var SugarPromptEditor = class {
     this.element.dataset.scHostOpaque = "";
     this.element.dataset.captureWheel = "true";
     this.element.style.width = "100%";
-    this.element.style.minHeight = "128px";
-    this.element.style.height = "128px";
+    this.element.style.minHeight = options.document ? "0" : "128px";
+    this.element.style.height = options.document ? "100%" : "128px";
     this.element.style.position = "relative";
+    if (options.document) this.element.classList.add("sc-prompt-document");
     this.#content = document2.createElement("div");
     this.#readiness = new PromptMountReadiness();
     this.#content.style.cssText = "width:100%;height:100%;min-width:0;min-height:0";
-    options.anchor.before(this.element);
+    options.place(this.element);
+    this.#gutter = options.document ? new PromptLineGutter(this.element) : null;
     this.#applyAppearance();
     this.#stopAppearance = options.appearance.subscribeAppearance(() => this.#applyAppearance());
     this.#admission = new PromptCatalogAdmission(this.element, {
@@ -48091,16 +47864,8 @@ var SugarPromptEditor = class {
     for (const type of ["keydown", "keyup", "pointerdown", "contextmenu", "wheel"]) {
       this.element.addEventListener(type, (event) => event.stopPropagation());
     }
-    const profile = resolveFeatureProfile(defaultPreferences, {
-      mode: "workflow",
-      loraScheduling: options.promptControl,
-      unavailableFeatures: [
-        "danbooru_url_import",
-        "spellcheck",
-        ...options.pickLora ? [] : ["lora_picker"]
-      ]
-    });
-    const tagCatalog = bundledPromptTagCatalog();
+    const preferences = options.preferences.current();
+    const tagCatalog = promptTagCatalog(options.tagLists.current());
     this.#api = mountEditor(this.#content, {
       source: options.source,
       menuPresentation: (root) => new SugarPromptMenu(
@@ -48114,7 +47879,18 @@ var SugarPromptEditor = class {
       placeholder: "Write a prompt\u2026",
       readOnly: options.readOnly,
       richRendering: true,
-      featureProfile: profile,
+      featureProfile: this.#profile(preferences),
+      wheelMode: preferences.wheelMode,
+      ...options.document ? {
+        documentKind: promptDocumentKind(options.document),
+        sourceLineChrome: {
+          enabled: true,
+          contentLeftInset: this.#gutter?.inset(options.source.split("\n").length) ?? 0
+        },
+        onSourceLines: (lines) => this.#numberLines(lines)
+      } : {},
+      spellcheckSession: spellcheckSessionFor(options.spellcheck),
+      booruPostLookup: options.booruPostLookup,
       tagCompletionCatalog: tagCatalog,
       wildcardCatalog: options.wildcardCatalog,
       modelCompletionPopupHost: options.modelCompletions,
@@ -48129,6 +47905,17 @@ var SugarPromptEditor = class {
       regionAccent: options.regionAccent
     });
     this.#regionAccent = options.regionAccent;
+    this.#stopTagLists = options.tagLists.subscribe(() => {
+      if (this.#disposed) return;
+      const catalog = promptTagCatalog(options.tagLists.current());
+      this.#api.setTagCompletionCatalog(catalog);
+      this.#api.setTagLexicon(catalog.lexicon);
+    });
+    this.#stopPreferences = options.preferences.subscribe((changed) => {
+      if (this.#disposed) return;
+      this.#api.setFeatureProfile(this.#profile(changed));
+      this.#api.setWheelMode(changed.wheelMode);
+    });
     this.#scheduling = new PromptLoraScheduling(
       this.#api,
       options.promptControl,
@@ -48137,6 +47924,31 @@ var SugarPromptEditor = class {
     markComfyPromptInput(this.element);
     this.#search = new PromptSearchPainter(this.element, this.#api, options.report);
     publishPromptSearch(this.#search);
+  }
+  /** Number the visible lines, widening the gutter when the line count gains a digit. */
+  #numberLines(lines) {
+    const gutter2 = this.#gutter;
+    if (this.#disposed || !gutter2) return;
+    const inset2 = gutter2.inset(this.#committedSource.split("\n").length);
+    if (inset2 !== lines.chrome.contentLeftInset)
+      this.#api.setSourceLineChrome({ enabled: true, contentLeftInset: inset2 });
+    gutter2.paint(lines, this.#content.querySelector(".cm-scroller"));
+  }
+  /** What this editor may offer under `preferences` and the services its host supplied. */
+  #profile(preferences) {
+    const document2 = this.#options.document;
+    return resolveFeatureProfile(
+      document2 ? promptDocumentPreferences(document2, preferences) : preferences,
+      {
+        mode: document2 ? "library" : "workflow",
+        loraScheduling: this.#options.promptControl,
+        unavailableFeatures: [
+          ...this.#options.booruPostLookup ? [] : ["danbooru_url_import"],
+          ...this.#options.spellcheck ? [] : ["spellcheck"],
+          ...this.#options.pickLora ? [] : ["lora_picker"]
+        ]
+      }
+    );
   }
   /** Preserve the native document and history when the host moves the same field to another presentation. */
   attach(textarea) {
@@ -48233,6 +48045,9 @@ var SugarPromptEditor = class {
     this.#readiness.dispose();
     this.#admission.dispose();
     this.#stopAppearance();
+    this.#stopPreferences();
+    this.#stopTagLists();
+    this.#gutter?.dispose();
     this.#resources?.dispose();
     this.#api.destroy();
     this.element.remove();
@@ -48376,6 +48191,10 @@ var SugarPromptEditor = class {
   /** Preserve native CSS-local geometry under both Comfy canvas transforms and ordinary masonry layout. */
   #layout(metrics) {
     if (this.#disposed) return;
+    if (this.#options.document) {
+      this.#readiness.publish(metrics.viewportWidth);
+      return;
+    }
     const height = Math.max(
       128,
       Math.min(320, Math.ceil(metrics.contentHeight + metrics.outerPadding))

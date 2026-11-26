@@ -33,6 +33,7 @@ import { WorkflowCanvasCoordinator } from '../application/WorkflowCanvasCoordina
 import { ComfyWorkflowSessionAdapter } from './ComfyWorkflowSessionAdapter.js';
 import { ComfyWorkflowEventAdapter } from './ComfyWorkflowEventAdapter.js';
 import { ComfyWorkflowHistoryAdapter } from './ComfyWorkflowHistoryAdapter.js';
+import { ComfyWorkflowQueueReconciler } from './ComfyWorkflowQueueReconciler.js';
 import { ComfyPromptSubmissionObserver } from './ComfyPromptSubmissionObserver.js';
 import { ComfyWorkflowPreviewDelivery } from './ComfyWorkflowPreviewDelivery.js';
 import { ComfyWorkflowOutputProjection } from './ComfyWorkflowOutputProjection.js';
@@ -129,7 +130,7 @@ export class ComfyWorkflowExecutionRuntime {
             return api.fetchApi.call(api, path, init);
         });
         this.wildcardLibrary = new WildcardLibrary(this.wildcardFiles, (error) => options.logger.error('SugarCubes could not read the wildcard folder.', { error }));
-        this.wildcards = new ComfyWildcardPrompts(() => options.app, this.wildcardLibrary);
+        this.wildcards = new ComfyWildcardPrompts(() => options.app, this.wildcardLibrary, options.resolveWildcards);
         this.previews = new ComfyWorkflowPreviewDelivery(this.results, options.logger, (frame) => this.canvases.preview(frame));
         this.#cubePreviews = new ComfyCubeLivePreview(this.sessions, this.results, this.previews, options.previewUrls, () => options.clock.now(), options.previewVisibility);
         this.outputs = new ComfyWorkflowOutputProjection(this.#cubePreviews, this.sessions, this.results);
@@ -156,6 +157,12 @@ export class ComfyWorkflowExecutionRuntime {
                 logger: this.options.logger,
             });
             this.#history = history;
+            const queue = new ComfyWorkflowQueueReconciler({
+                api: this.options.api,
+                runs: this.#runs,
+                ingestor: this.#ingestor,
+                logger: this.options.logger,
+            });
             this.#loads = createComfyWorkflowLoadObserver(this.options.app, this.sessions, adapter, this.options.logger);
             this.#construction = createComfyPromptConstructionObserver(this.options.app, this.sessions, this.#contexts, this.options.logger, (context) => this.#documentRevision?.(context.sessionId));
             this.#lifecycle = new WorkflowResultLifecycle({
@@ -173,6 +180,7 @@ export class ComfyWorkflowExecutionRuntime {
                 preview: (source, blob) => this.previews.deliver(source, blob),
                 connection: (connected) => this.#setConnected(connected),
                 reconnect: () => history.reconnect(),
+                queue: (remaining) => queue.remaining(remaining),
             });
             this.#lifecycle.install();
             this.#loads.install();
