@@ -1,3 +1,55 @@
+## [0.36.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.35.0...sugarcubes-v0.36.0) (2026-11-25)
+
+### Features
+
+* **cube-chain:** one Cube chain owns the stack order, placement and wiring on the live graph ([f5a6424](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/f5a6424c77506e98135a887e442a6534b55ac516))
+* **import:** a dropped generated image brings back its run and its painted masks ([3bc7b6e](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/3bc7b6ec6afe9cab6c75077aa17d9474e62ac972))
+* **resources:** one copy of every shared resource: the app icon is the shared ICO the executables, the orb, About and the GIMP companion use; shared Fluent artwork moves beside it; governance refuses duplicate resource files ([c420998](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/c420998aa00617d66a855934e99b929bea4af7ef))
+* **settings:** the settings workspace presents Python's pages and cards ([762ddfe](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/762ddfed052ba788c91d25f0cc57bda736d63fb6))
+* **shared-ui:** the splash and the page draw shared elements from one record ([26af4b6](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/26af4b6d4bfc241bd25720ef5e978e8e9d986d31))
+* **substitute-frame:** feedback round of 2026-11-23 ([8a160a4](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/8a160a4383546a7565b0c6d5b9435e6940548f1f))
+* **surface:** a searchable choice reads as one field with one underline and suggests its completion as ghost text ([e88b653](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/e88b653edebe8b298da2a6cdc153d2d98e8c3066))
+
+### Bug Fixes
+
+* **execution:** a Cube chain linked by proximity queues again ([f5bb016](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/f5bb016abc534b69e22eff877e99726276a08385))
+* **finder:** a text box's matches and selection land on its own characters whatever line endings its value holds ([83f5c8c](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/83f5c8c0e47f012165aab28b0064a24e45517246))
+* **finder:** matches are shown by one mechanism, the current match as a real selection; Field and Node queries highlight nothing; every Fluent field's focus underline comes from one definition and is cut by the field's corners ([487858d](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/487858d598b1672bef6fb18b107d4de8150a0d14))
+* **generation-strip:** the Continuous icon is drawn at 24 px ([f8d5e83](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/f8d5e838ed9d57b175a61c04fb7de72f985939ad))
+* **input-canvas:** a browser opening a desktop-painted image shows its masks from their files ([84bbcca](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/84bbcca2d7af90c2445ec68b6b99d2bd4f4422b0))
+* **masonry-search:** the finder marks its matches in prompts, text boxes, titles, field names and shown values ([ba3a250](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/ba3a2506a8151a4314e3102e074320c4ae78cf5a))
+* **model-library:** a model picture never paints an empty frame on its way in ([a8c4f37](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/a8c4f3764fa1ddff57e2693d17d7dedf44d5a443))
+* **model-library:** an ingest can no longer freeze, and consumers hear of changes at a bounded pace ([044ebde](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/044ebde108c6e7b530149bddf0bddbaffc4b1d9f))
+* **model-library:** background model data no longer closes menus, resets the wall or blanks images ([7e51449](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/7e514495695eb6d746288842c139c919a9f7dbf1))
+* **model-library:** model images have one owner: one thumbnail rule, one presentation with a decoded cache, shared LoRA rasters; walls report shown models and relayout only for new shapes; a failed preview is remembered, never retried on a clock ([fab4fd7](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/fab4fd7e115a0b758356cf6e3657a4c34d1825f6))
+* **output-canvas:** ComfyUI's graph chrome ends at the graph's edges, so its zoom menu opens above its button beside the output canvas ([f3e10c3](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/f3e10c36bf9eb3aab49d4b48034abf7446005a7b))
+* **output-canvas:** a new run's first preview replaces the shown final at once ([44d66d6](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/44d66d6b2da0d77a0b742cc9c2f91553bb94c1e4))
+* **output-canvas:** a stage's first preview shows from its owner once its tab is chosen ([5e571c0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/5e571c0fd1ab0dea2b5cb42c9f10b12696a70363))
+* **output-canvas:** an empty canvas keeps the wash instead of the window's Mica ([d4f4086](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/d4f408618be9252687a9342ca019709e0fa7dd67))
+* **output-canvas:** live previews of one workflow tab are never refused as older than another tab's ([28dd256](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/28dd2566f8e9dfb684484d00ceabd85ce3991f05))
+* **output-canvas:** one owner keeps preview bytes, so a stage's preview never comes back after its final ([937b26c](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/937b26c0533db9432ba880c9525a5456c3f2d541))
+* **output-saving:** an image carries the workflow as it was queued, and a Cube loaded from an earlier image gets its boundary links back ([ed1c3be](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/ed1c3beeac6cfb5aac79cde6051f6e73cfff8858))
+* **substitute-frame:** ComfyUI's menus carry their own token scope ([a4da8f3](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/a4da8f3cc750e34b39968f9b8c5eff9af21d142e))
+* **surface:** a graph that starts with no change callback is still heard ([090375c](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/090375c31ae43edc08e1e0c74fba52a89067c6dd))
+* **surface:** a node card hides everything beneath it in the desktop frame: what the graph canvas draws, and the cards under it, by Comfy's stacking and node opacity ([d86114f](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/d86114fc3c5efd4da4644732f88f54e8deb1cbd7))
+* **surface:** a node chin's divider curves into the card's corners again ([08084f8](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/08084f88b7fef3d2435263df855bfffc6a48faed))
+* **surface:** chrome text in the desktop frame cannot be selected, while fields and content can ([dfba759](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/dfba759b48e38ccadc2c64e14dfe9a4eb0c21902))
+* **surface:** every node chin is one rule: it starts at the body's edge and draws the one divider there, and its fill and hover stay below it, in the graph and masonry ([c9756d9](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/c9756d9ce75896557ad8309a9f8d7074cba6bfc5))
+* **surface:** frame feedback: one card surface owner, toolbar above side panels, minimap matches its toolbar, grid hidden under node cards, tooltips at the pointer, a card toggle leaves other cards alone, amber sampler bar and squared bar ends, console button on the caption row ([d36ad67](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/d36ad671a9fb43f087c762ed690ae946f9a34e77))
+* **surface:** gate findings for the feedback batch: tooltips on the shared observer, numbers searched as shown, comparison beside the catalog ([3150842](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/31508427d0c0e8eb6ef59893f0ee2ce03dbe137c))
+* **surface:** no Comfy queue notices in the Substitute frame; the Settings rail appears on the selected item once it is laid out ([44596b7](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/44596b7fe8b97249d9b43a15d95e329a42f4c4d2))
+* **surface:** the docked generation queue is not resizable and leaves no splitter edge at the left or over the progress bars; one selector names Comfy's job panel ([8d25950](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/8d2595046bdcf3735ae9917b69cb7486d7c6cad5))
+* **surface:** the graph/masonry toggle icon is cut off at its own box ([5daf542](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/5daf542862c5545805734e56ca3d677b1c7105da))
+* **surface:** the orb menu is an ordinary icon menu with no checks ([64a2e0e](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/64a2e0e48cd418434b329f36d0fea38ad940917c))
+* **surface:** the queue fly-out hangs below its button at most 420 px tall and its list scrolls with the shared overlay scroll bar ([0c1fe7d](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/0c1fe7d7946a959c7086ba6b5a43ccda12d46a6e))
+* **surface:** the sampler progress bar keeps the accent colour ([dced9df](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/dced9df0c7179c6b6474ff93ce6f1728b0fb8bd5))
+
+### Performance Improvements
+
+* **model-library:** a model field ignores catalog publications that changed none of its models ([1a65c91](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/1a65c913d4ead5e9901eaa8e3e2484e12610ae29))
+* **output-canvas:** a CPU frame relative to the retained frame repairs the surface: retained pixels are scrolled and only changed regions are copied and drawn ([a531615](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/a531615d80532dc51f38bd52af55d8164c3d0b65))
+* **prompt-editor:** a library update redraws no prompt that shows the same models; finder highlights survive a token redraw ([554c3c5](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/554c3c530ccb72f0bb7efb4387519738e388d171))
+
 ## [0.35.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.34.0...sugarcubes-v0.35.0) (2026-11-22)
 
 ### Features
