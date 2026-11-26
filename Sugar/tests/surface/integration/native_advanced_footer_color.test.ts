@@ -111,7 +111,9 @@ describe.each([
           content: `
     body{margin:0}body::before{content:'';position:fixed;inset:0;background:rgb(40,20,20);z-index:-1}
     main{margin:16px;width:440px}header{height:0}*{box-sizing:border-box}
-    .lg-node{display:flex;flex-direction:column}.bg-node-component-header-surface{background:var(--node-component-header-surface)}
+    .lg-node{display:flex;flex-direction:column}
+    /* A generous corner radius makes the divider's curve measurable in whole pixels. */
+    .lg-node[data-sc-style-node]{--sc-node-card-radius:12px!important}.bg-node-component-header-surface{background:var(--node-component-header-surface)}
     .bg-component-node-background{background:var(--component-node-background)}
     [data-testid^="node-body-"]{height:60px;display:flex;justify-content:space-between;padding:0 30px!important;align-items:center}
     [data-testid^="node-header-"]{height:49px!important;padding-left:40px!important}
@@ -180,16 +182,24 @@ describe.each([
             cube: root.hasAttribute('data-sugarcube-node'),
             root: rect(root),
             body: rect(body),
+            wrapper: rect(root.querySelector(':scope > [data-testid="node-inner-wrapper"]')!),
+            radius: Number.parseFloat(getComputedStyle(button).borderBottomLeftRadius),
             button: rect(button),
             desktop: document.documentElement.hasAttribute('data-sc-desktop-frame-surface'),
           };
         });
         expect(facts.desktop).toBe(true);
         expect(facts.cube).toBe(false);
-        // The chin starts where the body ends: nothing of it lies under the see-through body.
-        expect(Math.abs(facts.button.y - (facts.body.y + facts.body.height))).toBeLessThanOrEqual(
-          1,
-        );
+        // The divider is the wrapper's lower edge, under the body; the chin shows from it down and
+        // tucks up behind the body only by the corner radius, which fills the curve's corners.
+        const divider = Math.round(facts.wrapper.y + facts.wrapper.height) - 1;
+        expect(facts.radius).toBeGreaterThan(2);
+        expect(
+          Math.abs(facts.button.y + facts.radius - (facts.wrapper.y + facts.wrapper.height)),
+        ).toBeLessThanOrEqual(1);
+        expect(
+          Math.abs(facts.wrapper.y + facts.wrapper.height - 1 - (facts.body.y + facts.body.height)),
+        ).toBeLessThanOrEqual(1);
         const encoded = Uint8Array.from(await page.screenshot());
         const image = UPNG.decode(encoded.buffer);
         const data = new Uint8Array(UPNG.toRGBA8(image)[0]!);
@@ -213,6 +223,12 @@ describe.each([
         // One card layer: the footer and the body's lower edge paint the same pixel as the body.
         expect(overlap).toEqual(body);
         expect(footer).toEqual(explicit ? [112, 71, 71, 255] : body);
+        // The divider curves: just above it at the card's edge the corner lies outside the body's
+        // rounding and shows the chin, while the same height further in is still body.
+        if (explicit) {
+          expect(pixel(facts.root.x + 1, divider - 1)).toEqual([112, 71, 71, 255]);
+          expect(pixel(facts.root.x + facts.radius + 4, divider - 2)).toEqual([64, 80, 96, 255]);
+        }
         expect(await page.getByRole('button', { name: chin, exact: true }).isVisible()).toBe(true);
         // One colour per pixel row near the card's right edge, clear of every label.
         const column = (pixels: Uint8Array, width: number, y: number) => {
@@ -238,7 +254,6 @@ describe.each([
         const edges = rest.flatMap((row, index) =>
           index > 0 && differs(row, rest[index - 1]!) ? [top + index] : [],
         );
-        const divider = Math.round(facts.button.y);
         expect(edges.length).toBeGreaterThan(0);
         for (const edge of edges) expect(edge - divider).toBeGreaterThanOrEqual(0);
         for (const edge of edges) expect(edge - divider).toBeLessThanOrEqual(1);

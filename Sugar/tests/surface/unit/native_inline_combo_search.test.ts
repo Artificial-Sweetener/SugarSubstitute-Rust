@@ -104,13 +104,15 @@ test('leaves custom comboboxes unchanged and releases detached native inputs', (
 test('keeps every chin\u2019s rounding at the single card boundary in both palettes', () => {
   for (const dark of [true, false]) {
     const css = fluentAppearanceCss(dark);
-    // A card with a chin squares its body's lower corners; the chin rounds the card's.
-    expect(css).toContain(
-      '[data-sc-style-node]:has(> [data-testid="node-inner-wrapper"] + * > button) [data-testid^="node-body-"] { border-radius:0; }',
+    // A card with a chin curves its divider: the body's lower corners round into the chin, which
+    // fills the corners outside the curve and rounds the card's own lower corners.
+    expect(css).toMatch(
+      /\[data-sc-style-node\]:has\(> \[data-testid="node-inner-wrapper"\] \+ \* > button\) > \[data-testid="node-inner-wrapper"\] \{\s*border-bottom:1px solid var\(--sc-row-stroke\);\s*border-bottom-left-radius:var\(--sc-node-card-radius\); border-bottom-right-radius:var\(--sc-node-card-radius\);/,
     );
     expect(css).toMatch(
       /\[data-testid="node-inner-wrapper"\] \+ \* > button \{[^}]*border-radius:0 0 var\(--sc-node-card-radius\) var\(--sc-node-card-radius\);/,
     );
+    expect(css).toMatch(/\[data-testid="node-inner-wrapper"\] \+ \* > button \{[^}]*mask:/);
     expect(css).toContain('[data-sc-inline-search-shell] > :not(input) { display:none; }');
   }
 });
