@@ -25,6 +25,7 @@ import { acquireComboToggle } from './ComboToggleController.js';
 import { readOwnedDarkTheme } from './OwnedColorScheme.js';
 import { OverlayScrollbarHost } from './OverlayScrollbarHost.js';
 import { isBorrowedNativeCardPresentation } from '../NativeCardPresentationOwner.js';
+import { OrphanedTooltipRetirement } from './OrphanedTooltipRetirement.js';
 import { PointerTooltipPlacement } from './PointerTooltipPlacement.js';
 import { NATIVE_PRESENTATION_READY_EVENT } from '../NativePresentationReady.js';
 import { NativeCardGraphGeometry } from './NativeCardGraphGeometry.js';
@@ -62,6 +63,7 @@ export class AppearanceHost {
     #unsubscribePalette = null;
     #releaseComboToggle = null;
     #tooltips = null;
+    #orphanedTooltips = null;
     #releaseCompactMasonry = null;
     #releasePhotoProPalette = null;
     #releaseVisualStyle = null;
@@ -107,6 +109,7 @@ export class AppearanceHost {
         ensureOwnedControlAppearanceStyles(this.#options.document);
         this.#accent.setup();
         this.#tooltips = new PointerTooltipPlacement(this.#options.document);
+        this.#orphanedTooltips = new OrphanedTooltipRetirement(this.#options.document);
         const settings = readSettings(this.#options.app);
         this.#unsubscribe = createComfyRendererModeChangeSource(this.#options.app).subscribe(() => this.#reconcile());
         if (typeof settings.addEventListener === 'function' &&
@@ -164,6 +167,8 @@ export class AppearanceHost {
         this.#accent.dispose();
         this.#tooltips?.dispose();
         this.#tooltips = null;
+        this.#orphanedTooltips?.dispose();
+        this.#orphanedTooltips = null;
         this.#iconAppearance.dispose();
         this.#deactivate();
         releaseVisualStyle(this.#options.document, this.#selectedStyle);
