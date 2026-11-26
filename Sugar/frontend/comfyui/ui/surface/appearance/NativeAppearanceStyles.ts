@@ -222,9 +222,20 @@ export function nativeAppearanceCss(palette: NativeAppearancePalette, dark: bool
       box-sizing:border-box; padding:0 8px;
       font-family:var(--sc-font-family); font-size:var(--sc-search-font);
       color:var(--sc-text);
-      border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom-color:transparent;
+      border:var(--sc-field-border-width) solid transparent;
       border-radius:var(--sc-control-radius,4px); outline:none; z-index:1;
     }
+    /* The suggestion lies over the search in the same box and font: the typed text repeats
+       invisibly so the dim completion starts exactly where the caret is. */
+    [data-sc-inline-search-shell] > [data-sc-inline-search-ghost] {
+      position:absolute; left:var(--sc-search-left); top:var(--sc-search-top);
+      width:var(--sc-search-width); height:var(--sc-search-height);
+      box-sizing:border-box; padding:0 8px; border:var(--sc-field-border-width) solid transparent;
+      display:flex; align-items:center; overflow:hidden; white-space:pre; pointer-events:none; z-index:2;
+      font-family:var(--sc-font-family); font-size:var(--sc-search-font); color:var(--sc-text-muted);
+    }
+    [data-sc-inline-search-ghost][hidden] { display:none !important; }
+    .sc-inline-search-ghost__typed { color:transparent; }
     ${nativeNumericCss()}
     ${fieldSurfaceCss()}
   `;

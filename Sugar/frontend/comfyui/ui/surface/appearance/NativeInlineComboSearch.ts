@@ -14,12 +14,15 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Place Comfy's own live search input over its field while preserving native filtering and navigation. */
+import { NativeInlineComboSuggestion } from './NativeInlineComboSuggestion.js';
+
 interface SearchBinding {
   trigger: HTMLElement;
   popup: HTMLElement;
   input: HTMLInputElement;
   shell: HTMLElement;
   label: string | null;
+  suggestion: NativeInlineComboSuggestion;
 }
 
 const geometryProperties = ['left', 'top', 'width', 'height', 'font'] as const;
@@ -43,8 +46,20 @@ export class NativeInlineComboSearch {
     const input = popup.querySelector('[data-testid="widget-select-default-search-input"]');
     if (!(input instanceof HTMLInputElement) || !input.parentElement) return;
     const shell = input.parentElement;
-    this.#binding = { trigger, popup, input, shell, label: input.getAttribute('aria-label') };
+    const suggestion = new NativeInlineComboSuggestion(input, popup, () =>
+      (trigger.textContent ?? '').trim(),
+    );
+    this.#binding = {
+      trigger,
+      popup,
+      input,
+      shell,
+      label: input.getAttribute('aria-label'),
+      suggestion,
+    };
     input.setAttribute('data-sc-inline-search', '');
+    // The search shows through to the field's own surface, so the value beneath it is hidden.
+    trigger.setAttribute('data-sc-inline-search-target', '');
     shell.setAttribute('data-sc-inline-search-shell', '');
     input.setAttribute('aria-label', trigger.getAttribute('aria-label') ?? 'Search');
     this.#layout();
@@ -58,6 +73,8 @@ export class NativeInlineComboSearch {
     if (this.#frame !== null) this.#document.defaultView?.cancelAnimationFrame(this.#frame);
     this.#frame = null;
     if (!binding) return;
+    binding.suggestion.dispose();
+    binding.trigger.removeAttribute('data-sc-inline-search-target');
     binding.input.removeAttribute('data-sc-inline-search');
     binding.shell.removeAttribute('data-sc-inline-search-shell');
     if (binding.label === null) binding.input.removeAttribute('aria-label');
@@ -117,5 +134,7 @@ export class NativeInlineComboSearch {
       if (binding.input.style.getPropertyValue(name) !== value)
         binding.input.style.setProperty(name, value);
     }
+    binding.suggestion.place(binding.input.style);
+    binding.suggestion.update();
   }
 }

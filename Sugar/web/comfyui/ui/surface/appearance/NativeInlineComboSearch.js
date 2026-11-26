@@ -1,3 +1,20 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Place Comfy's own live search input over its field while preserving native filtering and navigation. */
+import { NativeInlineComboSuggestion } from './NativeInlineComboSuggestion.js';
 const geometryProperties = ['left', 'top', 'width', 'height', 'font'];
 /** Own the reversible geometry of one native searchable combobox, without duplicating its state. */
 export class NativeInlineComboSearch {
@@ -19,8 +36,18 @@ export class NativeInlineComboSearch {
         if (!(input instanceof HTMLInputElement) || !input.parentElement)
             return;
         const shell = input.parentElement;
-        this.#binding = { trigger, popup, input, shell, label: input.getAttribute('aria-label') };
+        const suggestion = new NativeInlineComboSuggestion(input, popup, () => (trigger.textContent ?? '').trim());
+        this.#binding = {
+            trigger,
+            popup,
+            input,
+            shell,
+            label: input.getAttribute('aria-label'),
+            suggestion,
+        };
         input.setAttribute('data-sc-inline-search', '');
+        // The search shows through to the field's own surface, so the value beneath it is hidden.
+        trigger.setAttribute('data-sc-inline-search-target', '');
         shell.setAttribute('data-sc-inline-search-shell', '');
         input.setAttribute('aria-label', trigger.getAttribute('aria-label') ?? 'Search');
         this.#layout();
@@ -35,6 +62,8 @@ export class NativeInlineComboSearch {
         this.#frame = null;
         if (!binding)
             return;
+        binding.suggestion.dispose();
+        binding.trigger.removeAttribute('data-sc-inline-search-target');
         binding.input.removeAttribute('data-sc-inline-search');
         binding.shell.removeAttribute('data-sc-inline-search-shell');
         if (binding.label === null)
@@ -93,5 +122,7 @@ export class NativeInlineComboSearch {
             if (binding.input.style.getPropertyValue(name) !== value)
                 binding.input.style.setProperty(name, value);
         }
+        binding.suggestion.place(binding.input.style);
+        binding.suggestion.update();
     }
 }

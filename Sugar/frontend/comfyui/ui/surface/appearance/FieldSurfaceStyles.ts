@@ -115,8 +115,9 @@ export function fieldOwnUnderlineCss(field: string, focused: string, colour = BR
  *
  * The resolved `--sc-field-surface` is the single state result. Painters apply it directly;
  * delegates, such as editor components with shadow-owned chrome, map it into their own painter.
- * The inline combo search covers its trigger while editing, so it composites the focused fill over
- * the card to hide the trigger text beneath and remain identical to the focused frame.
+ * The inline combo search lies over its trigger while editing. It paints no fill, edge or underline
+ * of its own (the trigger's own text is hidden instead), so the frame's one fill, outline and
+ * underline run unbroken beneath the search and the chevron, as on a plain choice.
  */
 export function fieldSurfaceCss(): string {
   return `
@@ -128,10 +129,8 @@ export function fieldSurfaceCss(): string {
       background-color:var(--sc-field-surface);
       transition:background-color var(--sc-motion-fast) var(--sc-motion-ease), border-color var(--sc-motion-fast) var(--sc-motion-ease);
     }
-    [data-sc-style-popup] [data-sc-inline-search] {
-      background:${underlineStrip(BRAND)} bottom center / var(--sc-field-underline-size,100% 2px) no-repeat border-box,
-        linear-gradient(var(--sc-field-focus-fill), var(--sc-field-focus-fill)), var(--sc-card-fill);
-    }
+    [data-sc-style-popup] [data-sc-inline-search] { background:none; }
+    :is([data-sc-inline-search-target], [data-sc-inline-search-target] *) { color:transparent !important; }
     @media (prefers-reduced-motion:reduce) {
       ${painters} { transition:none; }
     }
