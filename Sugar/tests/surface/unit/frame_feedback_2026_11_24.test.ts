@@ -20,7 +20,10 @@
  */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { desktopFrameCss } from '../../../frontend/comfyui/ui/surface/frame/DesktopFrameStyles.js';
-import { substituteToolbarCss } from '../../../frontend/comfyui/ui/surface/frame/SubstituteToolbarStyles.js';
+import {
+  substituteToolbarCss,
+  substituteToolbarViewButtons,
+} from '../../../frontend/comfyui/ui/surface/frame/SubstituteToolbarStyles.js';
 import {
   GRAPH_MINIMAP_GAP,
   GRAPH_MINIMAP_WIDTH,
@@ -85,6 +88,31 @@ test('the toolbar row spans the window and every side panel opens beneath it', (
     '.p-splitterpanel:has(> [data-sc-substitute-toolbar-menu]) { padding-top:44px; }',
   );
   expect(css).toContain('> :not(:has(> [data-sc-substitute-toolbar-menu])) { margin-top:44px; }');
+});
+
+test("the row's view buttons are flat until pointed at, and no other button loses its fill", () => {
+  expect(flat(substituteToolbarCss)).toContain(
+    `:root[data-sc-substitute-frame] [data-sc-substitute-toolbar] ${substituteToolbarViewButtons}:not(:hover) { background:transparent!important; }`,
+  );
+  const bar = document.createElement('div');
+  const button = (className: string, icon = ''): HTMLButtonElement => {
+    const element = document.createElement('button');
+    element.className = className;
+    if (icon) element.appendChild(document.createElement('i')).className = icon;
+    return bar.appendChild(element);
+  };
+  document.body.append(bar);
+  const matched = [
+    button('sugarcubes-masonry-toggle'),
+    button('sc-output-canvas-toggle'),
+    button('', 'icon-[lucide--play]'),
+    button('sc-plugin-settings'),
+  ].map((view) => view.matches(substituteToolbarViewButtons));
+  expect(matched).toEqual([true, true, false, false]);
+  // jsdom does not evaluate the icon match; ComfyUI's properties toggle is named by both its icons.
+  expect(substituteToolbarViewButtons).toContain(
+    'button:has(> i:is(.icon-\\[lucide--panel-right\\], .icon-\\[lucide--panel-left\\]))',
+  );
 });
 
 test('the minimap and the toolbar beneath it share one width, right edge, corner and surface', () => {

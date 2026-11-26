@@ -13,6 +13,15 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/**
+ * The masonry, output canvas and properties-panel buttons at the end of Substitute's row.
+ *
+ * ComfyUI's properties toggle is matched by its icon, with class selectors: Chromium cannot scope
+ * `:has()` invalidation for attribute selectors on `class`.
+ */
+export const substituteToolbarViewButtons =
+  ':is(.sugarcubes-masonry-toggle, .sc-output-canvas-toggle, button:has(> i:is(.icon-\\[lucide--panel-right\\], .icon-\\[lucide--panel-left\\])))';
+
 /** Present the native actionbar as Substitute's fixed override row beside the orb's pin. */
 export const substituteToolbarCss = `
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar-menu] { margin-left:0; padding-top:0; gap:0;
@@ -33,6 +42,8 @@ export const substituteToolbarCss = `
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar] .actionbar .drag-handle { display:none!important; }
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar] .p-panel-content { padding:0!important; }
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar] > .sc-overrides-dock-slot { flex:1 1 auto; min-width:0; }
+  /* The row's view buttons are flat until pointed at; each keeps its own hover fill. */
+  :root[data-sc-substitute-frame] [data-sc-substitute-toolbar] ${substituteToolbarViewButtons}:not(:hover) { background:transparent!important; }
   /* The row spans the window beneath the tab bar and keeps its place whatever opens beside the
      graph: ComfyUI's side panels are the row's neighbours in the same splitter, so the row leaves the
      splitter's flow at full width and every panel beside it starts under it, as the graph does. */
