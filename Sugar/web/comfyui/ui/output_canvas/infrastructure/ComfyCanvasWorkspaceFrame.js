@@ -22,6 +22,7 @@ export class ComfyCanvasWorkspaceFrame {
     panel;
     frames;
     changed;
+    reservation;
     element;
     #resize;
     #toolbar;
@@ -30,11 +31,12 @@ export class ComfyCanvasWorkspaceFrame {
     #bounds = null;
     #disposed = false;
     /** Retain native chrome identity and observe only the qualified workspace and toolbar mounts. */
-    constructor(root, panel, frames, changed) {
+    constructor(root, panel, frames, changed, reservation) {
         this.root = root;
         this.panel = panel;
         this.frames = frames;
         this.changed = changed;
+        this.reservation = reservation;
         this.element = root.ownerDocument.createElement('div');
         this.element.className = 'sc-output-workspace-frame';
         this.#toolbar = new ComfyCanvasToolbarLayout(panel);
@@ -85,15 +87,19 @@ export class ComfyCanvasWorkspaceFrame {
             next.frameHeight !== previous.frameHeight)
             this.changed(next.width, next.height);
     }
-    /** Measure the panel in client space, where the fixed sibling stays clear of graph allocation. */
+    /**
+     * Measure the area Comfy gives the graph panel, in client space: the panel itself plus the space
+     * reserved beside and below the graph, which the panel no longer covers.
+     */
     #readBounds() {
         const panel = this.panel.getBoundingClientRect();
         const frame = this.root.parentElement?.getBoundingClientRect();
+        const reserved = this.reservation();
         return {
             left: panel.left,
             top: panel.top,
-            width: panel.width,
-            height: panel.height,
+            width: panel.width + reserved.right,
+            height: panel.height + reserved.bottom,
             frameWidth: frame?.width ?? 0,
             frameHeight: frame?.height ?? 0,
         };

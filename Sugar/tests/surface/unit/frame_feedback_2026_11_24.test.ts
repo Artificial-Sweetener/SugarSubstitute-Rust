@@ -94,9 +94,8 @@ test('the minimap and the toolbar beneath it share one width, right edge, corner
   expect(css).toContain(`width:${String(GRAPH_MINIMAP_WIDTH)}px; justify-content:space-between;`);
   const minimap = css.slice(css.indexOf('.minimap-main-container {'));
   expect(minimap).toContain(
-    `right:calc(var(--sc-output-workspace-reserved-width,0px) + ${String(inset)}px)`,
+    `right:${String(inset)}px; bottom:${String(inset + toolbarHeight + GRAPH_MINIMAP_GAP)}px;`,
   );
-  expect(minimap).toContain(`+ ${String(inset + toolbarHeight + GRAPH_MINIMAP_GAP)}px)`);
   expect(minimap).toContain(`border-radius:${String(radius)}px !important`);
   const surface =
     'background:var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)); box-shadow:0 2px 8px #0003;';

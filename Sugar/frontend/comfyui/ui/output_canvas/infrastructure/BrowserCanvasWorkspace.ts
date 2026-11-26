@@ -92,12 +92,18 @@ export class BrowserCanvasWorkspace {
     this.#backdrop.type = 'button';
     this.#backdrop.setAttribute('aria-label', 'Close output canvas drawer');
     this.#backdrop.addEventListener('click', actions.close);
-    this.#workspaceFrame = new ComfyCanvasWorkspaceFrame(root, panel, frames, (width, height) => {
-      const previous = model.read().mode;
-      model.bounds(width, height);
-      if (model.read().mode !== previous) this.#input.cancel();
-      this.#render();
-    });
+    this.#workspaceFrame = new ComfyCanvasWorkspaceFrame(
+      root,
+      panel,
+      frames,
+      (width, height) => {
+        const previous = model.read().mode;
+        model.bounds(width, height);
+        if (model.read().mode !== previous) this.#input.cancel();
+        this.#render();
+      },
+      () => this.#frame.reservation(),
+    );
     this.#workspaceFrame.element.append(this.content, this.#backdrop, this.#pane);
     let input: CanvasWorkspaceResizeInput | null = null;
     try {

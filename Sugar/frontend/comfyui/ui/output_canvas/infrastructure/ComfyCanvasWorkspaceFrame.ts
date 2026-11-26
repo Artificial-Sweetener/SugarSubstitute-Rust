@@ -43,6 +43,7 @@ export class ComfyCanvasWorkspaceFrame {
     private readonly panel: HTMLElement,
     private readonly frames: CanvasFrameClock,
     private readonly changed: (width: number, height: number) => void,
+    private readonly reservation: () => { readonly right: number; readonly bottom: number },
   ) {
     this.element = root.ownerDocument.createElement('div');
     this.element.className = 'sc-output-workspace-frame';
@@ -98,15 +99,19 @@ export class ComfyCanvasWorkspaceFrame {
       this.changed(next.width, next.height);
   }
 
-  /** Measure the panel in client space, where the fixed sibling stays clear of graph allocation. */
+  /**
+   * Measure the area Comfy gives the graph panel, in client space: the panel itself plus the space
+   * reserved beside and below the graph, which the panel no longer covers.
+   */
   #readBounds(): WorkspaceBounds {
     const panel = this.panel.getBoundingClientRect();
     const frame = this.root.parentElement?.getBoundingClientRect();
+    const reserved = this.reservation();
     return {
       left: panel.left,
       top: panel.top,
-      width: panel.width,
-      height: panel.height,
+      width: panel.width + reserved.right,
+      height: panel.height + reserved.bottom,
       frameWidth: frame?.width ?? 0,
       frameHeight: frame?.height ?? 0,
     };

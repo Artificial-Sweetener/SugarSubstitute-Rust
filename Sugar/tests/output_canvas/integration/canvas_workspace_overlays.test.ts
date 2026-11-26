@@ -77,7 +77,10 @@ function fixture() {
       activeMenu.classList.contains('sc-output-workspace-topmenu')
         ? 36 + Number.parseFloat(activeMenu.style.getPropertyValue('--sc-output-toolbar-height'))
         : top;
-    return bounds(left, allocated, 1460 - left, bottom - allocated);
+    // The panel ends where the graph splitter's reserved padding begins.
+    const right = Number.parseFloat(splitter.style.paddingRight) || 0;
+    const below = Number.parseFloat(splitter.style.paddingBottom) || 0;
+    return bounds(left, allocated, 1460 - left - right, bottom - allocated - below);
   });
   jest
     .spyOn(row, 'getBoundingClientRect')

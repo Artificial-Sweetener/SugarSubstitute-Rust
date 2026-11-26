@@ -63,8 +63,9 @@ test('observes the outer frame and realigns chrome before publishing the resized
       .comfyui-body { position:relative; width:1280px; height:800px; }
       #graph-canvas-container { position:relative; width:100%; height:100%; }
       #chrome { position:absolute; inset:0; }
-      .graph-canvas-panel { position:absolute; left:63px; right:4px; top:94px; bottom:4px; }
-    </style><div class="comfyui-body"><div id="graph-canvas-container"><div id="chrome"><div class="graph-canvas-panel"></div></div><canvas id="graph-canvas"></canvas></div></div>`);
+      #splitter { position:absolute; display:flex; left:63px; right:4px; top:94px; bottom:4px; }
+      .graph-canvas-panel { flex:1; }
+    </style><div class="comfyui-body"><div id="graph-canvas-container"><div id="chrome"><div id="splitter"><div class="graph-canvas-panel"></div></div></div><canvas id="graph-canvas"></canvas></div></div>`);
   await page.addScriptTag({ content: allocationScript });
   const actual = await page.evaluate(async () => {
     const owner = globalThis as typeof globalThis & {
@@ -108,7 +109,7 @@ test('observes the outer frame and realigns chrome before publishing the resized
       initial,
       frameWidth: resized.frame.width,
       chromeWidth: resized.chrome.width,
-      panelRight: resized.panel.right,
+      panelMeetsPane: resized.panel.right === resized.pane.left,
       paneRight: resized.pane.right,
     };
   });
@@ -116,7 +117,7 @@ test('observes the outer frame and realigns chrome before publishing the resized
     initial: 1280,
     frameWidth: 1484,
     chromeWidth: 1484,
-    panelRight: 1480,
+    panelMeetsPane: true,
     paneRight: 1480,
   });
 });
@@ -134,8 +135,9 @@ test('matches fractional outer-frame dimensions instead of losing an inverse-cal
       .comfyui-body { position:relative; width:1484px; height:937px; }
       #graph-canvas-container { position:relative; width:100%; height:100%; }
       #chrome { position:absolute; inset:0; }
-      .graph-canvas-panel { position:absolute; left:63.25px; right:4.125px; top:78.5px; bottom:2.25px; }
-    </style><div class="comfyui-body"><div id="graph-canvas-container"><div id="chrome"><div class="graph-canvas-panel"></div></div><canvas id="graph-canvas"></canvas></div></div>`);
+      #splitter { position:absolute; display:flex; left:63.25px; right:4.125px; top:78.5px; bottom:2.25px; }
+      .graph-canvas-panel { flex:1; }
+    </style><div class="comfyui-body"><div id="graph-canvas-container"><div id="chrome"><div id="splitter"><div class="graph-canvas-panel"></div></div></div><canvas id="graph-canvas"></canvas></div></div>`);
   await page.addScriptTag({ content: allocationScript });
   const actual = await page.evaluate(() => {
     const owner = globalThis as typeof globalThis & {
@@ -213,6 +215,7 @@ test('keeps Comfy graph layers out of a transparent docked strip while chrome sp
       #chrome { position:absolute; top:0; left:0; z-index:999; display:flex; flex-direction:column;
         width:100%; height:100%; pointer-events:none; }
       #topbar { height:60px; flex-shrink:0; background:rgb(0,255,0); pointer-events:auto; }
+      #splitter { flex:1; display:flex; }
       .graph-canvas-panel { position:relative; flex:1; }
       #graph-canvas { position:absolute; inset:0; width:100%; height:100%; background:rgb(40,40,40); }
       [data-testid="transform-pane"] { position:absolute; inset:0; pointer-events:none;
@@ -220,7 +223,7 @@ test('keeps Comfy graph layers out of a transparent docked strip while chrome sp
       .node { position:absolute; left:300px; top:100px; width:600px; height:200px; background:rgb(0,0,255); }
       .isolate { isolation:isolate; }
       .dom-widget { position:fixed; left:500px; top:540px; width:690px; height:100px; background:rgb(255,0,0); }
-    </style><div class="comfyui-body"><div id="graph-canvas-container"><div id="chrome"><div id="topbar"></div><div class="graph-canvas-panel"></div></div><canvas id="graph-canvas"></canvas><div data-testid="transform-pane"><div class="node"></div></div><div class="isolate"><div class="dom-widget"></div></div></div></div>`);
+    </style><div class="comfyui-body"><div id="graph-canvas-container"><div id="chrome"><div id="topbar"></div><div id="splitter"><div class="graph-canvas-panel"></div></div></div><canvas id="graph-canvas"></canvas><div data-testid="transform-pane"><div class="node"></div></div><div class="isolate"><div class="dom-widget"></div></div></div></div>`);
   await page.addScriptTag({ content: allocationScript });
   const layout = await page.evaluate(async () => {
     const owner = globalThis as typeof globalThis & {

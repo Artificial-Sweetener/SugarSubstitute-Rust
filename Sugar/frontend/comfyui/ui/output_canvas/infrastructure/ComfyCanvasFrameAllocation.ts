@@ -36,9 +36,16 @@ interface SavedStyle {
  * the graph root clips its canvases, Vue node pane and graph overlays, and a container clip bounds
  * the fixed-position DOM widgets of Nodes 1.0. Chrome keeps the full frame by fixed positioning, in
  * the client coordinates Comfy already assumes for its own fixed graph overlays.
+ *
+ * Comfy's graph splitter (the graph panel and its bottom panel) is padded by the space reserved for
+ * the output pane and the console, so the graph panel ends where the graph ends and everything
+ * Comfy anchors in it (its toolbar, minimap and the zoom menu above them) lands on the graph's own
+ * edges, not beneath the pane or the console. Padding leaves Comfy's own margins on the splitter
+ * intact, and the rows above it, such as the top menu, keep their width.
  */
 export class ComfyCanvasFrameAllocation {
   readonly #chrome: HTMLElement;
+  readonly #splitter: HTMLElement;
   readonly #frame: HTMLElement;
   readonly #styles: readonly SavedStyle[];
   #allocation: string | null = null;
@@ -52,20 +59,24 @@ export class ComfyCanvasFrameAllocation {
     const chrome = graphChromeLayer(root);
     const canvas = root.querySelector<HTMLCanvasElement>(':scope > #graph-canvas');
     const frame = root.parentElement;
+    const splitter = panel.parentElement;
     if (
       root.id !== 'graph-canvas-container' ||
       !panel.matches('.graph-canvas-panel') ||
       !chrome?.contains(panel) ||
+      !splitter ||
+      splitter === chrome ||
       !canvas ||
       !frame?.matches('.comfyui-body')
     )
       throw new Error('The Comfy graph workspace layout is unsupported.');
     this.#chrome = chrome;
+    this.#splitter = splitter;
     this.#frame = frame;
     this.#styles = [
       { element: frame, property: 'overflow' },
-      { element: panel, property: '--sc-output-workspace-reserved-width' },
-      { element: panel, property: '--sc-output-workspace-reserved-height' },
+      { element: splitter, property: 'padding-right' },
+      { element: splitter, property: 'padding-bottom' },
       ...[
         'width',
         'height',
@@ -102,20 +113,21 @@ export class ComfyCanvasFrameAllocation {
     if (this.#disposed) return;
     const frame = this.#frame.getBoundingClientRect();
     const panel = this.panel.getBoundingClientRect();
+    // The panel's measured distance from the frame's edges includes the reservation in force;
+    // Comfy's own spacing is what remains without it.
+    const applied = this.reservation();
     const measured = frame.height > 0 && panel.height > 0;
     const top = measured ? Math.max(0, Math.min(frame.height, panel.top - frame.top)) : 0;
     const measuredWidth = frame.width > 0 && panel.width > 0;
     const left = measuredWidth ? Math.max(0, Math.min(frame.width, panel.left - frame.left)) : 0;
     const right = measuredWidth
-      ? Math.max(0, Math.min(frame.width - left, frame.right - panel.right))
+      ? Math.max(0, Math.min(frame.width - left, frame.right - panel.right - applied.right))
       : 0;
     const horizontal = left + right + inset;
-    const reserved = measured
-      ? Math.min(bottom, Math.max(0, frame.height - top - (frame.bottom - panel.bottom)))
-      : 0;
     const below = measured
-      ? Math.max(0, Math.min(frame.height - top, frame.bottom - panel.bottom))
+      ? Math.max(0, Math.min(frame.height - top, frame.bottom - panel.bottom - applied.bottom))
       : 0;
+    const reserved = measured ? Math.min(bottom, Math.max(0, frame.height - top - below)) : 0;
     const vertical = top + below + reserved;
     // Fixed chrome follows the frame's client rectangle, so frame moves and resizes join the key.
     const allocation = JSON.stringify([
@@ -138,12 +150,8 @@ export class ComfyCanvasFrameAllocation {
       return;
     }
     this.#set(this.root, 'width', horizontal ? `calc(100% - ${horizontal}px)` : null);
-    this.#set(this.panel, '--sc-output-workspace-reserved-width', inset ? `${inset}px` : null);
-    this.#set(
-      this.panel,
-      '--sc-output-workspace-reserved-height',
-      reserved ? `${reserved}px` : null,
-    );
+    this.#set(this.#splitter, 'padding-right', inset ? `${inset}px` : null);
+    this.#set(this.#splitter, 'padding-bottom', reserved ? `${reserved}px` : null);
     this.#set(this.root, 'margin-left', horizontal ? `${left}px` : null);
     this.#set(this.root, 'margin-top', vertical ? `${top}px` : null);
     this.#set(this.root, 'height', vertical ? `calc(100% - ${vertical}px)` : null);
@@ -156,13 +164,25 @@ export class ComfyCanvasFrameAllocation {
     this.#set(
       this.root,
       GRAPH_LAYER_CLIP_PROPERTY,
-      `inset(0px 0px calc(100% - ${measured ? panel.height - reserved : 0}px) 0px)`,
+      `inset(0px 0px calc(100% - ${measured ? frame.height - vertical : 0}px) 0px)`,
     );
     this.#set(this.#chrome, 'position', 'fixed');
     this.#set(this.#chrome, 'left', `${frame.left}px`);
     this.#set(this.#chrome, 'top', `${frame.top}px`);
     this.#set(this.#chrome, 'width', `${frame.width}px`);
     this.#set(this.#chrome, 'height', `${frame.height}px`);
+  }
+
+  /**
+   * The space now reserved beside and below the graph, in CSS pixels. The graph panel ends this
+   * far inside the area Comfy gives it, so the output workspace adds it back to find that area.
+   */
+  reservation(): { readonly right: number; readonly bottom: number } {
+    const read = (property: string): number =>
+      Number.parseFloat(this.#splitter.style.getPropertyValue(property)) || 0;
+    return this.#disposed
+      ? { right: 0, bottom: 0 }
+      : { right: read('padding-right'), bottom: read('padding-bottom') };
   }
 
   /** Relinquish viewport allocation while Comfy owns an alternate application surface. */

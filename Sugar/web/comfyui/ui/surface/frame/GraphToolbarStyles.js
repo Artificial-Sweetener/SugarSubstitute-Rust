@@ -37,16 +37,14 @@ export const graphToolbarCss = (() => {
     const { inset, padding, control, radius } = GRAPH_TOOLBAR_MIRROR;
     return `
   ${TOOLBAR} {
-    right:calc(var(--sc-output-workspace-reserved-width,0px) + ${String(inset)}px);
-    bottom:calc(var(--sc-output-workspace-reserved-height,0px) + ${String(inset)}px);
+    right:${String(inset)}px; bottom:${String(inset)}px;
     height:${String(control + 2 * padding + 2)}px; padding:${String(padding)}px; gap:4px; box-sizing:border-box;
     align-items:center; border:1px solid var(--interface-stroke,#454545); border-radius:${String(radius)}px;
     background:var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)); box-shadow:0 2px 8px #0003; }
   ${TOOLBAR} button { height:${String(control)}px; min-height:${String(control)}px; border-radius:5px; }
   ${TOOLBAR} { width:${String(GRAPH_MINIMAP_WIDTH)}px; justify-content:space-between; }
   ${MINIMAP} {
-    right:calc(var(--sc-output-workspace-reserved-width,0px) + ${String(inset)}px);
-    bottom:calc(var(--sc-output-workspace-reserved-height,0px) + ${String(inset + control + 2 * padding + 2 + GRAPH_MINIMAP_GAP)}px); }
+    right:${String(inset)}px; bottom:${String(inset + control + 2 * padding + 2 + GRAPH_MINIMAP_GAP)}px; }
   ${MINIMAP} > .litegraph-minimap { box-sizing:border-box; border-radius:${String(radius)}px !important;
     border:1px solid var(--interface-stroke,#454545) !important;
     background:var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)); box-shadow:0 2px 8px #0003; }`;

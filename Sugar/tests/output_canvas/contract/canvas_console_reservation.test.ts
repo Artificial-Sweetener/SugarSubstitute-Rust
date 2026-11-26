@@ -26,30 +26,40 @@ function frame() {
   parent.append(root);
   root.id = 'graph-canvas-container';
   const chrome = document.createElement('div');
+  const splitter = document.createElement('div');
+  splitter.className = 'splitter-overlay-bottom';
   const panel = document.createElement('div');
   panel.className = 'graph-canvas-panel';
-  chrome.append(panel);
+  splitter.append(panel);
+  chrome.append(splitter);
   const canvas = document.createElement('canvas');
   canvas.id = 'graph-canvas';
   root.append(chrome, canvas);
   const box = { left: 0, top: 78, right: 1600, bottom: 908, width: 1600, height: 830 };
-  for (const element of [parent, panel])
-    jest
-      .spyOn(element, 'getBoundingClientRect')
-      .mockReturnValue({ ...box, x: box.left, y: box.top, toJSON: () => box } as DOMRect);
-  return { root, panel };
+  jest
+    .spyOn(parent, 'getBoundingClientRect')
+    .mockReturnValue({ ...box, x: box.left, y: box.top, toJSON: () => box } as DOMRect);
+  // The panel ends where the splitter's padding begins, as the browser lays it out.
+  jest.spyOn(panel, 'getBoundingClientRect').mockImplementation(() => {
+    const right = box.right - (Number.parseFloat(splitter.style.paddingRight) || 0);
+    const bottom = box.bottom - (Number.parseFloat(splitter.style.paddingBottom) || 0);
+    const rect = { left: 0, top: 78, right, bottom, width: right, height: bottom - 78 };
+    return { ...rect, x: 0, y: 78, toJSON: () => rect } as DOMRect;
+  });
+  return { root, splitter, panel };
 }
 
-test('a console reservation shortens the graph and lifts its bottom chrome, and 0 gives it back', () => {
+test('a console reservation shortens the graph and the panel its bottom chrome rides on, and 0 gives it back', () => {
   const f = frame();
   const allocation = new ComfyCanvasFrameAllocation(f.root, f.panel);
   allocation.apply(480, 200);
   expect(f.root.style.height).toBe('calc(100% - 200px)');
   expect(f.root.style.width).toBe('calc(100% - 480px)');
-  expect(f.panel.style.getPropertyValue('--sc-output-workspace-reserved-height')).toBe('200px');
+  expect(f.splitter.style.paddingBottom).toBe('200px');
+  expect(f.panel.getBoundingClientRect().bottom).toBe(708);
   allocation.apply(480, 0);
   expect(f.root.style.height).toBe('');
-  expect(f.panel.style.getPropertyValue('--sc-output-workspace-reserved-height')).toBe('');
+  expect(f.splitter.style.paddingBottom).toBe('');
   allocation.apply(0, 0);
   expect(f.root.style.cssText).toBe('');
   allocation.dispose();
@@ -65,12 +75,11 @@ test('a reservation never exceeds the graph, and invalid heights are refused', (
   allocation.dispose();
 });
 
-test('ComfyUI’s graph toolbar and minimap ride on the graph’s reserved bottom', () => {
+test('ComfyUI’s graph toolbar and minimap keep ComfyUI’s own placement in the reduced panel', () => {
   ensureCanvasWorkspaceStyles(document);
   const css = [...document.head.querySelectorAll('style')]
     .map((style) => style.textContent ?? '')
-    .join('')
-    .replace(/\s+/g, ' ');
-  expect(css).toContain('bottom:var(--sc-output-workspace-reserved-height,0px)');
-  expect(css).toContain('bottom:calc(54px + var(--sc-output-workspace-reserved-height,0px))');
+    .join('');
+  expect(css).not.toContain('--sc-output-workspace-reserved');
+  expect(css).not.toContain('.minimap-main-container');
 });

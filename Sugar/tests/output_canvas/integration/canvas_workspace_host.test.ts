@@ -64,18 +64,25 @@ function fixture(width = 1400) {
   const chrome = document.createElement('div');
   const panel = document.createElement('div');
   panel.className = 'graph-canvas-panel';
-  jest.spyOn(panel, 'getBoundingClientRect').mockReturnValue({
-    x: 0,
-    y: 0,
-    left: 0,
-    top: 0,
-    right: width,
-    bottom: 800,
-    width,
-    height: 800,
-    toJSON: () => ({}),
+  // ComfyUI 1.47.11 holds the graph panel in a splitter; the panel ends where its padding begins.
+  const splitter = document.createElement('div');
+  splitter.className = 'splitter-overlay-bottom';
+  jest.spyOn(panel, 'getBoundingClientRect').mockImplementation(() => {
+    const right = width - (Number.parseFloat(splitter.style.paddingRight) || 0);
+    return {
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right,
+      bottom: 800,
+      width: right,
+      height: 800,
+      toJSON: () => ({}),
+    };
   });
-  chrome.append(panel);
+  splitter.append(panel);
+  chrome.append(splitter);
   const canvas = document.createElement('canvas');
   canvas.id = 'graph-canvas';
   root.append(chrome, canvas);

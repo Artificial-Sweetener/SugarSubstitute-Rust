@@ -27,9 +27,12 @@ function fixture(width = 1400) {
   root.id = 'graph-canvas-container';
   root.style.setProperty('overflow', 'clip');
   const chrome = document.createElement('div');
+  const splitter = document.createElement('div');
+  splitter.className = 'splitter-overlay-bottom';
   const panel = document.createElement('div');
   panel.className = 'graph-canvas-panel';
-  chrome.append(panel);
+  splitter.append(panel);
+  chrome.append(splitter);
   const graph = document.createElement('canvas');
   graph.id = 'graph-canvas';
   root.append(chrome, graph);
@@ -49,17 +52,21 @@ function fixture(width = 1400) {
     bottom: 800,
     toJSON: () => ({}),
   }));
-  jest.spyOn(panel, 'getBoundingClientRect').mockImplementation(() => ({
-    x: 0,
-    y: 0,
-    left: 0,
-    top: 0,
-    width: measuredWidth,
-    height: 800,
-    right: measuredWidth,
-    bottom: 800,
-    toJSON: () => ({}),
-  }));
+  // The panel ends where the graph splitter's reserved padding begins.
+  jest.spyOn(panel, 'getBoundingClientRect').mockImplementation(() => {
+    const width = measuredWidth - (Number.parseFloat(splitter.style.paddingRight) || 0);
+    return {
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      width,
+      height: 800,
+      right: width,
+      bottom: 800,
+      toJSON: () => ({}),
+    };
+  });
   const frames = new CanvasFrameFixture();
   // A 1400 px workspace leaves this default editor a 560 px canvas.
   const model = new CanvasWorkspaceLayout(840);
@@ -73,6 +80,7 @@ function fixture(width = 1400) {
   return {
     root,
     chrome,
+    splitter,
     panel,
     graph,
     frames,
@@ -148,7 +156,12 @@ test('keeps the fixed sibling on the panel client rectangle across allocation an
     toJSON: () => ({ left, top, width, height }),
   });
   jest.spyOn(parent, 'getBoundingClientRect').mockReturnValue(rectangle(0, 0, 1400, 900));
-  jest.spyOn(f.panel, 'getBoundingClientRect').mockReturnValue(rectangle(4, 86, 1392, 810));
+  // The panel ends where the graph splitter's reserved padding begins.
+  jest
+    .spyOn(f.panel, 'getBoundingClientRect')
+    .mockImplementation(() =>
+      rectangle(4, 86, 1392 - (Number.parseFloat(f.splitter.style.paddingRight) || 0), 810),
+    );
   const sibling = f.root.querySelector<HTMLElement>('.sc-output-workspace-frame')!;
   window.dispatchEvent(new Event('resize'));
   f.frames.advance(16);
@@ -201,22 +214,24 @@ test('requires explicit narrow activation and exposes authoritative keyboard wid
   f.dispose();
 });
 
-test('keeps native minimap chrome aligned with the remaining graph allocation', () => {
+test('ends the graph panel at the docked pane while the workspace keeps the whole area', () => {
   const f = fixture();
+  // ComfyUI's minimap, toolbar and zoom menu anchor in the panel, which now ends at the pane.
+  expect(f.splitter.style.paddingRight).toBe('560px');
+  expect(f.panel.getBoundingClientRect().right).toBe(840);
   const minimap = document.createElement('div');
   minimap.className = 'minimap-main-container';
   f.panel.append(minimap);
-  // jsdom does not resolve custom properties in geometry; inspect the matching CSSOM rule.
-  const rule = [...document.styleSheets]
+  const offsets = [...document.styleSheets]
     .flatMap((sheet) => [...sheet.cssRules])
     .filter((entry): entry is CSSStyleRule => entry instanceof CSSStyleRule)
-    .find((entry) => minimap.matches(entry.selectorText) && entry.style.getPropertyValue('right'));
-  expect(rule?.style.getPropertyValue('right')).toBe(
-    'var(--sc-output-workspace-reserved-width,0px)',
-  );
-  expect(f.panel.style.getPropertyValue('--sc-output-workspace-reserved-width')).toBe('560px');
+    .filter((entry) => minimap.matches(entry.selectorText));
+  expect(offsets).toEqual([]);
+  // The workspace sibling still spans the graph and the pane.
+  const workspace = f.root.querySelector<HTMLElement>('.sc-output-workspace-frame')!;
+  expect(workspace.style.width).toBe('1400px');
   f.workspace.preferences({ visible: false, editorWidth: 0 });
-  expect(f.panel.style.getPropertyValue('--sc-output-workspace-reserved-width')).toBe('');
+  expect(f.splitter.style.paddingRight).toBe('');
   f.dispose();
 });
 

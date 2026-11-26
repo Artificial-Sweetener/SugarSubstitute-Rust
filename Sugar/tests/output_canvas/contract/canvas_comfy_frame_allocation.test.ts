@@ -32,25 +32,55 @@ function frame() {
   const root = document.createElement('div');
   parent.append(root);
   root.id = 'graph-canvas-container';
+  // ComfyUI 1.47.11: the chrome layer holds the graph splitter, which holds the graph panel.
   const chrome = document.createElement('div');
+  const splitter = document.createElement('div');
+  splitter.className = 'splitter-overlay-bottom';
   const panel = document.createElement('div');
   panel.className = 'graph-canvas-panel';
-  chrome.append(panel);
+  splitter.append(panel);
+  chrome.append(splitter);
   const canvas = document.createElement('canvas');
   canvas.id = 'graph-canvas';
   const nodes = document.createElement('div');
   nodes.className = 'ph-no-capture';
   root.append(chrome, canvas, nodes);
-  return { parent, root, chrome, panel, canvas, nodes };
+  return { parent, root, chrome, splitter, panel, canvas, nodes };
 }
 
-test('allocates a common graph origin and compensates only identified native chrome', () => {
+/**
+ * Lay the graph panel out inside the frame as the browser would: Comfy's own spacing from each
+ * frame edge, and on the right and bottom also the padding the allocation puts on the splitter.
+ */
+function lay(
+  f: ReturnType<typeof frame>,
+  bounds: () => DOMRect,
+  spacing: { left: number; top: number; right: number; bottom: number },
+): void {
+  const padding = (property: string): number =>
+    Number.parseFloat(f.splitter.style.getPropertyValue(property)) || 0;
+  jest.spyOn(f.parent, 'getBoundingClientRect').mockImplementation(bounds);
+  jest.spyOn(f.panel, 'getBoundingClientRect').mockImplementation(() => {
+    const outer = bounds();
+    const left = outer.left + spacing.left;
+    const top = outer.top + spacing.top;
+    return rectangle(
+      left,
+      top,
+      outer.right - spacing.right - padding('padding-right') - left,
+      outer.bottom - spacing.bottom - padding('padding-bottom') - top,
+    );
+  });
+}
+
+test('allocates a common graph origin and ends the graph splitter where the graph ends', () => {
   const f = frame();
   const adapter = new ComfyCanvasFrameAllocation(f.root, f.panel);
   adapter.apply(480);
   expect(f.root.style.marginLeft).toBe('0px');
   expect(f.root.style.width).toBe('calc(100% - 480px)');
-  expect(f.panel.style.getPropertyValue('--sc-output-workspace-reserved-width')).toBe('480px');
+  expect(f.splitter.style.paddingRight).toBe('480px');
+  expect(adapter.reservation()).toEqual({ right: 480, bottom: 0 });
   expect(f.chrome.style.position).toBe('fixed');
   expect(f.chrome.style.left).toBe('0px');
   expect(f.root.style.overflow).toBe('clip');
@@ -65,8 +95,35 @@ test('allocates a common graph origin and compensates only identified native chr
   expect(f.root.style.cssText).toBe('');
   expect(f.chrome.style.cssText).toBe('');
   expect(f.parent.style.cssText).toBe('');
-  expect(f.panel.style.cssText).toBe('');
+  expect(f.splitter.style.cssText).toBe('');
+  expect(adapter.reservation()).toEqual({ right: 0, bottom: 0 });
   adapter.dispose();
+});
+
+test('anchors ComfyUI graph chrome on the graph’s own edges, beside the output pane, with no per-control offsets', () => {
+  const f = frame();
+  lay(f, () => rectangle(0, 0, 1280, 800), { left: 0, top: 78, right: 0, bottom: 0 });
+  const adapter = new ComfyCanvasFrameAllocation(f.root, f.panel);
+  adapter.apply(320, 200);
+  // The panel Comfy anchors its toolbar, minimap and zoom menu in ends where the graph ends.
+  const panel = f.panel.getBoundingClientRect();
+  expect([panel.left, panel.right, panel.bottom]).toEqual([0, 960, 600]);
+  expect(f.root.style.width).toBe('calc(100% - 320px)');
+  expect(f.root.style.height).toBe('calc(100% - 278px)');
+  expect(adapter.reservation()).toEqual({ right: 320, bottom: 200 });
+  // Repeating the allocation in its own layout is stable.
+  const mutations = new MutationObserver(() => undefined);
+  mutations.observe(f.parent, { attributes: true, subtree: true });
+  adapter.apply(320, 200);
+  expect(mutations.takeRecords()).toHaveLength(0);
+  mutations.disconnect();
+  ensureCanvasWorkspaceStyles(document);
+  const css = [...document.head.querySelectorAll('style')]
+    .map((style) => style.textContent)
+    .join('');
+  expect(css).not.toContain('--sc-output-workspace-reserved');
+  adapter.dispose();
+  expect(f.splitter.style.cssText).toBe('');
 });
 
 test('restores pre-existing inline styles and priorities on disposal and rejects unsupported roots', () => {
@@ -77,7 +134,7 @@ test('restores pre-existing inline styles and priorities on disposal and rejects
   f.parent.style.setProperty('overflow', 'hidden', 'important');
   f.chrome.style.setProperty('left', '2px');
   f.chrome.style.setProperty('position', 'absolute', 'important');
-  f.panel.style.setProperty('--sc-output-workspace-reserved-width', '10px', 'important');
+  f.splitter.style.setProperty('padding-right', '10px', 'important');
   const original = f.root.style.cssText;
   const chromeOriginal = f.chrome.style.cssText;
   const adapter = new ComfyCanvasFrameAllocation(f.root, f.panel);
@@ -88,10 +145,8 @@ test('restores pre-existing inline styles and priorities on disposal and rejects
   expect(f.chrome.style.cssText).toBe(chromeOriginal);
   expect(f.parent.style.getPropertyValue('overflow')).toBe('hidden');
   expect(f.parent.style.getPropertyPriority('overflow')).toBe('important');
-  expect(f.panel.style.getPropertyValue('--sc-output-workspace-reserved-width')).toBe('10px');
-  expect(f.panel.style.getPropertyPriority('--sc-output-workspace-reserved-width')).toBe(
-    'important',
-  );
+  expect(f.splitter.style.getPropertyValue('padding-right')).toBe('10px');
+  expect(f.splitter.style.getPropertyPriority('padding-right')).toBe('important');
   adapter.apply(500);
   expect(f.root.style.cssText).toBe(original);
   expect(() => new ComfyCanvasFrameAllocation(document.createElement('div'), f.panel)).toThrow(
@@ -103,11 +158,8 @@ test('restores pre-existing inline styles and priorities on disposal and rejects
 
 test('allocates the real graph below chrome even with the output canvas closed and restores on suspension', () => {
   const f = frame();
-  jest.spyOn(f.parent, 'getBoundingClientRect').mockReturnValue(rectangle(0, 0, 1200, 900));
-  let top = 86;
-  jest
-    .spyOn(f.panel, 'getBoundingClientRect')
-    .mockImplementation(() => rectangle(4, top, 1192, 896 - top));
+  const spacing = { left: 4, top: 86, right: 4, bottom: 4 };
+  lay(f, () => rectangle(0, 0, 1200, 900), spacing);
   const adapter = new ComfyCanvasFrameAllocation(f.root, f.panel);
   adapter.apply(480);
   expect(f.root.style.marginTop).toBe('86px');
@@ -124,7 +176,7 @@ test('allocates the real graph below chrome even with the output canvas closed a
   adapter.apply(0);
   expect(f.root.style.width).toBe('calc(100% - 8px)');
   expect(f.root.style.marginTop).toBe('86px');
-  top = 120;
+  spacing.top = 120;
   adapter.apply(0);
   expect(f.root.style.marginTop).toBe('120px');
   expect(f.root.style.height).toBe('calc(100% - 124px)');
@@ -158,8 +210,7 @@ test('preserves one layout quantum as a real fractional inset without reconstruc
 
 test('preserves a meaningful fractional edge inset without rewriting a stable allocation', () => {
   const f = frame();
-  jest.spyOn(f.parent, 'getBoundingClientRect').mockReturnValue(rectangle(0, 0, 1484, 937));
-  jest.spyOn(f.panel, 'getBoundingClientRect').mockReturnValue(rectangle(0, 78, 1483.75, 859));
+  lay(f, () => rectangle(0, 0, 1484, 937), { left: 0, top: 78, right: 0.25, bottom: 0 });
   const adapter = new ComfyCanvasFrameAllocation(f.root, f.panel);
   adapter.apply(593.59375);
 
@@ -176,12 +227,7 @@ test('preserves a meaningful fractional edge inset without rewriting a stable al
 test('updates authoritative chrome dimensions when only the outer frame resizes', () => {
   const f = frame();
   let width = 1484;
-  jest
-    .spyOn(f.parent, 'getBoundingClientRect')
-    .mockImplementation(() => rectangle(0, 0, width, 937));
-  jest
-    .spyOn(f.panel, 'getBoundingClientRect')
-    .mockImplementation(() => rectangle(63.25, 78.5, width - 67.375, 856.25));
+  lay(f, () => rectangle(0, 0, width, 937), { left: 63.25, top: 78.5, right: 4.125, bottom: 2.25 });
   const adapter = new ComfyCanvasFrameAllocation(f.root, f.panel);
   adapter.apply(593.59375);
   expect(f.chrome.style.cssText).toContain('width: 1484px');
@@ -201,12 +247,7 @@ test('updates authoritative chrome dimensions when only the outer frame resizes'
 test('keeps fixed chrome on the frame client rectangle when the frame moves', () => {
   const f = frame();
   let left = 12;
-  jest
-    .spyOn(f.parent, 'getBoundingClientRect')
-    .mockImplementation(() => rectangle(left, 30, 1200, 900));
-  jest
-    .spyOn(f.panel, 'getBoundingClientRect')
-    .mockImplementation(() => rectangle(left + 4, 116, 1192, 810));
+  lay(f, () => rectangle(left, 30, 1200, 900), { left: 4, top: 86, right: 4, bottom: 4 });
   const adapter = new ComfyCanvasFrameAllocation(f.root, f.panel);
   adapter.apply(480);
   expect(f.chrome.getAttribute('style')).toBe(

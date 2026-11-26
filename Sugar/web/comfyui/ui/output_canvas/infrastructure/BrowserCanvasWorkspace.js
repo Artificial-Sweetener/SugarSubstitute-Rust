@@ -76,7 +76,7 @@ export class BrowserCanvasWorkspace {
             if (model.read().mode !== previous)
                 this.#input.cancel();
             this.#render();
-        });
+        }, () => this.#frame.reservation());
         this.#workspaceFrame.element.append(this.content, this.#backdrop, this.#pane);
         let input = null;
         try {

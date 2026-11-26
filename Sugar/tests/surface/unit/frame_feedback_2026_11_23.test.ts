@@ -120,9 +120,9 @@ test('ComfyUI’s graph toolbar mirrors the canvas tab bar, in the SugarSubstitu
     `height:${String(control + 2 * padding + 2)}px; padding:${String(padding)}px`,
   );
   expect(css).toContain(`border-radius:${String(radius)}px`);
-  expect(css).toContain(
-    `bottom:calc(var(--sc-output-workspace-reserved-height,0px) + ${String(inset)}px)`,
-  );
+  // The graph panel ends at the graph's edges, so the inset is measured from them directly.
+  expect(css).toContain(`right:${String(inset)}px; bottom:${String(inset)}px;`);
+  expect(css).not.toContain('reserved');
   for (const rule of css.split('}').filter((part) => part.includes('{')))
     expect(rule.trim().startsWith(':root[data-sc-substitute-frame]')).toBe(true);
 });
