@@ -16,6 +16,7 @@
 /** Verify public execution event adaptation and exact subscription teardown. */
 
 import { ComfyWorkflowEventAdapter } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowEventAdapter.js';
+import { ComfyWorkflowQueueReconciler } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowQueueReconciler.js';
 import { WorkflowEventApi, workflowResultsFixture } from '../support/workflow_results.js';
 import { promptId } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
 import { WorkflowProgressStore } from '../../../frontend/comfyui/ui/execution/application/WorkflowProgressStore.js';
@@ -47,10 +48,35 @@ function fixture() {
     reconnect: () => {
       reconnects++;
     },
+    queue: (remaining) => queue.remaining(remaining),
+  });
+  const requests: string[] = [];
+  const held = new Set<string>();
+  const history = new Set<string>();
+  /** Answer queue and history reads from the test's own record of what ComfyUI holds. */
+  const fetchApi = (path: string) => {
+    requests.push(path);
+    const id = decodeURIComponent(path.split('/').pop() ?? '');
+    const body =
+      path === '/queue'
+        ? { queue_running: [], queue_pending: [...held].map((job) => [0, job]) }
+        : history.has(id)
+          ? { [id]: {} }
+          : {};
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+  };
+  const queue = new ComfyWorkflowQueueReconciler({
+    api: { fetchApi },
+    runs: f.runs,
+    ingestor: f.ingestor,
+    logger: { error: (...args: unknown[]) => errors.push(args) },
   });
   f.ingestor.accepted(f.ingestor.submitting(f.a), f.id);
   return {
     ...f,
+    requests,
+    held,
+    history,
     api,
     adapter,
     progress,
@@ -264,4 +290,31 @@ test('continues teardown after a host removal failure and disables any retained 
   expect(f.api.listeners.get('reconnected')?.size).toBe(0);
   f.api.emit('execution_start', { prompt_id: 'one' });
   expect(f.runs.read(f.id)?.status).toBe('queued');
+});
+
+test('a waiting job deleted from the queue ends, while one still held or already run is left alone', async () => {
+  const f = fixture();
+  f.adapter.install();
+  const session = f.a.session.sessionId;
+  const held = promptId('held');
+  const ran = promptId('ran');
+  f.ingestor.accepted(f.ingestor.submitting(f.a), held);
+  f.ingestor.accepted(f.ingestor.submitting(f.a), ran);
+  f.held.add('held');
+  f.history.add('ran');
+  expect(f.results.read(session)?.runStatus).toBe('queued');
+
+  // ComfyUI's count matches the three known jobs: nothing is read.
+  f.api.emit('status', { exec_info: { queue_remaining: 3 } });
+  expect(f.requests).toEqual([]);
+
+  f.api.emit('status', { exec_info: { queue_remaining: 1 } });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(f.requests[0]).toBe('/queue');
+  expect(f.runs.read(f.id)).toBeNull();
+  expect(f.runs.read(held)?.status).toBe('queued');
+  expect(f.runs.read(ran)?.status).toBe('queued');
+  expect(f.results.read(session)?.runStatus).toBe('queued');
+  expect(f.results.read(session)?.runOrder).toBe(0);
+  expect(f.errors).toEqual([]);
 });

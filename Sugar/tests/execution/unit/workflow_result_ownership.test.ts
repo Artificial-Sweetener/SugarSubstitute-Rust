@@ -127,14 +127,29 @@ test('a job queued while another runs leaves the running job its previews and it
   expect(store.read(a.sessionId)?.preview?.promptId).toBe(started.promptId);
 });
 
-test('a job queued while nothing runs still becomes the frontier at once', () => {
+test('a waiting job reports queued and takes the frontier only when it starts', () => {
   const store = new WorkflowResultStore();
   const runs = new WorkflowRunRegistry();
   store.synchronize([a]);
   const queued = runs.accept(runs.reserve({ session: a, sources: [source] }), promptId('one'));
+  const later = runs.accept(runs.reserve({ session: a, sources: [source] }), promptId('two'));
   store.updateRun(queued);
-  expect(store.read(a.sessionId)?.runOrder).toBe(queued.order);
+  store.updateRun(later);
+  expect(store.read(a.sessionId)?.runOrder).toBe(0);
   expect(store.read(a.sessionId)?.runStatus).toBe('queued');
+  const started = runs.setStatus(queued.promptId, 'running');
+  if (!started) throw new Error('Run one was not accepted');
+  store.updateRun(started);
+  expect(store.read(a.sessionId)?.runOrder).toBe(started.order);
+  expect(store.read(a.sessionId)?.runStatus).toBe('running');
+  expect(store.publishPreview(preview(started))).toBe(true);
+  const finished = runs.setStatus(queued.promptId, 'complete');
+  if (finished) store.updateRun(finished);
+  expect(store.read(a.sessionId)?.runStatus).toBe('queued');
+  const ended = runs.setStatus(later.promptId, 'cancelled');
+  if (ended) store.updateRun(ended);
+  expect(store.read(a.sessionId)?.runStatus).toBe('complete');
+  expect(store.read(a.sessionId)?.runOrder).toBe(started.order);
 });
 
 test('retires a source preview only when its first batch member becomes final', () => {

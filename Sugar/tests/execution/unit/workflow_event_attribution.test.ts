@@ -105,18 +105,21 @@ test('expires early events after thirty seconds and releases metadata immediatel
   expect(f.recoveries).toEqual([]);
 });
 
-test('reserves result order at submission even when accepted responses arrive in reverse order', () => {
+test('an output whose start notice was lost still places its job on the timeline as it ran', () => {
   const f = workflowResultsFixture();
   const first = f.ingestor.submitting(f.a);
   const second = f.ingestor.submitting(f.a);
   const newer = promptId('newer');
   f.ingestor.accepted(second, newer);
-  f.ingestor.final(workflowFinal(newer, 'newer.png'));
-  f.ingestor.accepted(first, f.id);
-  expect(f.ingestor.final(workflowFinal(f.id, 'older.png'))).toBe(false);
+  expect(f.ingestor.final(workflowFinal(newer, 'newer.png'))).toBe(true);
   expect(f.results.read(f.a.session.sessionId)?.runOrder).toBe(second.order);
+  expect(f.results.read(f.a.session.sessionId)?.runStatus).toBe('running');
+  // The earlier submission's output arrives afterwards: ComfyUI ran it later, so it is newer.
+  f.ingestor.accepted(first, f.id);
+  expect(f.ingestor.final(workflowFinal(f.id, 'older.png'))).toBe(true);
+  expect(f.results.read(f.a.session.sessionId)?.runOrder).toBeGreaterThan(second.order);
   expect(f.results.read(f.a.session.sessionId)?.outputs[0]?.items[0]?.file.filename).toBe(
-    'newer.png',
+    'older.png',
   );
 });
 

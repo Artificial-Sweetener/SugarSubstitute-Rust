@@ -39,6 +39,7 @@ import type { NativeSurfaceDiscovery } from '../../core/embedded/EmbeddedCanvasC
 import { ComfyWorkflowSessionAdapter } from './ComfyWorkflowSessionAdapter.js';
 import { ComfyWorkflowEventAdapter } from './ComfyWorkflowEventAdapter.js';
 import { ComfyWorkflowHistoryAdapter } from './ComfyWorkflowHistoryAdapter.js';
+import { ComfyWorkflowQueueReconciler } from './ComfyWorkflowQueueReconciler.js';
 import { ComfyPromptSubmissionObserver } from './ComfyPromptSubmissionObserver.js';
 import { ComfyWorkflowPreviewDelivery } from './ComfyWorkflowPreviewDelivery.js';
 import { ComfyWorkflowOutputProjection } from './ComfyWorkflowOutputProjection.js';
@@ -217,6 +218,12 @@ export class ComfyWorkflowExecutionRuntime {
         logger: this.options.logger,
       });
       this.#history = history;
+      const queue = new ComfyWorkflowQueueReconciler({
+        api: this.options.api,
+        runs: this.#runs,
+        ingestor: this.#ingestor,
+        logger: this.options.logger,
+      });
       this.#loads = createComfyWorkflowLoadObserver(
         this.options.app,
         this.sessions,
@@ -245,6 +252,7 @@ export class ComfyWorkflowExecutionRuntime {
         preview: (source, blob) => this.previews.deliver(source, blob),
         connection: (connected) => this.#setConnected(connected),
         reconnect: () => history.reconnect(),
+        queue: (remaining) => queue.remaining(remaining),
       });
       this.#lifecycle.install();
       this.#loads.install();

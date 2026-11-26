@@ -381,6 +381,7 @@ export class NativeCanvasPresentation {
           const result = await this.#send(binding, selection.operation, (revision) => {
             selectionRevision = revision;
           }).finally(() => preview?.selectionFinished());
+          if (result.status !== 'applied') preview?.selectionRefused();
           if (!this.#owns(binding)) return;
           if (result.status === 'error') {
             // The host could not present this result, e.g. an undecodable file. The prepared

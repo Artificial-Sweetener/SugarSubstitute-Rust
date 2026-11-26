@@ -135,6 +135,9 @@ test('background results stay with their workflow and late decodes cannot replac
     const b = promptId('job-b');
     ingestor.accepted(ingestor.submitting(f.a), a);
     ingestor.accepted(ingestor.submitting(f.b), b);
+    // Only a job ComfyUI started may show previews.
+    ingestor.started(a);
+    ingestor.started(b);
     const sourceA = ingestor.resolveSource(a, ['42:23']);
     const sourceB = ingestor.resolveSource(b, ['42:23']);
     if (!sourceA || !sourceB) throw new Error('Missing attributed workflow sources.');

@@ -133,8 +133,11 @@ test('the next run replaces a kept preview with its own first preview', () => {
   expect(store.publishPreview(frame(first, 1))).toBe(true);
   store.updateRun({ ...first, status: 'cancelled' });
   const second = start(store, runs, 'two');
-  expect(store.read(session.sessionId)?.preview).toBeNull();
+  // The stopped run's image stays until the next run has one of its own to show.
+  expect(store.read(session.sessionId)?.preview?.promptId).toBe(first.promptId);
+  expect(store.publishPreview(frame(first, 2))).toBe(false);
   expect(store.publishPreview(frame(second, 1))).toBe(true);
+  expect(store.read(session.sessionId)?.preview?.promptId).toBe(second.promptId);
   const media = decodeComfyMedia({ images: [{ filename: 'two.png' }] });
   if (!media) throw new Error('Invalid test media');
   store.retain({ run: second, source, ...media, merge: false });

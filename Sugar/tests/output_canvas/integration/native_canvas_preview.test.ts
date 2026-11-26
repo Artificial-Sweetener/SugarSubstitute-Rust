@@ -1343,3 +1343,66 @@ test("a new run's first preview replaces the shown final without selecting the p
     preview: { token: 'preview:next-run' },
   });
 });
+
+test('a preview its plan named before the watch was accepted is taken from its owner once it is', async () => {
+  const f = fixture();
+  // A stopped run's newest image: its owner holds the bytes and no further frame will arrive.
+  const kept = f.preview(1);
+  f.owned.set(kept.token, new NativePreviewBlob());
+  f.presentation.update(previewGeometry, f.item, kept);
+  await settle();
+  f.ready('observing');
+  await settle();
+  for (let index = 0; index < 4; index++) {
+    f.respond(index, index === 0 ? 'ready' : 'applied');
+    await settle();
+  }
+  f.respond(4, 'applied', finalViewport);
+  await settle();
+  expect(
+    f.calls.some(
+      (call) => call.type === 'surface.preview.begin' && call.preview.token === kept.token,
+    ),
+  ).toBe(true);
+  expect(f.errors).toEqual([]);
+});
+
+test('a preview transfer interrupted by a final selection that is then cancelled never blocks the next frames', async () => {
+  const f = fixture();
+  await commit(f);
+  /** Answer the newest unsettled host request of `type`. */
+  const answer = async (type: string, status: 'applied' | 'cancelled' | 'stale') => {
+    const index = f.calls.findLastIndex(
+      (call, at) => call.type === type && !f.pending[at]?.settled,
+    );
+    if (index < 0) throw new Error(`No pending ${type}.`);
+    f.respond(index, status, type === 'surface.viewport.request' ? finalViewport : undefined);
+    await settle();
+  };
+  // A frame of the finishing run is on its way to the host.
+  f.presentation.receive(f.preview(1), new NativePreviewBlob());
+  await settle();
+  await answer('surface.preview.begin', 'applied');
+  // Its final arrives: the page selects it, which interrupts the transfer.
+  f.presentation.update(previewGeometry, f.second, null);
+  await settle();
+  expect(
+    f.calls.some((call, at) => call.type === 'surface.select' && !f.pending[at]?.settled),
+  ).toBe(true);
+  // The next run's first preview arrives while that final is still loading: the select is
+  // cancelled, so nothing acknowledges the interrupted transfer.
+  const next: WorkflowPreview = { ...f.preview(2), runOrder: 2, token: 'preview:next' };
+  f.presentation.update(previewGeometry, null, next);
+  await settle();
+  await answer('surface.select', 'cancelled');
+  // The host fenced that lease when it admitted the select, so it refuses the withdraw.
+  if (f.calls.at(-1)?.type === 'surface.preview.withdraw')
+    await answer('surface.preview.withdraw', 'stale');
+  f.presentation.receive(next, new NativePreviewBlob());
+  await settle();
+  expect(f.calls.at(-1)).toMatchObject({
+    type: 'surface.preview.begin',
+    preview: { token: 'preview:next' },
+  });
+  expect(f.errors).toEqual([]);
+});

@@ -103,6 +103,8 @@ export class NativeCanvasPreview {
   #displayedPreview = false;
   /** The content last asked for, kept through failures that drop the presentation's state. */
   #requested: string | null = null;
+  /** The token of the named preview whose owner was last asked for its bytes. */
+  #asked: string | null = null;
   #sequence = -1;
   #epoch = 0;
   #drops = 0;
@@ -188,11 +190,25 @@ export class NativeCanvasPreview {
       this.#pending = null;
       if (!this.#active?.withdrawing && (release || this.#active)) this.#withdraw();
     }
+    // A preview named again after something else was shown is asked for again.
+    if (changed || release) this.#asked = null;
     this.#interest = preview;
-    // The named preview comes from its owner when its frame went by before this plan named it.
-    const owned = preview ? this.options.context.previewFrame(preview) : null;
-    if (preview && owned) this.receive(preview, owned);
+    this.#takeOwned();
     return changed;
+  }
+
+  /**
+   * Ask the owner, once per named preview, for the bytes of a frame that went by before this
+   * attachment could take it: before the plan named it, before the host accepted the watch or
+   * before the attachment was committed. A stopped run's newest image has no later frame to wait
+   * for, so the ask is repeated on each pass until the attachment may take bytes.
+   */
+  #takeOwned(): void {
+    const interest = this.#interest;
+    if (!interest || this.#asked === interest.token || !this.wants()) return;
+    this.#asked = interest.token;
+    const owned = this.options.context.previewFrame(interest);
+    if (owned) this.receive(interest, owned);
   }
 
   /**
@@ -246,6 +262,19 @@ export class NativeCanvasPreview {
     if (this.#pending) this.options.changed();
   }
 
+  /**
+   * A selection that was cancelled or refused acknowledges nothing, so the transfer it
+   * interrupted is withdrawn by name: the host either still holds the lease and reports its end,
+   * or refuses the withdraw and the lease is forgotten. Without this the frame waits for a notice
+   * that never comes and holds back every later frame.
+   */
+  selectionRefused(): void {
+    const interrupted = this.#active;
+    if (interrupted?.phase !== 'awaiting' || interrupted.submitted) return;
+    interrupted.withdrawing = false;
+    this.#withdraw();
+    this.options.changed();
+  }
   /** A successful final selection acknowledges the newly accepted native final frame. */
   selected(): void {
     this.#clearActive();
@@ -258,6 +287,7 @@ export class NativeCanvasPreview {
   /** Offer at most one ordinary operation; asynchronous Blob reads consume no mutation credit. */
   next(): NativeCanvasPreviewStep | null {
     if (!this.observing || !this.options.active() || this.#selecting) return null;
+    this.#takeOwned();
     if (!this.#active && this.#pending) {
       const pending = this.#pending;
       this.#pending = null;
