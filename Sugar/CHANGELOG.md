@@ -1,3 +1,17 @@
+## [0.37.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.36.1...sugarcubes-v0.37.0) (2026-11-26)
+
+### Features
+
+* **model-library:** cards keep what was learned, show their state, and fill from a queue that empties ([6510cd4](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/6510cd4c5b16a149f54340f070790b856a85d748))
+
+### Bug Fixes
+
+* **dialogs:** a dialog's title, close button and response buttons stay in place while its content scrolls ([b436dcf](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/b436dcfffe0c8a1ef58f5e96b5ba0a06543b6afd))
+* **frame:** the view buttons on Substitute's bar are flat until pointed at ([a6998ee](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/a6998ee1f0880f40c593241debfb0b3764ebd2a6))
+* **prompt-editor:** right-clicking an installed LoRA's banner offers that model's rows ([5cf6e4b](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/5cf6e4b016450fd0876b445700ca7867eec07f0b))
+* **search:** the finder's current match is drawn at the height of the text box's own glyphs ([7e5346c](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/7e5346cfe510567ea702ec1b1adddeb7567fd3c1))
+* **tooltips:** a ComfyUI tooltip that lost its element or its pointer no longer stays on the page ([672f4c1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/672f4c1740b4042104ad28f602d5ce7d9a965813))
+
 ## [0.36.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.36.0...sugarcubes-v0.36.1) (2026-11-25)
 
 ### Bug Fixes
