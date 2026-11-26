@@ -207,3 +207,34 @@ test('without a What is new owner the Updates entry offers no such button', () =
   );
   expect(button?.hidden).toBe(true);
 });
+
+test('long notes scroll between a title bar and response buttons that stay in place', async () => {
+  const modal = new WhatsNewModal({ document });
+  modal.show(
+    [
+      {
+        key: 'sugarcubes',
+        product: 'SugarCubes',
+        currentVersion: '0.16.0',
+        updatedFrom: '0.15.3',
+        status: { kind: 'loading' },
+      },
+    ],
+    { retry: jest.fn(), closed: jest.fn() },
+  );
+  await settle();
+  const dialog = document.querySelector<HTMLElement>('.sugarcubes-whats-new-dialog');
+  if (!dialog) throw new Error("The What's new dialog did not open.");
+  const [header, content, footer] = [...dialog.children] as HTMLElement[];
+  expect(header?.querySelector('.sugarcubes-modal__close')).not.toBeNull();
+  expect([...(footer?.querySelectorAll('button') ?? [])].at(-1)?.textContent).toBe(
+    WHATS_NEW_TEXT.close,
+  );
+  // The dialog itself never scrolls, so its first and last rows cannot leave the view.
+  expect(getComputedStyle(dialog).overflow).toBe('hidden');
+  expect(getComputedStyle(dialog).flexDirection).toBe('column');
+  expect(getComputedStyle(header as HTMLElement).flex).toBe('0 0 auto');
+  expect(getComputedStyle(footer as HTMLElement).flex).toBe('0 0 auto');
+  expect(getComputedStyle(content as HTMLElement).overflow).toBe('auto');
+  expect(getComputedStyle(content as HTMLElement).minHeight).toBe('0');
+});
