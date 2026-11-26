@@ -361,18 +361,19 @@ function sidebarIcon(icon) {
         return element;
     };
 }
-/** Every registered sidebar tab as an entry; choosing the open one closes it. */
-function sidebarEntries(sidebar) {
+/**
+ * Every registered sidebar tab as an entry; choosing the open one closes it. The orb menu is an
+ * ordinary icon menu, so a tab's open state is not shown as a check.
+ */
+export function sidebarEntries(sidebar) {
     const tabs = sidebar.tabs();
     if (tabs.length === 0)
         return [];
-    const active = sidebar.active();
     return [
         { label: '', separator: true },
         ...tabs.map((tab) => ({
             label: tab.title,
             icon: sidebarIcon(tab.icon),
-            checked: tab.id === active,
             select: () => sidebar.toggle(tab.id),
         })),
     ];

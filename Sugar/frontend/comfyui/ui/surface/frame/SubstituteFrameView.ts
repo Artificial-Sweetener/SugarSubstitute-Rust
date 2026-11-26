@@ -43,7 +43,6 @@ export interface SubstituteFrameViewActions {
       readonly title: string;
       readonly icon: string | null;
     }[];
-    active(): string | null;
     toggle(id: string): void;
   };
   openOverrides(trigger: HTMLElement): void;
@@ -428,17 +427,18 @@ function sidebarIcon(icon: string | null): (document: Document) => HTMLElement {
   };
 }
 
-/** Every registered sidebar tab as an entry; choosing the open one closes it. */
-function sidebarEntries(sidebar: SubstituteFrameViewActions['sidebar']): ContextMenuEntry[] {
+/**
+ * Every registered sidebar tab as an entry; choosing the open one closes it. The orb menu is an
+ * ordinary icon menu, so a tab's open state is not shown as a check.
+ */
+export function sidebarEntries(sidebar: SubstituteFrameViewActions['sidebar']): ContextMenuEntry[] {
   const tabs = sidebar.tabs();
   if (tabs.length === 0) return [];
-  const active = sidebar.active();
   return [
     { label: '', separator: true },
     ...tabs.map((tab) => ({
       label: tab.title,
       icon: sidebarIcon(tab.icon),
-      checked: tab.id === active,
       select: () => sidebar.toggle(tab.id),
     })),
   ];
