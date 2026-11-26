@@ -1,3 +1,34 @@
+## [0.11.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.10.0...substitute-v0.11.0) (2026-11-25)
+
+### Features
+
+* **output-canvas:** the app log records what canvas presentation costs ([15f6dd8](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/15f6dd8ad3faa83c69e3a049e61372da0fe10998))
+* **output-canvas:** the app log records what the GPU producer and the presenter's fence cost, how much of the surface each frame redrew, and its viewport ([010ca3b](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/010ca3bc27525caa9f0a00b52cebaa16b06ea022))
+* **resources:** one copy of every shared resource: the app icon is the shared ICO the executables, the orb, About and the GIMP companion use; shared Fluent artwork moves beside it; governance refuses duplicate resource files ([c420998](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/c420998aa00617d66a855934e99b929bea4af7ef))
+* **shared-ui:** the splash and the page draw shared elements from one record ([26af4b6](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/26af4b6d4bfc241bd25720ef5e978e8e9d986d31))
+
+### Bug Fixes
+
+* **canvas:** a camera motion keeps presenting while retired work is dropped ([6abb6ee](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/6abb6eea6765d4383a17f7c72d8ac8f266235f74))
+* **canvas:** a final chosen while a live preview shows returns from retention ([540b4a1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/540b4a14fda6bbf1458defa46861ed87ca03a6f7))
+* **canvas:** a motion record names the session work that held its ticks ([845fdcc](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/845fdcc11fee80f6594ea789043b6a06b457936a))
+* **canvas:** a motion record names what stopped its frames ([3e25b9a](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/3e25b9af94d412a12e869825cad869ec5306cf73))
+* **canvas:** each camera motion records the frames it presented ([838f692](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/838f6923c7d8cdbaa5655c9682d9b6949c221ebe))
+* **canvas:** each live preview frame records how long it waited at each step ([6ad05a5](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/6ad05a53e1c36fd4f7a92a3a55217ed3c5d145bc))
+* **canvas:** each selection records how it got its document and when each tier showed ([9edeb0e](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/9edeb0ebd10f57359d7e6921b9f03188c6e3be95))
+* **canvas:** each zoom logs its wheel gap, chosen duration and why it jumped ([d08b6c9](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/d08b6c93db1a9bb5af211a0603cb2fc47554e3db))
+* **canvas:** every zoom follows one responsive curve, fast wheel input included ([da85296](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/da85296022a499412fa7ca708649454b33a3bbfb))
+* **canvas:** live preview frames decode in memory, never through the image cache ([a4ab8de](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/a4ab8de825c991e2cbfa9fedb35d815d8437f185))
+* **canvas:** zoom records reach the application log ([7aeff57](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/7aeff572d7e8cc6def30ad0d6302f14b217c38a7))
+* **output-canvas:** one owner keeps preview bytes, so a stage's preview never comes back after its final ([937b26c](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/937b26c0533db9432ba880c9525a5456c3f2d541))
+
+### Performance Improvements
+
+* **desktop:** the native loop takes a runnable step at once instead of after a 16 ms poll ([2839f85](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/2839f855cb8bf3b2734813f9c18125b0ea1ce01f))
+* **output-canvas:** CPU previews refill one retained bitmap, and presentation reports its cost ([a672189](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/a6721896582e3a4c1c2dbfde6cc3deada2983b9c))
+* **output-canvas:** a CPU frame relative to the retained frame repairs the surface: retained pixels are scrolled and only changed regions are copied and drawn ([a531615](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/a531615d80532dc51f38bd52af55d8164c3d0b65))
+* **output-canvas:** a shared GPU frame relative to the retained frame repairs the surface: retained pixels are scrolled and only changed regions are copied from the frame's complete texture ([5e689b3](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/5e689b369e3e73f83b8dce970416aed0b726b8c3))
+
 ## [0.10.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.9.0...substitute-v0.10.0) (2026-11-22)
 
 ### Features
