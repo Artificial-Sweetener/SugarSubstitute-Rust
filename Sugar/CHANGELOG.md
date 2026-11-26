@@ -1,3 +1,9 @@
+## [0.36.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.36.0...sugarcubes-v0.36.1) (2026-11-25)
+
+### Bug Fixes
+
+* **execution:** a job ComfyUI runs after a later submission still publishes its images to the output canvas ([4427945](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/44279457dcbd46412e7cbcb50e763cb73118637c))
+
 ## [0.36.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.35.0...sugarcubes-v0.36.0) (2026-11-25)
 
 ### Features
