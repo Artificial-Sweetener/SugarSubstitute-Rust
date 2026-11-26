@@ -1,3 +1,12 @@
+## [0.11.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.11.0...substitute-v0.11.1) (2026-11-26)
+
+### Bug Fixes
+
+* **substitute:** build on Linux and macOS again: only the Windows startup loop has the progress wait ([9fb2be3](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/9fb2be3ee35a6daf91f6b0f88ace6a80d60e053e))
+* **substitute:** build on Linux and macOS again: the canvas selection record is compiled only with the native canvas, like its siblings ([f171317](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/f171317aa102c544200c3c0ef09065965b242817))
+* **substitute:** canvas and GPU timing records fit the diagnostic relay's inline observation again ([95cb45d](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/95cb45d9c82f518c92f1a5c37d84583668fbac3b))
+* **substitute:** the canvas selection record is compiled with the native canvas on every Windows build, and recorded for review ([ec2dc08](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/ec2dc089a1d2bba6c602e4ab284ac4fd2639809d))
+
 ## [0.11.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.10.0...substitute-v0.11.0) (2026-11-25)
 
 ### Features
