@@ -14,36 +14,47 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the page's single long-poll of committed model catalog generations. */
-import type { ModelCatalogSnapshot } from './ModelCatalog.js';
+import { decodeModelCatalogUpdate } from './ModelCatalog.js';
+import type { ModelCatalogChanges, ModelCatalogSnapshot } from './ModelCatalog.js';
 import type { ModelApiFetch } from './ModelApiTransport.js';
 import { abortableModelDelay } from './ModelJobClient.js';
-import { isRecord } from '../types/common.js';
 
 interface CatalogWatcher {
   readonly listener: (snapshot: ModelCatalogSnapshot) => void;
   readonly reportError: (error: unknown) => void;
 }
 
+/** How the catalog owner takes what the subscription learned. */
+export interface ModelCatalogFollower {
+  /** Read the catalog, from the server when `force` is set. */
+  load(force: boolean): Promise<ModelCatalogSnapshot>;
+  /** Apply the models a change names to the held catalog. */
+  apply(changes: ModelCatalogChanges): ModelCatalogSnapshot;
+}
+
 /**
- * Share one change subscription between every catalog consumer.
+ * Share one change subscription between every catalog consumer, and tell every one of them
+ * about every new catalog, whoever read it.
  *
  * The server holds each change request open until the revision advances, so one request per
  * consumer would multiply idle connections. The poll starts with the first watcher and stops
  * only when the last watcher leaves; consumers joining or leaving never start another request.
+ * A change names the models it touched, and only those are read.
  */
 export class ModelCatalogSubscription {
   readonly #fetch: ModelApiFetch;
-  readonly #load: (force: boolean) => Promise<ModelCatalogSnapshot>;
+  readonly #catalog: ModelCatalogFollower;
   readonly #watchers = new Set<CatalogWatcher>();
   #controller: AbortController | null = null;
+  #published: ModelCatalogSnapshot | null = null;
 
-  /** Bind the catalog transport and the catalog owner's snapshot loader. */
-  constructor(fetchApi: ModelApiFetch, load: (force: boolean) => Promise<ModelCatalogSnapshot>) {
+  /** Bind the catalog transport and the catalog owner. */
+  constructor(fetchApi: ModelApiFetch, catalog: ModelCatalogFollower) {
     this.#fetch = fetchApi;
-    this.#load = load;
+    this.#catalog = catalog;
   }
 
-  /** Receive committed generations until the returned release is called. */
+  /** Receive every new catalog until the returned release is called. */
   watch(
     listener: (snapshot: ModelCatalogSnapshot) => void,
     reportError: (error: unknown) => void,
@@ -62,33 +73,32 @@ export class ModelCatalogSubscription {
     };
   }
 
-  /** Follow revisions with bounded backoff, publishing each committed snapshot to every watcher. */
+  /**
+   * Tell every watcher about a catalog the owner now holds. The owner calls this for every
+   * catalog it reads, so a change a person just made reaches every surface without waiting for
+   * the long-poll to notice it. A catalog already published is not published again.
+   */
+  publish(snapshot: ModelCatalogSnapshot): void {
+    if (snapshot === this.#published) return;
+    this.#published = snapshot;
+    for (const watcher of [...this.#watchers]) watcher.listener(snapshot);
+  }
+
+  /** Follow revisions with bounded backoff; the owner publishes each catalog it takes. */
   async #run(signal: AbortSignal): Promise<void> {
-    let snapshot: ModelCatalogSnapshot | null = null;
     let failures = 0;
     while (!signal.aborted) {
       try {
-        snapshot ??= await this.#load(false);
+        const held = await this.#catalog.load(false);
         const response = await this.#fetch(
-          `/sugarcubes/v1/models/changes?afterRevision=${String(snapshot.revision)}`,
+          `/sugarcubes/v1/models/changes?afterRevision=${String(held.revision)}`,
           { signal },
         );
         if (!response.ok)
           throw new Error(`Model catalog updates are unavailable (${String(response.status)}).`);
-        const payload: unknown = await response.json();
-        if (
-          !isRecord(payload) ||
-          payload.schemaVersion !== 1 ||
-          typeof payload.revision !== 'number' ||
-          !Number.isSafeInteger(payload.revision) ||
-          payload.revision < 0
-        )
-          throw new Error('Invalid model catalog update response.');
-        if (payload.revision !== snapshot.revision) {
-          snapshot = await this.#load(true);
-          if (!signal.aborted)
-            for (const watcher of [...this.#watchers]) watcher.listener(snapshot);
-        }
+        const update = decodeModelCatalogUpdate(await response.json());
+        if (update.changes) this.#catalog.apply(update.changes);
+        else if (update.revision !== held.revision) await this.#catalog.load(true);
         failures = 0;
       } catch (error: unknown) {
         if (signal.aborted) return;

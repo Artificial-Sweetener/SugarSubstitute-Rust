@@ -95,6 +95,7 @@ export const ModelPickerField = defineComponent({
     const opensBelow = ref(true);
     const popupId = useId();
     const currentItem = computed(() => props.items.find((item) => item.value === current.value));
+    const hovering = ref(false);
     useModelSelectionUpdates(() => currentItem.value, props.updates, props.feedback);
     emit('contextReady', () => (currentItem.value ? context.project(currentItem.value) : []));
     const compatibility = ref<ModelCompatibilityContext | null>(props.compatibility?.() ?? null);
@@ -236,7 +237,17 @@ export const ModelPickerField = defineComponent({
           [h('span', { class: 'sc-model-find-icon', 'aria-hidden': 'true' }), 'Find models'],
         );
       const item = currentItem.value;
-      const banner = item ? chooseModelThumbnail(item, 'banner', MODEL_BANNER_SIZE) : null;
+      // A blurred banner sharpens only under the pointer, and only when its sharp files came.
+      const revealed = hovering.value && !!item?.image?.reveal.length;
+      const banner = item
+        ? chooseModelThumbnail(
+            revealed ? { ...item, thumbnails: item.image?.reveal ?? [] } : item,
+            'banner',
+            MODEL_BANNER_SIZE,
+          )
+        : null;
+      const waiting =
+        !banner && (item?.image?.state === 'pending' || item?.image?.state === 'retrying');
       const label = item ? [item.title, item.version].filter(Boolean).join(' - ') : current.value;
       return h(
         'div',
@@ -244,8 +255,18 @@ export const ModelPickerField = defineComponent({
           ref: surface,
           class: [
             'sc-model-field',
-            { 'sc-model-field-open': open.value, 'sc-model-field-transferring': !!transfer.value },
+            {
+              'sc-model-field-open': open.value,
+              'sc-model-field-transferring': !!transfer.value,
+              'sc-model-field-waiting': waiting && !open.value && !transfer.value,
+            },
           ],
+          onPointerenter: () => {
+            hovering.value = true;
+          },
+          onPointerleave: () => {
+            hovering.value = false;
+          },
           'data-sc-style-combo-frame': '',
           [FIELD_MENU_OWNER]: '',
           'aria-busy': !!transfer.value,

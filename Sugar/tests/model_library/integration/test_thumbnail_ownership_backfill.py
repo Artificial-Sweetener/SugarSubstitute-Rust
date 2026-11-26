@@ -20,6 +20,7 @@ from __future__ import annotations
 from sugarcubes.model_library.domain.provider_metadata import ProviderMetadataRecord
 
 from contextlib import closing
+from dataclasses import replace
 import asyncio
 from io import BytesIO
 from pathlib import Path
@@ -28,7 +29,12 @@ import sqlite3
 from PIL import Image
 import pytest
 
-from sugarcubes.model_library.domain.models import ModelMetadata, ThumbnailReference
+from sugarcubes.model_library.domain.models import (
+    ModelCatalogEntry,
+    ModelMetadata,
+    ThumbnailReference,
+)
+from sugarcubes.model_library.domain.thumbnail_safety import EXPLICIT_TIER, SAFE_TIER
 from sugarcubes.model_library.infrastructure.runtime import ModelLibraryRuntime
 from sugarcubes.model_library.infrastructure.thumbnail_preparer import (
     ModelThumbnailPreparer,
@@ -81,6 +87,14 @@ def test_runtime_registers_all_persisted_thumbnail_owners_before_collection(
             connection.execute("DELETE FROM thumbnail_sources")
     before = repository.snapshot()
     runtime = ModelLibraryRuntime(fixture.roots)
+    # Starting once gives each provider image stored without a content tier the tier its
+    # former setting implies; nothing else about the catalog changes.
+    stamped = repository.snapshot()
+    assert stamped.revision == before.revision + 1
+    assert tuple(_without_tier(entry) for entry in stamped.entries) == before.entries
+    for content in ("b" * 64, "c" * 64):
+        (record,) = repository.provider_records(content)
+        assert record.metadata.thumbnail_tier == EXPLICIT_TIER
     assert runtime.assets.source_summary("civitai").source_count == 2
     assert runtime.assets.source_summary("user").source_count == 2
     assert runtime.assets.source_summary("local").source_count == 1
@@ -90,11 +104,18 @@ def test_runtime_registers_all_persisted_thumbnail_owners_before_collection(
         for item in (*images, *local, *chosen)
     )
     assert all(runtime.assets.resolve(item.asset_id) is None for item in provider_only)
-    assert repository.snapshot() == before
+    assert repository.snapshot() == stamped
     reopened = ModelLibraryRuntime(fixture.roots)
     assert reopened.assets.source_summary("user").source_count == 2
     assert reopened.assets.source_summary("local").source_count == 1
-    assert repository.snapshot() == before
+    assert repository.snapshot() == stamped
+
+
+def _without_tier(entry: ModelCatalogEntry) -> ModelCatalogEntry:
+    """Compare a card as it was before its stored image was given a content tier."""
+    if entry.metadata is None:
+        return entry
+    return replace(entry, metadata=replace(entry.metadata, thumbnail_tier=None))
 
 
 def _legacy_images(
@@ -155,8 +176,13 @@ def test_backfill_preserves_missing_and_other_provider_legacy_references(
         for item in images
         if item.asset_id != images[-1].asset_id
     )
+    # The image keeps its files and owner; it only gains a tier. An OpenModelDB image is safe;
+    # one from an unknown provider takes the tier of an unknown former setting.
     assert fixture.repository.list_entries()[0].metadata == ModelMetadata(
-        "Unknown origin", provider=provider, thumbnails=images
+        "Unknown origin",
+        provider=provider,
+        thumbnails=images,
+        thumbnail_tier=SAFE_TIER if provider == "openmodeldb" else EXPLICIT_TIER,
     )
 
 

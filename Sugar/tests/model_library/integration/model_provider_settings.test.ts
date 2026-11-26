@@ -30,6 +30,7 @@ const initial = {
   downloadsEnabled: true,
   thumbnailDownloadsEnabled: true,
   thumbnailSafety: 'allow_soft',
+  thumbnailRevealOnHover: false,
 };
 const ROWS = [
   'generation.missing_models.lookup',
@@ -37,6 +38,7 @@ const ROWS = [
   'model_sources.civitai_lookup.local_metadata',
   'model_sources.safety.civitai_thumbnails',
   'model_sources.safety.civitai_thumbnail_policy',
+  'model_sources.safety.civitai_thumbnail_reveal',
 ];
 
 function response(payload: unknown, ok = true): Response {
@@ -182,6 +184,48 @@ test.each([
     expect(server.metadataLookupEnabled).toBe(false);
     expect(server.thumbnailDownloadsEnabled).toBe(true);
     expect(report).not.toHaveBeenCalled();
+  } finally {
+    rows.dispose();
+  }
+});
+
+test('reveal on hover can be switched only while thumbnails are shown blurred', async () => {
+  const patches: unknown[] = [];
+  let server = initial;
+  const { rows } = mount(async (_path, options) => {
+    if (options?.method === 'PATCH') {
+      const patch: unknown = JSON.parse(String(options.body));
+      patches.push(patch);
+      server = { ...server, ...(patch as Partial<typeof initial>) };
+    }
+    return response(server);
+  });
+  try {
+    await settle();
+    const reveal = (): HTMLButtonElement =>
+      switchOf(rows, 'model_sources.safety.civitai_thumbnail_reveal');
+    // Nothing is blurred under "Allow soft / racy", so there is nothing to reveal.
+    expect(reveal().disabled).toBe(true);
+    const policy = rows.control<HTMLSelectElement>(
+      'model_sources.safety.civitai_thumbnail_policy',
+      'select',
+    );
+    expect([...policy.options].map((option) => option.value)).toEqual([
+      'sfw_only',
+      'allow_soft',
+      'blur',
+      'allow_all',
+      'disabled',
+    ]);
+    policy.value = 'blur';
+    policy.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+    expect(reveal().disabled).toBe(false);
+    expect(reveal().getAttribute('aria-checked')).toBe('false');
+    reveal().click();
+    await settle();
+    expect(patches).toEqual([{ thumbnailSafety: 'blur' }, { thumbnailRevealOnHover: true }]);
+    expect(reveal().getAttribute('aria-checked')).toBe('true');
   } finally {
     rows.dispose();
   }

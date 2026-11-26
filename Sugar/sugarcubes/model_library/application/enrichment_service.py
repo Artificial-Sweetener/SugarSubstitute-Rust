@@ -13,10 +13,11 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Coordinate explicit fingerprint and provider enrichment behind typed boundaries."""
+"""Look a model up with its providers and add what they say to what is already known."""
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 import logging
 from typing import Protocol
@@ -25,146 +26,104 @@ from .ports import ModelCatalogRepository
 from .fingerprint_service import ModelFingerprintService
 from .blocking_model_work import complete_blocking_model_work
 from .metadata_activity import ModelMetadataActivity
-from ..domain.models import ModelCatalogEntry, ThumbnailReference
+from .thumbnail_fill import ModelPreviewUnavailableError, ModelThumbnailFill
+from ..domain.models import ModelCatalogEntry
 from ..domain.provider_models import ProviderModelVersion
 from ..domain.enrichment_freshness import ModelEnrichmentResult
 from ..domain.provider_metadata import (
-    ProviderMetadataRecord,
+    merge_provider_records,
     project_provider_metadata,
-    provider_image_origin,
 )
-from ..domain.thumbnail_sources import ThumbnailSourceOrigin
 
 _LOGGER = logging.getLogger(__name__)
-
-
-class ModelPreviewUnavailableError(RuntimeError):
-    """Report a recoverable preview failure without discarding verified provider labels.
-
-    ``reason`` is a plain cause that is safe to log. ``expected`` marks an ordinary provider
-    or network outcome, such as being offline, a timeout or a refused response, which is
-    reported without a traceback; every other cause keeps its traceback.
-    """
-
-    def __init__(self, message: str, *, reason: str, expected: bool) -> None:
-        """Keep the plain cause and its classification beside the chained original error."""
-        super().__init__(message)
-        self.reason = reason
-        self.expected = expected
 
 
 class ModelProvider(Protocol):
     """Normalize remote metadata at the provider adapter boundary."""
 
-    async def lookup(self, sha256: str, kind: str) -> tuple[ProviderModelVersion, ...]:
-        """Return every ordered exact match or an empty confirmed-missing batch."""
+    async def lookup(
+        self,
+        sha256: str,
+        kind: str,
+        weights_hash: Callable[[], Awaitable[str | None]],
+        *,
+        ask_again: bool = False,
+    ) -> tuple[ProviderModelVersion, ...]:
+        """Return every ordered exact match or an empty confirmed-missing batch.
 
-
-class ModelPreviewPreparer(Protocol):
-    """Prepare a validated provider image through the authoritative image owner."""
-
-    async def prepare(self, url: str) -> tuple[ThumbnailReference, ...]:
-        """Finish physical publication before returning success, failure or caller cancellation."""
-
-    def available(self, thumbnails: tuple[ThumbnailReference, ...]) -> bool:
-        """Check prepared files before trusting persisted thumbnail references."""
+        ``weights_hash`` computes the hash of the file without its header, for a provider that
+        can identify a file whose header was rewritten after it was downloaded. ``ask_again``
+        asks the provider even about a file it recently said it does not know.
+        """
 
 
 @dataclass(frozen=True, slots=True)
 class ModelEnrichmentService:
-    """Keep explicit enrichment from replacing deliberate user metadata choices."""
+    """Learn a model's provider labels once; a later lookup only ever adds to them."""
 
     repository: ModelCatalogRepository
     fingerprints: ModelFingerprintService
     provider: ModelProvider
-    previews: ModelPreviewPreparer
+    thumbnails: ModelThumbnailFill
     activity: ModelMetadataActivity = field(default_factory=ModelMetadataActivity)
 
     async def refresh(
-        self, entry: ModelCatalogEntry, *, preserve_previews: bool = False
+        self, entry: ModelCatalogEntry, *, replace_labels: bool = False
     ) -> ModelEnrichmentResult:
-        """Resolve content identity, refresh provider evidence, and preserve local fallback images."""
+        """Resolve content identity and merge provider evidence into the stored records.
+
+        ``replace_labels`` is set for a refresh a person asked for, which asks the provider
+        again whatever it answered before and may update the names and words it gives. Nothing
+        here removes a stored record or replaces a stored image.
+        """
         async with self.activity.work():
-            return await self._refresh(entry, preserve_previews=preserve_previews)
+            return await self._refresh(entry, replace_labels=replace_labels)
 
     async def _refresh(
-        self, entry: ModelCatalogEntry, *, preserve_previews: bool
+        self, entry: ModelCatalogEntry, *, replace_labels: bool
     ) -> ModelEnrichmentResult:
-        """Publish exact provider evidence inside the retained operation lease."""
+        """Publish merged provider evidence inside the retained operation lease."""
+        model_id = entry.evidence.location_id
         sha256 = await self.fingerprints.refresh(entry)
-        versions = await self.provider.lookup(sha256, entry.evidence.kind)
+        versions = await self.provider.lookup(
+            sha256,
+            entry.evidence.kind,
+            lambda: self.fingerprints.weights_hash(entry),
+            ask_again=replace_labels,
+        )
+        stored = await complete_blocking_model_work(
+            self.repository.provider_records, sha256
+        )
         if not versions:
-            await complete_blocking_model_work(
-                self.repository.clear_provider_metadata, sha256
-            )
-            return ModelEnrichmentResult(entry.evidence.location_id, None)
-        version = versions[0]
-        image_version = (
-            version
-            if version.preview_url is not None
-            else next(
-                (
-                    item
-                    for item in versions
-                    if item.provider.casefold() == "civitai"
-                    and item.preview_url is not None
-                ),
-                version,
-            )
-        )
-        image_owner = version
-        origin: ThumbnailSourceOrigin | None = entry.thumbnail_origin
-        thumbnails = entry.metadata.thumbnails if entry.metadata is not None else ()
-        missing_previews = not await complete_blocking_model_work(
-            self.previews.available, thumbnails
-        )
-        if missing_previews:
-            thumbnails = ()
-        if image_version.preview_url is None and not preserve_previews:
-            thumbnails = ()
-        preview_warning: str | None = None
-        if image_version.preview_url is not None and not (
-            preserve_previews and thumbnails
-        ):
-            try:
-                thumbnails = await self.previews.prepare(image_version.preview_url)
-                image_owner = image_version
-                origin = provider_image_origin(
-                    ProviderMetadataRecord(image_version.metadata(thumbnails))
-                )
-            except ModelPreviewUnavailableError as error:
-                preview_warning = "Metadata refreshed; the previous preview was kept."
-                _LOGGER.warning(
-                    "Model preview refresh failed; keeping the previous preview. "
-                    "operation=model_preview_refresh provider=%s cause=%s",
-                    image_version.provider,
-                    error.reason,
-                    extra={
-                        "operation": "model_preview_refresh",
-                        "model_id": entry.evidence.location_id,
-                        "provider": image_version.provider,
-                        "cause": error.reason,
-                    },
-                    exc_info=None if error.expected else error,
-                )
-        records = tuple(
-            ProviderMetadataRecord(
-                item.metadata(thumbnails if item is image_owner else ()),
-                origin if item is image_owner and thumbnails else None,
-            )
-            for item in versions
-        )
-        presentation = project_provider_metadata(records)
-        metadata = presentation.metadata
+            # A provider that stops answering for a file says nothing about what was learned.
+            return ModelEnrichmentResult(model_id, None, kept=bool(stored))
         await complete_blocking_model_work(
             self.repository.save_provider_metadata,
             sha256,
-            records,
-            prepared_assets_changed=missing_previews and bool(thumbnails),
+            merge_provider_records(stored, versions, replace_labels=replace_labels),
+        )
+        warning: str | None = None
+        try:
+            await self.thumbnails.fill(model_id)
+        except ModelPreviewUnavailableError as error:
+            warning = "Metadata refreshed. The thumbnail will be tried again."
+            _LOGGER.warning(
+                "Model thumbnail fetch failed; it will be retried. "
+                "operation=model_thumbnail_fill cause=%s",
+                error.reason,
+                extra={
+                    "operation": "model_thumbnail_fill",
+                    "model_id": model_id,
+                    "cause": error.reason,
+                },
+                exc_info=None if error.expected else error,
+            )
+        presentation = project_provider_metadata(
+            await complete_blocking_model_work(self.repository.provider_records, sha256)
         )
         return ModelEnrichmentResult(
-            entry.evidence.location_id,
-            metadata,
-            preview_warning,
+            model_id,
+            presentation.metadata,
+            warning,
             presentation.thumbnail_origin,
         )

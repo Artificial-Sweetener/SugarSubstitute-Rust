@@ -2,11 +2,11 @@ import {
   ModelBusyRing
 } from "./chunk-ZVGMUCWU.js";
 import {
-  ModelImageElement
-} from "./chunk-W2YTYCO4.js";
-import {
   useModelImage
 } from "./chunk-SPVIVHMR.js";
+import {
+  ModelImageElement
+} from "./chunk-W2YTYCO4.js";
 import {
   defineComponent,
   h

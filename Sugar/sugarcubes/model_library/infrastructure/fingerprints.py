@@ -25,6 +25,13 @@ from threading import Event
 from ..application.ports import ModelRoots
 from ..domain.models import ModelEvidence
 
+# The largest safetensors header accepted when locating where the weights begin.
+_HEADER_LIMIT = 100 * 1024 * 1024
+
+
+class _NoWeights(ValueError):
+    """The file has no readable safetensors header, so it has no weights-only hash."""
+
 
 class ApprovedModelFingerprints:
     """Resolve every fingerprint through the host's approved model registry."""
@@ -35,15 +42,38 @@ class ApprovedModelFingerprints:
 
     async def fingerprint(self, evidence: ModelEvidence) -> str:
         """Stop background reads on cancellation and reject changed file evidence."""
+        return await self._hashed(evidence, 0)
+
+    async def weights_fingerprint(self, evidence: ModelEvidence) -> str | None:
+        """Hash a safetensors file without its header; none for any other file.
+
+        Two files with the same weights and different header metadata share this hash, which
+        is how a provider recognises a file whose header was rewritten after its download.
+        """
+        if not evidence.relative_path.casefold().endswith(".safetensors"):
+            return None
+        try:
+            return await self._hashed(evidence, None)
+        except _NoWeights:
+            return None
+
+    async def _hashed(self, evidence: ModelEvidence, start: int | None) -> str:
+        """Run one bounded read off the event loop and stop it when the caller cancels."""
         cancelled = Event()
         try:
-            return await asyncio.to_thread(self._read, evidence, cancelled)
+            return await asyncio.to_thread(self._read, evidence, cancelled, start)
         except asyncio.CancelledError:
             cancelled.set()
             raise
 
-    def _read(self, evidence: ModelEvidence, cancelled: Event) -> str:
-        """Stream approved bytes without allocating model-sized buffers or loading weights."""
+    def _read(
+        self, evidence: ModelEvidence, cancelled: Event, start: int | None
+    ) -> str:
+        """Stream approved bytes without allocating model-sized buffers or loading weights.
+
+        ``start`` is the first byte hashed; none means the first byte after the safetensors
+        header, whose length the file states in its first eight bytes.
+        """
         resolved = self._roots.resolve_file(evidence.kind, evidence.value)
         if resolved is None:
             raise ValueError("The requested model is no longer available.")
@@ -56,6 +86,12 @@ class ApprovedModelFingerprints:
             raise ValueError("The model changed before fingerprinting began.")
         digest = hashlib.sha256()
         with path.open("rb") as stream:
+            if start is None:
+                header = int.from_bytes(stream.read(8), "little")
+                start = 8 + header
+                if not 0 < header <= _HEADER_LIMIT or start >= before.st_size:
+                    raise _NoWeights
+            stream.seek(start)
             while content := stream.read(4 * 1024 * 1024):
                 if cancelled.is_set():
                     raise ValueError("Model fingerprinting was cancelled.")

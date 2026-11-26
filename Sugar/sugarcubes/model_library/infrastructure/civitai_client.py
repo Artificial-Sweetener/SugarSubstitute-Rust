@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 import asyncio
 import logging
@@ -25,12 +25,14 @@ import aiohttp
 import re
 import time
 
+from ..domain.models import PreviewCandidate
 from ..domain.provider_models import ProviderModelVersion
 from ..domain.provider_releases import ModelProviderRelease
 from ..domain.thumbnail_safety import CivitaiThumbnailSafety
 from ..application.metadata_activity import ModelMetadataActivity
 from .civitai_download_access import CivitaiDownloadAccess
 from .civitai_codec import parse_civitai_version
+from .civitai_image_codec import civitai_preview_candidates
 from .civitai_release_codec import parse_civitai_releases
 from .civitai_transport import CivitaiResourceMissing, CivitaiTransport
 from .metadata_codec import normalized_hash
@@ -66,11 +68,51 @@ class CivitaiModelProvider:
         self._missing: dict[str, float] = {}
         self._activity = activity or ModelMetadataActivity()
 
-    async def lookup(self, sha256: str) -> ProviderModelVersion | None:
-        """Resolve verified content identity while caching only explicit provider misses."""
+    async def lookup(
+        self,
+        sha256: str,
+        weights_hash: Callable[[], Awaitable[str | None]],
+        *,
+        ask_again: bool = False,
+    ) -> ProviderModelVersion | None:
+        """Resolve verified content identity while caching only explicit provider misses.
+
+        A file whose full hash CivitAI does not know is asked for again by the hash of its
+        weights alone: an uploader who rewrites a file's header gives it a new full hash while
+        its weights, and so its identity, stay the same. ``ask_again`` forgets the remembered
+        misses of this file first, so a lookup a person asked for always reaches CivitAI.
+        """
         if not self._lookup_enabled():
             return None
-        return await self._version_by_hash(sha256)
+        if ask_again:
+            self._missing.pop(normalized_hash(sha256), None)
+        version = await self._version_by_hash(sha256)
+        if version is not None:
+            return version
+        weights = await weights_hash()
+        if weights is None:
+            return None
+        if ask_again:
+            self._missing.pop(normalized_hash(weights)[:12], None)
+        return await self._version_by_weights(weights)
+
+    async def _version_by_weights(self, weights: str) -> ProviderModelVersion | None:
+        """Accept a weights-hash answer only when one of its files states that same hash."""
+        short = normalized_hash(weights)[:12]
+        if self._missing.get(short, 0) > time.monotonic():
+            return None
+        async with self._activity.work():
+            try:
+                payload = await self._transport.read_json(
+                    f"https://civitai.com/api/v1/model-versions/by-hash/{short}"
+                )
+            except CivitaiResourceMissing:
+                self._remember_missing(short)
+                return None
+        if not _states_weights_hash(payload, short):
+            self._remember_missing(short)
+            return None
+        return parse_civitai_version(payload, self._thumbnail_policy())
 
     async def requested_version(self, sha256: str) -> ProviderModelVersion | None:
         """Apply explicit missing-model policy without enabling automatic metadata enrichment."""
@@ -126,13 +168,32 @@ class CivitaiModelProvider:
                 f"https://civitai.com/api/v1/model-versions/by-hash/{fingerprint}"
             )
         except CivitaiResourceMissing:
-            self._missing[fingerprint] = time.monotonic() + 3600
-            if len(self._missing) > 1024:
-                self._missing.pop(next(iter(self._missing)))
+            self._remember_missing(fingerprint)
             return None
         if payload is None:
             raise ValueError("CivitAI returned invalid model-version metadata.")
         return payload
+
+    async def version_previews(self, version_id: str) -> tuple[PreviewCandidate, ...]:
+        """Read the images one known version offers; a version CivitAI no longer has offers none."""
+        if not re.fullmatch(r"[1-9][0-9]{0,15}", version_id):
+            raise ValueError("Invalid CivitAI model version identity.")
+        async with self._activity.work():
+            try:
+                payload = await self._transport.read_json(
+                    f"https://civitai.com/api/v1/model-versions/{version_id}"
+                )
+            except CivitaiResourceMissing:
+                return ()
+        return civitai_preview_candidates(
+            payload.get("images") if isinstance(payload, dict) else None
+        )
+
+    def _remember_missing(self, identity: str) -> None:
+        """Keep a bounded hour-long memory of hashes the provider does not know."""
+        self._missing[identity] = time.monotonic() + 3600
+        if len(self._missing) > 1024:
+            self._missing.pop(next(iter(self._missing)))
 
     async def read_preview(self, url: str) -> bytes:
         """Delegate image origin and credential isolation to the transport owner."""
@@ -169,3 +230,16 @@ class CivitaiModelProvider:
             release,
             offers=tuple(replace(offer, access=access) for offer in release.offers),
         )
+
+
+def _states_weights_hash(payload: object, short: str) -> bool:
+    """Confirm a by-hash answer names the asked weights hash on one of its own files."""
+    files: object = payload.get("files") if isinstance(payload, dict) else None
+    if not isinstance(files, list):
+        return False
+    for item in files:
+        hashes: object = item.get("hashes") if isinstance(item, dict) else None
+        stated: object = hashes.get("AutoV3") if isinstance(hashes, dict) else None
+        if isinstance(stated, str) and stated.casefold() == short:
+            return True
+    return False

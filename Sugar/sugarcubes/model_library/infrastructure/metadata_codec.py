@@ -20,9 +20,13 @@ from __future__ import annotations
 import json
 import re
 
-from ..domain.models import ModelMetadata, ThumbnailReference
+from ..domain.models import ModelMetadata, PreviewCandidate, ThumbnailReference
 from .provider_link_codec import provider_link_value
 from .model_content_codec import optional_nsfw, optional_nsfw_level
+
+# How many provider images are remembered for one model.
+_PREVIEW_LIMIT = 32
+_THUMBNAIL_ROLES = ("standard", "banner", "standard-blurred", "banner-blurred")
 
 
 def normalized_hash(value: str) -> str:
@@ -51,6 +55,15 @@ def encode_metadata(metadata: ModelMetadata) -> str:
             "providerNsfw": metadata.provider_nsfw,
             "providerNsfwLevel": metadata.provider_nsfw_level,
             "thumbnails": [item.to_payload() for item in metadata.thumbnails],
+            "thumbnailTier": metadata.thumbnail_tier,
+            "previews": [
+                {
+                    "url": item.url,
+                    "tier": item.tier,
+                    "thumbnails": [image.to_payload() for image in item.thumbnails],
+                }
+                for item in metadata.previews
+            ],
         },
         ensure_ascii=False,
         sort_keys=True,
@@ -66,6 +79,9 @@ def decode_metadata(payload: str) -> ModelMetadata:
     tags: object = value.get("tags", [])
     variants: object = value.get("thumbnails", [])
     links: object = value.get("providerLinks", [])
+    previews: object = value.get("previews", [])
+    if not isinstance(previews, list) or len(previews) > _PREVIEW_LIMIT:
+        raise ValueError("Model previews must be a bounded list.")
     if not isinstance(words, list) or not all(isinstance(word, str) for word in words):
         raise ValueError("Model trained words must be strings.")
     if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
@@ -90,6 +106,32 @@ def decode_metadata(payload: str) -> ModelMetadata:
         provider_nsfw_level=optional_nsfw_level(value.get("providerNsfwLevel")),
         thumbnails=tuple(_thumbnail(item) for item in variants),
         provider_links=tuple(provider_link_value(item) for item in links),
+        thumbnail_tier=_tier(value.get("thumbnailTier")),
+        previews=tuple(_preview(item) for item in previews),
+    )
+
+
+def _tier(value: object) -> int | None:
+    """Accept only the three stored content tiers, or none for an image no provider rated."""
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool) or value not in (0, 1, 2):
+        raise ValueError("Invalid stored thumbnail content tier.")
+    return value
+
+
+def _preview(value: object) -> PreviewCandidate:
+    """Validate one remembered provider image and any files prepared from it."""
+    if not isinstance(value, dict):
+        raise ValueError("Model preview must be an object.")
+    variants: object = value.get("thumbnails", [])
+    tier = _tier(value.get("tier"))
+    if not isinstance(variants, list) or tier is None:
+        raise ValueError("Invalid stored model preview.")
+    return PreviewCandidate(
+        url=_string(value.get("url")),
+        tier=tier,
+        thumbnails=tuple(_thumbnail(item) for item in variants),
     )
 
 
@@ -115,7 +157,7 @@ def _thumbnail(value: object) -> ThumbnailReference:
         or not isinstance(height, int)
         or isinstance(height, bool)
         or height <= 0
-        or role not in ("standard", "banner")
+        or role not in _THUMBNAIL_ROLES
         or content_type not in ("image/png", "image/jpeg", "image/webp")
     ):
         raise ValueError("Invalid prepared thumbnail format or geometry.")

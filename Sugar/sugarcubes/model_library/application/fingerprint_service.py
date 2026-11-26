@@ -31,6 +31,9 @@ class ModelFingerprintReader(Protocol):
     async def fingerprint(self, evidence: ModelEvidence) -> str:
         """Return a digest only when the complete read matches the observed file."""
 
+    async def weights_fingerprint(self, evidence: ModelEvidence) -> str | None:
+        """Return the digest of a file's weights without its header, when it has one."""
+
 
 @dataclass(frozen=True, slots=True)
 class ModelFingerprintService:
@@ -49,3 +52,7 @@ class ModelFingerprintService:
                 "The model changed while its fingerprint was being refreshed."
             )
         return sha256
+
+    async def weights_hash(self, entry: ModelCatalogEntry) -> str | None:
+        """Identify a file by its weights alone, for a provider lookup its full hash missed."""
+        return await self.reader.weights_fingerprint(entry.evidence)

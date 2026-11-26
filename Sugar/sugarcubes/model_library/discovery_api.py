@@ -23,7 +23,7 @@ import logging
 import aiohttp
 from aiohttp import web
 
-from .application.enrichment_service import ModelPreviewUnavailableError
+from .application.thumbnail_fill import ModelPreviewUnavailableError
 from .domain.model_families import picker_suggestion_context
 from .domain.model_suggestions import ModelSuggestionContext
 from .domain.model_relationships import ModelRelationships

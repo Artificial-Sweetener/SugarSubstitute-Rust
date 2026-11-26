@@ -141,7 +141,7 @@ host.setup(null, {
         openModelChooser(
           document,
           {
-            items,
+            items: { current: () => items, watch: () => () => undefined },
             label,
             anchor,
             context: {

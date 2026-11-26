@@ -42,7 +42,8 @@ export const modelSourcesPage = {
             title: 'Thumbnails and safety',
             rows: [
                 row('model_sources.safety.civitai_thumbnails', 'Download CivitAI thumbnails', 'Download provider images for picker thumbnails.', 'image-multiple'),
-                row('model_sources.safety.civitai_thumbnail_policy', 'Thumbnail safety', 'Choose which CivitAI thumbnails may be shown.', 'shield-checkmark', 640, ['nsfw', 'sfw']),
+                row('model_sources.safety.civitai_thumbnail_policy', 'Thumbnail safety', 'Choose which CivitAI thumbnails may be shown.', 'shield-checkmark', 640, ['nsfw', 'sfw', 'blur']),
+                row('model_sources.safety.civitai_thumbnail_reveal', 'Reveal on hover', 'Show a blurred thumbnail sharp while the pointer is over it.', 'cursor-hover'),
             ],
         },
         {

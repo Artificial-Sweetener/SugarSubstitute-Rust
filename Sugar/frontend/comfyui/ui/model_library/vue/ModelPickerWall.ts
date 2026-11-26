@@ -29,6 +29,7 @@ import type { PropType } from 'vue';
 import { chooseModelThumbnail } from '../ModelCatalog.js';
 import type { ModelCatalogItem } from '../ModelCatalog.js';
 import { ModelCatalogImage } from './ModelCatalogImage.js';
+import { ModelBlankCard } from './ModelBlankCard.js';
 import { visibleModelRows, MODEL_PICKER_WALL_PROFILE } from '../ModelPickerLayout.js';
 import type { ModelWallProfile } from '../ModelPickerLayout.js';
 import { layoutModelGallery } from '../ModelGalleryLayout.js';
@@ -65,6 +66,8 @@ export const ModelPickerWall = defineComponent({
     const height = ref(580);
     const scrollTop = ref(0);
     const rows = computed(() => layoutModelGallery(props.items, width.value, props.profile));
+    // The model under the pointer, by identity, so a republished catalog keeps it.
+    const hovered = ref<string | null>(null);
     let observer: ResizeObserver | null = null;
     onMounted(() => {
       const element = viewport.value;
@@ -151,11 +154,15 @@ export const ModelPickerWall = defineComponent({
             row.tiles.map((tile) => {
               const item = props.items[tile.index];
               if (!item) return null;
+              // A blurred image sharpens only under the pointer, and only when the library
+              // sent its sharp files; moving through the wall with the keyboard reveals nothing.
+              const revealed = hovered.value === item.id && !!item.image?.reveal.length;
               const image = chooseModelThumbnail(
-                item,
+                revealed ? { ...item, thumbnails: item.image?.reveal ?? [] } : item,
                 'standard',
                 Math.max(tile.width, tile.height) * devicePixelRatio,
               );
+              const state = item.image?.state ?? 'none';
               return h(
                 'div',
                 {
@@ -180,7 +187,13 @@ export const ModelPickerWall = defineComponent({
                     width: `${String(tile.width)}px`,
                     height: `${String(tile.height)}px`,
                   },
-                  onPointerenter: () => emit('highlight', tile.index),
+                  onPointerenter: () => {
+                    hovered.value = item.id;
+                    emit('highlight', tile.index);
+                  },
+                  onPointerleave: () => {
+                    if (hovered.value === item.id) hovered.value = null;
+                  },
                   onClick: () => emit('activate', item.value),
                   onContextmenu: (event: MouseEvent) => {
                     event.preventDefault();
@@ -191,7 +204,7 @@ export const ModelPickerWall = defineComponent({
                 [
                   image
                     ? h(ModelCatalogImage, { image, fallback: true })
-                    : h('span', { class: 'sc-model-no-image' }, 'No image'),
+                    : h(ModelBlankCard, { state: state === 'ready' ? 'none' : state }),
                   h('span', { class: 'sc-model-caption' }, [
                     h(ModelGalleryTitle, {
                       title: item.title,

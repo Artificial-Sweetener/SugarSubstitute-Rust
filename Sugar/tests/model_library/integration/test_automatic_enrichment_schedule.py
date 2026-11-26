@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 import hashlib
 from pathlib import Path
 
@@ -37,7 +38,14 @@ class PausedProvider(ObservedProvider):
         self.started: asyncio.Queue[str] = asyncio.Queue()
         self.release = asyncio.Event()
 
-    async def lookup(self, sha256: str, kind: str) -> tuple[ProviderModelVersion, ...]:
+    async def lookup(
+        self,
+        sha256: str,
+        kind: str,
+        weights_hash: Callable[[], Awaitable[str | None]],
+        *,
+        ask_again: bool = False,
+    ) -> tuple[ProviderModelVersion, ...]:
         """Hold each provider request until the proof releases it."""
         self.hashes.append(sha256)
         self.started.put_nowait(sha256)

@@ -26,9 +26,14 @@ import sqlite3
 
 import pytest
 from sugarcubes.model_library.application.automatic_enrichment import (
-    PREVIEW_FAILURE_REMEMBERED,
+    THUMBNAIL_RETRY_DELAYS,
 )
 from sugarcubes.model_library.domain.models import ModelEvidence, ModelMetadata
+from sugarcubes.model_library.domain.thumbnail_presentation import present_thumbnail
+from sugarcubes.model_library.domain.thumbnail_safety import (
+    EXPLICIT_TIER,
+    CivitaiThumbnailSafety,
+)
 from sugarcubes.model_library.infrastructure.enrichment_cache import (
     SqliteModelEnrichmentCache,
 )
@@ -65,10 +70,10 @@ def test_completed_provider_decisions_remain_fresh_after_restart_and_a_day(
     assert len(fixture.provider.hashes) == 2
 
 
-def test_missing_prepared_variant_is_rebuilt_without_waiting_a_day(
+def test_a_lost_prepared_file_is_fetched_again_from_the_stored_offer_without_a_lookup(
     tmp_path: Path,
 ) -> None:
-    """Reconsider selected images when their stored prepared files disappear."""
+    """Rebuild an image whose file was deleted, from the stored offer, never asking what the model is."""
     fixture = EnrichmentFreshnessFixture(tmp_path, fixture_provider_version())
     assert asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == "found"
     current = fixture.repository.list_entries()[0]
@@ -76,81 +81,114 @@ def test_missing_prepared_variant_is_rebuilt_without_waiting_a_day(
     missing = fixture.previews.assets.resolve(current.metadata.thumbnails[-1].asset_id)
     assert missing is not None
     missing.path.unlink()
-    revision = fixture.repository.revision()
-    assert asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "found"
-    assert missing.path.is_file()
-    assert fixture.repository.revision() > revision
-    assert len(fixture.provider.hashes) == 2 and len(fixture.previews.urls) == 2
-    assert (
-        asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == "cached"
+    restarted = fixture.restart()
+    lost = fixture.repository.list_entries()[0]
+    # The provider is not asked again; the image alone is owed.
+    assert not restarted.needs_refresh(lost)
+    assert restarted.owed([lost]) == (fixture.identity,)
+    assert asyncio.run(restarted.refresh(fixture.identity))["status"] == "cached"
+    assert len(fixture.provider.hashes) == 1 and len(fixture.previews.urls) == 2
+    rebuilt = fixture.repository.list_entries()[0]
+    assert rebuilt.metadata is not None
+    assert rebuilt.metadata.thumbnails == current.metadata.thumbnails
+    assert rebuilt.metadata.title == current.metadata.title
+    assert fixture.previews.assets.resolve(missing.asset_id) is not None
+    assert restarted.owed([rebuilt]) == ()
+
+
+def test_changed_thumbnail_policy_fetches_a_stored_offer_without_a_lookup(
+    tmp_path: Path,
+) -> None:
+    """Fetch an image the new setting allows from the stored offer, never asking the provider."""
+    fixture = EnrichmentFreshnessFixture(
+        tmp_path, fixture_provider_version(nsfw_level=8)
     )
-
-
-def test_changed_thumbnail_policy_reselects_provider_images_immediately(
-    tmp_path: Path,
-) -> None:
-    """Invalidate successful image decisions by policy identity instead of an arbitrary retry deadline."""
-    fixture = EnrichmentFreshnessFixture(tmp_path, fixture_provider_version())
     assert asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == "found"
-    fixture.policy[0] = "civitai-thumbnail-v1:allow_soft"
-    assert asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "found"
-    assert len(fixture.provider.hashes) == 2 and len(fixture.previews.urls) == 2
+    assert not fixture.previews.urls
+    filtered = fixture.repository.list_entries()[0]
+    assert filtered.metadata is not None and filtered.metadata.thumbnails == ()
+    assert present_thumbnail(filtered, fixture.policy[0]).filtered
+    fixture.policy[0] = CivitaiThumbnailSafety.ALLOW_ALL
+    restarted = fixture.restart()
+    assert not restarted.needs_refresh(filtered)
+    assert restarted.owed([filtered]) == (fixture.identity,)
+    assert asyncio.run(restarted.refresh(fixture.identity))["status"] == "cached"
+    assert len(fixture.provider.hashes) == 1
+    assert fixture.previews.urls == ["https://image.civitai.com/fixture.jpg"]
+    current = fixture.repository.list_entries()[0]
+    assert current.metadata is not None and current.metadata.thumbnails
+    assert current.metadata.thumbnail_tier == EXPLICIT_TIER
+    assert restarted.owed([current]) == ()
 
 
-def test_animation_policy_reconsiders_cached_matches_without_preview(
+def test_a_match_without_preview_is_not_asked_again_when_the_setting_changes(
     tmp_path: Path,
 ) -> None:
-    """Refresh earlier excluded-media decisions when first-frame preparation becomes available."""
+    """Keep a found match that offered no image, whatever the provider would answer now."""
     fixture = EnrichmentFreshnessFixture(
         tmp_path, fixture_provider_version(preview=False)
     )
     assert asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == "found"
     assert not fixture.previews.urls
     fixture.provider.version = fixture_provider_version()
-    fixture.policy[0] = "civitai-thumbnail-v2:sfw_only"
-    assert asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "found"
-    assert len(fixture.previews.urls) == 1
+    fixture.policy[0] = CivitaiThumbnailSafety.ALLOW_ALL
+    assert (
+        asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "cached"
+    )
+    assert len(fixture.provider.hashes) == 1 and not fixture.previews.urls
+    # A refresh a person asks for adds the image the provider now offers.
+    asked = asyncio.run(fixture.restart().refresh(fixture.identity, automatic=False))
+    assert asked["status"] == "found" and len(fixture.previews.urls) == 1
+    current = fixture.repository.list_entries()[0]
+    assert current.metadata is not None and current.metadata.thumbnails
 
 
-def test_a_failed_preview_is_remembered_and_no_clock_brings_it_back(
+def test_a_failed_preview_is_fetched_again_on_its_own_without_a_lookup(
     tmp_path: Path,
 ) -> None:
-    """Ask the provider again only when a person asks, never because time has passed."""
+    """Retry the stored offer once its delay has passed; the provider is not asked what it is."""
     fixture = EnrichmentFreshnessFixture(tmp_path, fixture_provider_version())
     fixture.previews.unavailable = True
     first = asyncio.run(fixture.automatic.refresh(fixture.identity))
     assert first["status"] == "found" and "warning" in first
     lookups = len(fixture.provider.hashes)
     fixture.previews.unavailable = False
-    for elapsed in (301, 3_601, 86_401, 10 * 365 * 86_400):
-        fixture.clock[0] += elapsed
-        assert (
-            asyncio.run(fixture.restart().refresh(fixture.identity))["status"]
-            == "cached"
-        )
+    fixture.clock[0] += THUMBNAIL_RETRY_DELAYS[0] - 1
+    waiting = fixture.restart()
+    assert waiting.owed(fixture.repository.list_entries()) == ()
+    assert asyncio.run(waiting.refresh(fixture.identity))["status"] == "cached"
+    assert len(fixture.previews.urls) == 1
+    fixture.clock[0] += 2
+    due = fixture.restart()
+    assert due.owed(fixture.repository.list_entries()) == (fixture.identity,)
+    assert asyncio.run(due.refresh(fixture.identity))["status"] == "cached"
+    assert len(fixture.previews.urls) == 2
     assert len(fixture.provider.hashes) == lookups
-    # A person asking for the model to be refreshed is not held back by the remembered failure.
-    asked = asyncio.run(fixture.restart().refresh(fixture.identity, automatic=False))
-    assert asked["status"] == "found" and "warning" not in asked
-    assert len(fixture.provider.hashes) == lookups + 1
-    assert (
-        asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == "cached"
-    )
+    current = fixture.repository.list_entries()[0]
+    assert current.metadata is not None and current.metadata.thumbnails
+    assert due.owed([current]) == ()
 
 
-def test_a_failed_preview_is_asked_for_again_when_its_policy_changes(
+def test_a_failed_preview_keeps_its_retry_time_when_the_setting_changes(
     tmp_path: Path,
 ) -> None:
-    """A failure belongs to one content and one policy; another policy has no failure recorded."""
+    """A failure belongs to the model; another setting neither asks the provider nor skips the wait."""
     fixture = EnrichmentFreshnessFixture(tmp_path, fixture_provider_version())
     fixture.previews.unavailable = True
     assert "warning" in asyncio.run(fixture.automatic.refresh(fixture.identity))
     lookups = len(fixture.provider.hashes)
     fixture.previews.unavailable = False
-    fixture.policy[0] = "civitai-thumbnail-v1:allow_soft"
+    fixture.policy[0] = CivitaiThumbnailSafety.ALLOW_SOFT
     changed = asyncio.run(fixture.restart().refresh(fixture.identity))
-    assert changed["status"] == "found" and "warning" not in changed
-    assert len(fixture.provider.hashes) == lookups + 1
+    assert changed == {"modelId": fixture.identity, "status": "cached"}
+    assert len(fixture.previews.urls) == 1
+    fixture.clock[0] += THUMBNAIL_RETRY_DELAYS[0] + 1
+    assert (
+        asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "cached"
+    )
+    assert len(fixture.provider.hashes) == lookups and len(fixture.previews.urls) == 2
+    current = fixture.repository.list_entries()[0]
+    assert current.metadata is not None and current.metadata.thumbnails
 
 
 def test_local_previews_keep_precedence_across_policy_changes(tmp_path: Path) -> None:
@@ -162,12 +200,16 @@ def test_local_previews_keep_precedence_across_policy_changes(tmp_path: Path) ->
         entry.evidence, "local-fixture", ModelMetadata("Local", thumbnails=local)
     )
     assert asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == "found"
-    fixture.policy[0] = "civitai-thumbnail-v1:allow_soft"
-    assert asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "found"
+    fixture.policy[0] = CivitaiThumbnailSafety.ALLOW_SOFT
+    assert (
+        asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "cached"
+    )
     assert fixture.previews.urls == ["local-fixture"]
+    assert len(fixture.provider.hashes) == 1
     current = fixture.repository.list_entries()[0]
     assert current.metadata is not None and current.metadata.thumbnails == local
     assert current.thumbnail_origin == "local"
+    assert present_thumbnail(current, fixture.policy[0]).thumbnails == local
 
 
 def test_user_choice_preserves_image_after_provider_labels_and_policy_changes(
@@ -179,52 +221,62 @@ def test_user_choice_preserves_image_after_provider_labels_and_policy_changes(
     entry = fixture.repository.list_entries()[0]
     chosen = asyncio.run(fixture.previews.prepare("user-choice"))
     fixture.repository.save_thumbnail_choice(entry.evidence, chosen)
-    fixture.policy[0] = "civitai-thumbnail-v1:allow_soft"
-    assert asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "found"
+    fixture.policy[0] = CivitaiThumbnailSafety.ALLOW_SOFT
+    assert (
+        asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "cached"
+    )
     current = fixture.repository.list_entries()[0]
     assert current.metadata is not None and current.metadata.thumbnails == chosen
     assert current.thumbnail_origin == "user"
-    assert len(fixture.previews.urls) == 2
+    assert len(fixture.previews.urls) == 2 and len(fixture.provider.hashes) == 1
 
 
-def test_new_provider_miss_removes_provider_state_and_keeps_user_choice(
+def test_new_provider_miss_keeps_provider_state_and_user_choice(
     tmp_path: Path,
 ) -> None:
-    """Drop a disproved provider link and image while preserving deliberate user presentation."""
+    """Keep a learned provider link beside deliberate user presentation when a provider stops answering."""
     fixture = EnrichmentFreshnessFixture(tmp_path, fixture_provider_version())
     assert asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == "found"
     entry = fixture.repository.list_entries()[0]
-    assert entry.sha256 is not None
+    assert entry.sha256 is not None and entry.metadata is not None
+    links = entry.metadata.links()
+    assert links
     chosen = asyncio.run(fixture.previews.prepare("user-choice"))
     fixture.repository.save_user_metadata(entry.sha256, ModelMetadata("User title"))
     assert fixture.repository.save_thumbnail_choice(entry.evidence, chosen)
     fixture.provider.version = None
-    assert (
-        asyncio.run(fixture.automatic.refresh(fixture.identity, automatic=False))[
-            "status"
-        ]
-        == "not_found"
-    )
+    assert asyncio.run(
+        fixture.automatic.refresh(fixture.identity, automatic=False)
+    ) == {"modelId": fixture.identity, "status": "not_found", "kept": True}
     current = fixture.repository.list_entries()[0]
     assert current.metadata is not None and current.metadata.title == "User title"
-    assert current.metadata.links() == () and current.metadata.thumbnails == chosen
+    assert current.metadata.links() == links and current.metadata.thumbnails == chosen
     assert (
         asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "cached"
     )
 
 
-def test_disabled_thumbnail_policy_clears_old_provider_image(tmp_path: Path) -> None:
-    """Remove incompatible automatic provider images when the active policy selects no image."""
+def test_disabled_thumbnail_policy_hides_the_provider_image_and_keeps_it_stored(
+    tmp_path: Path,
+) -> None:
+    """Filter a stored provider image at display time; switching images off removes nothing."""
     fixture = EnrichmentFreshnessFixture(tmp_path, fixture_provider_version())
     assert asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == "found"
+    stored = fixture.repository.list_entries()[0]
+    assert stored.metadata is not None and stored.metadata.thumbnails
     fixture.provider.version = fixture_provider_version(preview=False)
-    fixture.policy[0] = "civitai-thumbnail-v1:disabled"
-    assert asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "found"
-    current = fixture.repository.list_entries()[0]
-    assert current.metadata is not None and current.metadata.thumbnails == ()
+    fixture.policy[0] = CivitaiThumbnailSafety.DISABLED
     assert (
         asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "cached"
     )
+    assert len(fixture.provider.hashes) == 1
+    current = fixture.repository.list_entries()[0]
+    assert current.metadata is not None
+    assert current.metadata.thumbnails == stored.metadata.thumbnails
+    hidden = present_thumbnail(current, fixture.policy[0])
+    assert hidden.thumbnails == () and hidden.filtered and hidden.wanted is None
+    shown = present_thumbnail(current, CivitaiThumbnailSafety.SFW_ONLY)
+    assert shown.thumbnails == stored.metadata.thumbnails
 
 
 _EVIDENCE_CHANGES: tuple[Callable[[ModelEvidence], ModelEvidence], ...] = (
@@ -344,29 +396,29 @@ def test_thumbnail_only_policy_change_retains_a_confirmed_miss(tmp_path: Path) -
         asyncio.run(fixture.automatic.refresh(fixture.identity))["status"]
         == "not_found"
     )
-    fixture.policy[0] = "civitai-thumbnail-v1:disabled"
+    fixture.policy[0] = CivitaiThumbnailSafety.DISABLED
     assert (
         asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "cached"
     )
     assert len(fixture.provider.hashes) == 1
 
 
-def test_a_failed_preview_is_recorded_without_a_time_to_try_again(
+def test_a_failed_preview_is_recorded_with_a_time_to_try_again(
     tmp_path: Path,
 ) -> None:
-    """The record holds the remembered failure, and a success clears it."""
+    """The record holds the failure and its next try, and a success clears it."""
     fixture = EnrichmentFreshnessFixture(tmp_path, fixture_provider_version())
     fixture.previews.unavailable = True
     attempts = SqliteEnrichmentAttempts(
         fixture.repository.asset_root.parent / "enrichment.sqlite3"
     )
-    policy = f"{fixture.provider_scope[0]}|{fixture.policy[0]}"
     assert asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == "found"
+    assert attempts.thumbnail_failures() == {
+        fixture.identity: (1, fixture.clock[0] + THUMBNAIL_RETRY_DELAYS[0])
+    }
     digest = fixture.repository.list_entries()[0].sha256
     assert digest is not None
-    assert (
-        attempts.content_retry_at(digest, policy=policy) == PREVIEW_FAILURE_REMEMBERED
-    )
+    assert attempts.content_retry_at(digest, policy=fixture.provider_scope[0]) == 0
     fixture.previews.unavailable = False
     assert (
         asyncio.run(fixture.automatic.refresh(fixture.identity, automatic=False))[
@@ -374,4 +426,4 @@ def test_a_failed_preview_is_recorded_without_a_time_to_try_again(
         ]
         == "found"
     )
-    assert attempts.content_retry_at(digest, policy=policy) == 0
+    assert attempts.thumbnail_failures() == {}

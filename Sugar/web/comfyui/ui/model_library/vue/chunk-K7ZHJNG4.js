@@ -1,9 +1,12 @@
 import {
+  useModelImage
+} from "./chunk-SPVIVHMR.js";
+import {
   ModelImageElement
 } from "./chunk-W2YTYCO4.js";
 import {
-  useModelImage
-} from "./chunk-SPVIVHMR.js";
+  ModelBlankCard
+} from "./chunk-FGK24KN5.js";
 import {
   defineComponent,
   h
@@ -25,7 +28,7 @@ var ModelCatalogImage = defineComponent({
     return () => {
       const { url, unavailable } = image();
       if (url) return h(ModelImageElement, { ...attrs, url });
-      return unavailable && props.fallback ? h("span", { class: "sc-model-no-image" }, "No image") : null;
+      return unavailable && props.fallback ? h(ModelBlankCard, { state: "none" }) : null;
     };
   }
 });

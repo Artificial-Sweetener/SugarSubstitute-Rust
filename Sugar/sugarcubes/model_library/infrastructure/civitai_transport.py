@@ -49,7 +49,7 @@ def approved_civitai_api_url(url: str) -> bool:
             and not parsed.fragment
             and re.fullmatch(
                 r"/api/v1/(?:enums|models(?:/[1-9][0-9]{0,15})?|images|"
-                r"model-versions/(?:by-hash/[a-f0-9]{64}|mini/[1-9][0-9]{0,15}|[1-9][0-9]{0,15}))",
+                r"model-versions/(?:by-hash/(?:[a-f0-9]{64}|[a-f0-9]{12})|mini/[1-9][0-9]{0,15}|[1-9][0-9]{0,15}))",
                 parsed.path,
             )
             is not None

@@ -18,7 +18,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 import time
 
 from .catalog_store import SqliteModelCatalogRepository
@@ -30,15 +30,16 @@ class ModelCatalogUpdates:
 
     The first change after a quiet period is announced at once. While changes keep arriving,
     a consumer that already holds the last announced revision hears of the newest one at most
-    once per interval, so a long ingest costs each consumer one catalog read per interval
-    instead of one per model. The newest revision is always announced.
+    once per interval, so a burst of commits reaches each consumer as one change. The interval
+    is short, because a consumer is told which models changed and reads only those. The newest
+    revision is always announced.
     """
 
     def __init__(
         self,
         repository: SqliteModelCatalogRepository,
         *,
-        interval: float = 3.0,
+        interval: float = 0.25,
         clock: Callable[[], float] = time.monotonic,
         pause: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
@@ -52,9 +53,11 @@ class ModelCatalogUpdates:
         self._announced: tuple[int, float] | None = None
         repository.database.watch_commits(self._committed)
 
-    async def invalidate(self) -> None:
-        """Advance the durable token for deliberate cache actions that change no catalog row."""
-        await complete_blocking_model_work(self._repository.database.invalidate)
+    async def invalidate(self, changed: Sequence[str] | None = None) -> None:
+        """Announce a change no catalog row holds, for the named models or for all of them."""
+        await complete_blocking_model_work(
+            self._repository.database.invalidate, changed
+        )
 
     async def wait(self, after_revision: int) -> int:
         """Return a newer revision, or the same one after fifteen quiet seconds."""

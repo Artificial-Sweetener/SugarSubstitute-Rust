@@ -22,10 +22,13 @@ from dataclasses import dataclass
 from .models import ModelMetadata
 from .thumbnail_sources import ThumbnailSourceOrigin
 
+# Names a decision made under the learn-once rules; any other name is from before them.
+LEARNED_POLICY = "learned-v1"
+
 
 @dataclass(frozen=True, slots=True)
 class ModelEnrichmentRecord:
-    """Retain exact content, thumbnail policy and a confirmed match or provider miss."""
+    """Retain exact content, the providers that answered for it, and what they said."""
 
     sha256: str
     policy: str
@@ -44,6 +47,8 @@ class ModelEnrichmentResult:
     metadata: ModelMetadata | None
     warning: str | None = None
     thumbnail_origin: ThumbnailSourceOrigin | None = None
+    # A lookup that found nothing for a model that already has provider labels, which stay.
+    kept: bool = False
 
     @property
     def status(self) -> str:
@@ -63,4 +68,6 @@ class ModelEnrichmentResult:
             )
         if self.warning is not None:
             result["warning"] = self.warning
+        if self.kept:
+            result["kept"] = True
         return result

@@ -21,6 +21,7 @@ from sugarcubes.model_library.infrastructure.relationship_catalog import (
     model_relationships,
 )
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from pathlib import Path
 
@@ -58,13 +59,21 @@ from tests.model_library.support.model_roots import FixtureFileRoots
 from tests.model_library.support.enrichment import (
     ObservedProvider,
     ObservedPreviews,
+    thumbnail_fill,
 )
 
 
 class FailingProvider(ObservedProvider):
     """Retain failures behind the same provider boundary as successful lookups."""
 
-    async def lookup(self, sha256: str, kind: str) -> tuple[ProviderModelVersion, ...]:
+    async def lookup(
+        self,
+        sha256: str,
+        kind: str,
+        weights_hash: Callable[[], Awaitable[str | None]],
+        *,
+        ask_again: bool = False,
+    ) -> tuple[ProviderModelVersion, ...]:
         """Record the verified hash and simulate a transient provider outage."""
         self.hashes.append(sha256)
         raise ValueError("Temporary provider outage")
@@ -85,7 +94,7 @@ def test_missing_matches_survive_restart_and_changed_files_are_reconsidered(
         repository,
         ModelFingerprintService(repository, ApprovedModelFingerprints(roots)),
         provider,
-        ObservedPreviews(),
+        thumbnail_fill(repository, ObservedPreviews()),
     )
     clock = [1000.0]
     state_path = repository.asset_root.parent / "enrichment.sqlite3"
@@ -97,9 +106,6 @@ def test_missing_matches_survive_restart_and_changed_files_are_reconsidered(
             SqliteModelEnrichmentCache(
                 repository.asset_root.parent / "enrichment-cache.sqlite3"
             ),
-            service.previews,
-            lambda _kind: "fixture-policy",
-            lambda _kind: "fixture-provider",
             lambda _kind: ("civitai",),
         ),
         lambda: clock[0],
@@ -114,9 +120,6 @@ def test_missing_matches_survive_restart_and_changed_files_are_reconsidered(
             SqliteModelEnrichmentCache(
                 repository.asset_root.parent / "enrichment-cache.sqlite3"
             ),
-            service.previews,
-            lambda _kind: "fixture-policy",
-            lambda _kind: "fixture-provider",
             lambda _kind: ("civitai",),
         ),
         lambda: clock[0],
@@ -132,10 +135,10 @@ def test_missing_matches_survive_restart_and_changed_files_are_reconsidered(
     assert len(provider.hashes) == 2
 
 
-def test_automatic_metadata_keeps_existing_preview_and_manual_refresh_remains_available(
+def test_automatic_and_manual_refresh_both_keep_an_existing_preview(
     tmp_path: Path,
 ) -> None:
-    """Keep automatic provider labels below deliberate local images and allow explicit refresh."""
+    """Keep a local image through an automatic lookup and through a refresh a person asks for."""
     (tmp_path / "fixture.safetensors").write_bytes(b"fixture")
     roots = FixtureFileRoots(tmp_path)
     repository = SqliteModelCatalogRepository(tmp_path)
@@ -159,7 +162,7 @@ def test_automatic_metadata_keeps_existing_preview_and_manual_refresh_remains_av
         repository,
         ModelFingerprintService(repository, ApprovedModelFingerprints(roots)),
         provider,
-        ObservedPreviews(),
+        thumbnail_fill(repository, ObservedPreviews()),
     )
     automatic = AutomaticModelEnrichment(
         repository,
@@ -169,9 +172,6 @@ def test_automatic_metadata_keeps_existing_preview_and_manual_refresh_remains_av
             SqliteModelEnrichmentCache(
                 repository.asset_root.parent / "enrichment-cache.sqlite3"
             ),
-            service.previews,
-            lambda _kind: "fixture-policy",
-            lambda _kind: "fixture-provider",
             lambda _kind: ("civitai",),
         ),
         lambda: 1000,
@@ -193,10 +193,10 @@ def test_automatic_metadata_keeps_existing_preview_and_manual_refresh_remains_av
     )
     assert len(provider.hashes) == 2
     current = repository.list_entries()[0]
-    assert (
-        current.metadata is not None
-        and current.metadata.thumbnails[0].asset_id == "a" * 64
-    )
+    assert current.metadata is not None and current.metadata.thumbnails == old
+    assert current.thumbnail_origin == "local"
+    assert current.metadata.title == "Provider"
+    assert [link.provider_id for link in current.metadata.links()] == ["civitai"]
 
 
 def test_provider_failure_cooldown_is_shared_without_extending_duplicate_deadlines(
@@ -213,7 +213,7 @@ def test_provider_failure_cooldown_is_shared_without_extending_duplicate_deadlin
         repository,
         ModelFingerprintService(repository, ApprovedModelFingerprints(roots)),
         provider,
-        ObservedPreviews(),
+        thumbnail_fill(repository, ObservedPreviews()),
     )
     clock = [1000.0]
     path = repository.asset_root.parent / "enrichment.sqlite3"
@@ -225,9 +225,6 @@ def test_provider_failure_cooldown_is_shared_without_extending_duplicate_deadlin
             SqliteModelEnrichmentCache(
                 repository.asset_root.parent / "enrichment-cache.sqlite3"
             ),
-            service.previews,
-            lambda _kind: "fixture-policy",
-            lambda _kind: "fixture-provider",
             lambda _kind: ("civitai",),
         ),
         lambda: clock[0],
@@ -247,9 +244,6 @@ def test_provider_failure_cooldown_is_shared_without_extending_duplicate_deadlin
             SqliteModelEnrichmentCache(
                 repository.asset_root.parent / "enrichment-cache.sqlite3"
             ),
-            service.previews,
-            lambda _kind: "fixture-policy",
-            lambda _kind: "fixture-provider",
             lambda _kind: ("civitai",),
         ),
         lambda: clock[0],

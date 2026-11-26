@@ -22,6 +22,7 @@ import { modelApiError } from './ModelApiTransport.js';
 export const modelThumbnailSafetyChoices = [
   { value: 'sfw_only', label: 'SFW only' },
   { value: 'allow_soft', label: 'Allow soft / racy' },
+  { value: 'blur', label: 'Blur NSFW' },
   { value: 'allow_all', label: 'Allow all' },
   { value: 'disabled', label: 'Disabled' },
 ] as const;
@@ -35,6 +36,8 @@ export interface ModelProviderPreferences {
   readonly downloadsEnabled: boolean;
   readonly thumbnailDownloadsEnabled: boolean;
   readonly thumbnailSafety: ModelThumbnailSafety;
+  /** Whether a blurred thumbnail sharpens while the pointer is over it. */
+  readonly thumbnailRevealOnHover: boolean;
 }
 
 /** Validate complete server snapshots before controls can display or edit shared policy. */
@@ -45,7 +48,8 @@ export function decodeModelProviderPreferences(value: unknown): ModelProviderPre
     typeof value.metadataLookupEnabled !== 'boolean' ||
     typeof value.missingModelLookupEnabled !== 'boolean' ||
     typeof value.downloadsEnabled !== 'boolean' ||
-    typeof value.thumbnailDownloadsEnabled !== 'boolean'
+    typeof value.thumbnailDownloadsEnabled !== 'boolean' ||
+    typeof value.thumbnailRevealOnHover !== 'boolean'
   )
     throw new Error('The model provider settings response is invalid.');
   const safety = modelThumbnailSafetyChoices.find(
@@ -58,6 +62,7 @@ export function decodeModelProviderPreferences(value: unknown): ModelProviderPre
     downloadsEnabled: value.downloadsEnabled,
     thumbnailDownloadsEnabled: value.thumbnailDownloadsEnabled,
     thumbnailSafety: safety.value,
+    thumbnailRevealOnHover: value.thumbnailRevealOnHover,
   };
 }
 

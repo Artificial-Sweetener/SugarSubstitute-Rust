@@ -20,6 +20,7 @@ import { modelApiError } from './ModelApiTransport.js';
 export const modelThumbnailSafetyChoices = [
     { value: 'sfw_only', label: 'SFW only' },
     { value: 'allow_soft', label: 'Allow soft / racy' },
+    { value: 'blur', label: 'Blur NSFW' },
     { value: 'allow_all', label: 'Allow all' },
     { value: 'disabled', label: 'Disabled' },
 ];
@@ -30,7 +31,8 @@ export function decodeModelProviderPreferences(value) {
         typeof value.metadataLookupEnabled !== 'boolean' ||
         typeof value.missingModelLookupEnabled !== 'boolean' ||
         typeof value.downloadsEnabled !== 'boolean' ||
-        typeof value.thumbnailDownloadsEnabled !== 'boolean')
+        typeof value.thumbnailDownloadsEnabled !== 'boolean' ||
+        typeof value.thumbnailRevealOnHover !== 'boolean')
         throw new Error('The model provider settings response is invalid.');
     const safety = modelThumbnailSafetyChoices.find((choice) => choice.value === value.thumbnailSafety);
     if (!safety)
@@ -41,6 +43,7 @@ export function decodeModelProviderPreferences(value) {
         downloadsEnabled: value.downloadsEnabled,
         thumbnailDownloadsEnabled: value.thumbnailDownloadsEnabled,
         thumbnailSafety: safety.value,
+        thumbnailRevealOnHover: value.thumbnailRevealOnHover,
     };
 }
 /** Use the shared HTTP owner for every preference read and deliberate partial update. */

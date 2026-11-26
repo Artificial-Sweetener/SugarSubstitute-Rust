@@ -44,6 +44,7 @@ function fixture(known: readonly string[]) {
   const updates: { values: string[]; active: number }[] = [];
   const activated: number[] = [];
   let choose: (index: number) => void = () => undefined;
+  const watchers = new Set<() => void>();
   const surface = {
     element: document.createElement('div'),
     update: (items: readonly ModelCatalogItem[], active: number) => {
@@ -60,8 +61,23 @@ function fixture(known: readonly string[]) {
       },
     },
     (value) => (known.includes(value) ? installed(value) : null),
+    (changed) => {
+      watchers.add(changed);
+      return () => watchers.delete(changed);
+    },
   ).mount({ activate: (index) => activated.push(index) });
-  return { popup, surface, updates, activated, choose: (index: number) => choose(index) };
+  return {
+    popup,
+    surface,
+    updates,
+    activated,
+    choose: (index: number) => choose(index),
+    /** Tell the popup the catalog changed, as the prompt editor host does. */
+    catalogChanged: () => {
+      for (const changed of [...watchers]) changed();
+    },
+    watching: () => watchers.size,
+  };
 }
 
 test('ranked candidates are drawn as their installed models with the same current one', () => {
@@ -91,4 +107,15 @@ test('a candidate the library no longer holds is left out and positions still ag
   expect(f.popup.neighbor(1, 'ArrowRight')).toBe(1);
   // A neighbour past the shown models keeps the current candidate.
   expect(f.popup.neighbor(2, 'ArrowRight')).toBe(2);
+});
+
+test('an open popup draws its candidates again when the catalog changes, until it is disposed', () => {
+  const f = fixture(['a.safetensors', 'b.safetensors']);
+  f.popup.update(['a.safetensors', 'b.safetensors'].map(candidate), 1);
+  const drawn = f.updates.length;
+  f.catalogChanged();
+  expect(f.updates).toHaveLength(drawn + 1);
+  expect(f.updates.at(-1)).toEqual(f.updates[drawn - 1]);
+  f.popup.dispose();
+  expect(f.watching()).toBe(0);
 });

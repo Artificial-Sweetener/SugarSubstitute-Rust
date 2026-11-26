@@ -26,7 +26,28 @@ export interface ModelThumbnail {
   readonly url: string;
 }
 
+/**
+ * What a model's card draws where its image goes.
+ *
+ * - `ready`: an image.
+ * - `pending`: a lookup or an image fetch is queued or running.
+ * - `retrying`: the same, after a failure.
+ * - `filtered`: an image exists that the thumbnail safety setting excludes.
+ * - `not_found`: no provider knows the file.
+ * - `none`: the model is known, or is never looked up, and has no image.
+ */
+export type ModelImageState = 'ready' | 'pending' | 'retrying' | 'filtered' | 'not_found' | 'none';
+
+export interface ModelCardImage {
+  readonly state: ModelImageState;
+  /** Whether the model's thumbnails are blurred files. */
+  readonly blurred: boolean;
+  /** The sharp files of a blurred image, present only when hover reveal is switched on. */
+  readonly reveal: readonly ModelThumbnail[];
+}
+
 export interface ModelCatalogItem {
+  readonly image?: ModelCardImage;
   readonly versionCount?: number | null;
   readonly architecture?: ModelArchitecture | null;
   readonly traits?: ModelTraits | null;
@@ -139,7 +160,98 @@ function decodeItem(value: unknown): ModelCatalogItem {
     trainedWords: value.trainedWords.map(text),
     tags: value.tags === undefined ? [] : decodeTags(value.tags),
     thumbnails: value.thumbnails.map(decodeThumbnail),
+    image: decodeCardImage(value.image, value.thumbnails.length > 0),
   };
+}
+
+const IMAGE_STATES: readonly ModelImageState[] = [
+  'ready',
+  'pending',
+  'retrying',
+  'filtered',
+  'not_found',
+  'none',
+];
+
+/** Accept catalogs without card states, reading them as an image or as no image. */
+function decodeCardImage(value: unknown, pictured: boolean): ModelCardImage {
+  if (value === undefined)
+    return { state: pictured ? 'ready' : 'none', blurred: false, reveal: [] };
+  if (
+    !isRecord(value) ||
+    typeof value.blurred !== 'boolean' ||
+    !Array.isArray(value.reveal) ||
+    !IMAGE_STATES.some((state) => state === value.state)
+  )
+    throw new Error('Invalid model card image.');
+  return {
+    state: value.state as ModelImageState,
+    blurred: value.blurred,
+    reveal: value.reveal.map(decodeThumbnail),
+  };
+}
+
+/** The models a published change names, and the ones it removed. */
+export interface ModelCatalogChanges {
+  readonly revision: number;
+  readonly items: readonly ModelCatalogItem[];
+  readonly removed: readonly string[];
+}
+
+/** The server's answer to "what changed since the revision I hold". */
+export interface ModelCatalogUpdate {
+  readonly revision: number;
+  /** The changed models, or null when the whole catalog must be read again. */
+  readonly changes: ModelCatalogChanges | null;
+}
+
+/** Validate a change answer before any of it reaches the held catalog. */
+export function decodeModelCatalogUpdate(value: unknown): ModelCatalogUpdate {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== 1 ||
+    typeof value.revision !== 'number' ||
+    !Number.isSafeInteger(value.revision) ||
+    value.revision < 0
+  )
+    throw new Error('Invalid model catalog update response.');
+  if (value.models === undefined) return { revision: value.revision, changes: null };
+  if (!Array.isArray(value.models) || !Array.isArray(value.removed))
+    throw new Error('Invalid model catalog changes.');
+  return {
+    revision: value.revision,
+    changes: {
+      revision: value.revision,
+      items: value.models.map(decodeItem),
+      removed: value.removed.map(text),
+    },
+  };
+}
+
+/**
+ * Apply the models a change names to the catalog it follows. Every other entry stays the same
+ * object, so consumers redo nothing for them. A change at or before the held revision is
+ * already applied and returns the held catalog itself.
+ */
+export function applyModelCatalogChanges(
+  held: ModelCatalogSnapshot,
+  changes: ModelCatalogChanges,
+): ModelCatalogSnapshot {
+  if (changes.revision <= held.revision) return held;
+  const removed = new Set(changes.removed);
+  const changed = new Map(changes.items.map((item) => [item.id, item]));
+  const items = held.items
+    .filter((item) => !removed.has(item.id))
+    .map((item) => {
+      const next = changed.get(item.id);
+      changed.delete(item.id);
+      return next ?? item;
+    });
+  return continueModelCatalog(held, {
+    ...held,
+    revision: changes.revision,
+    items: [...items, ...changed.values()],
+  });
 }
 
 /** Validate additive tensor evidence while preserving older public catalog payloads. */
@@ -245,6 +357,20 @@ export function continueModelCatalog(
       ? { relationships: previous.relationships }
       : {}),
   };
+}
+
+/**
+ * A list of models that follows the catalog.
+ *
+ * A surface that shows models while it is open takes one of these, never an array: an array is
+ * the catalog as it was when the surface opened, and a surface holding one keeps showing a model
+ * as it was after its image or its labels have changed.
+ */
+export interface LiveModels {
+  /** The models as the catalog has them now. */
+  current(): readonly ModelCatalogItem[];
+  /** Be told whenever `current` changes, until the returned release is called. */
+  watch(changed: () => void): () => void;
 }
 
 /** The size a model's banner is asked for, by a field and by a prompt's LoRA chip alike. */

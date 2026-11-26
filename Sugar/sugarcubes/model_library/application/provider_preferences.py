@@ -81,6 +81,9 @@ class ModelProviderPreferenceService:
                 thumbnail_safety=patch.get(
                     "thumbnail_safety", current.thumbnail_safety
                 ),
+                thumbnail_reveal_on_hover=patch.get(
+                    "thumbnail_reveal_on_hover", current.thumbnail_reveal_on_hover
+                ),
             )
         )
         if self._changed is not None:
@@ -108,21 +111,13 @@ class ModelProviderPreferenceService:
         if not self.downloads_enabled():
             raise ValueError("CivitAI downloads are disabled.")
 
+    def reveal_on_hover(self) -> bool:
+        """Say whether a blurred thumbnail's sharp files may reach a consumer."""
+        return self.read().thumbnail_reveal_on_hover
+
     def enrichment_enabled(self, kind: str) -> bool:
         """Keep OpenModelDB enrichment available independently of CivitAI lookup policy."""
         return kind == "upscale_models" or self.metadata_lookup_enabled()
-
-    def enrichment_policy(self, kind: str) -> str:
-        """Version thumbnail decisions independently for OpenModelDB and configured CivitAI policy."""
-        return (
-            f"openmodeldb-thumbnail-v1|civitai-thumbnail-v2:{self.image_policy().value}"
-            if kind == "upscale_models"
-            else f"civitai-thumbnail-v2:{self.image_policy().value}"
-        )
-
-    def enrichment_provider_scope(self, kind: str) -> str:
-        """Invalidate upscaler misses when CivitAI lookup becomes eligible alongside OpenModelDB."""
-        return ",".join(self.enrichment_providers(kind))
 
     def enrichment_providers(self, kind: str) -> tuple[str, ...]:
         """Name eligible providers explicitly for durable maintenance and retry ownership."""

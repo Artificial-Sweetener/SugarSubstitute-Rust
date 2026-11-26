@@ -43,16 +43,20 @@ class ModelEnrichmentWorker:
         interval: float = 60,
         *,
         after_refresh: Callable[[str], Awaitable[None]] | None = None,
+        published: Callable[[Sequence[str]], Awaitable[None]] | None = None,
     ) -> None:
         """Bind the authoritative use case and job owner to a bounded scheduler.
 
         ``after_refresh`` runs for a model once its enrichment found provider metadata and
         has released the metadata lease, so follow-up work takes a lease of its own.
+        ``published`` announces a finished job to catalog consumers: what a card shows can
+        change without any catalog row changing, when a lookup finds nothing or a fetch fails.
         """
         self._repository = repository
         self._enrichment = enrichment
         self._jobs = jobs
         self._after_refresh = after_refresh
+        self._published = published
         self._interval = interval
         self._reconsider = False
         self._shown: OrderedDict[str, None] = OrderedDict()
@@ -76,15 +80,17 @@ class ModelEnrichmentWorker:
             self._task.add_done_callback(self._observe_failure)
 
     def prioritize(self, identities: Sequence[str]) -> None:
-        """Move visible choices ahead of the remaining startup backlog without duplication."""
+        """Move visible models that are still waiting ahead of the rest of the backlog.
+
+        A model that is owed nothing is not queued: naming it changes nothing.
+        """
         for identity in reversed(identities):
             self._shown[identity] = None
             self._shown.move_to_end(identity, last=False)
         while len(self._shown) > _SHOWN_MODELS:
             self._shown.popitem()
         for identity in reversed(identities):
-            if identity != self._current:
-                self._pending.setdefault(identity, True)
+            if identity in self._pending:
                 self._pending.move_to_end(identity, last=False)
         self._wake.set()
 
@@ -97,17 +103,24 @@ class ModelEnrichmentWorker:
         if self._loop is not None and not self._loop.is_closed():
             self._loop.call_soon_threadsafe(self._wake.set)
 
-    async def refill(self) -> None:
-        """Append current candidates while retaining visible-model priority."""
+    async def refill(self, *, verify_files: bool = True) -> None:
+        """Append current candidates while retaining visible-model priority.
+
+        The idle timer passes ``verify_files=False``: it exists to pick up retries that came
+        due, and leaves checking stored image files to a start or a folder scan.
+        """
         await self._ready.wait()
         generation = self._generation
         entries = await asyncio.to_thread(self._repository.list_entries)
-        for entry in sorted(entries, key=lambda item: item.evidence.size_bytes):
-            identity = entry.evidence.location_id
-            if identity != self._current and await asyncio.to_thread(
-                self._enrichment.needs_refresh, entry
-            ):
-                if generation == self._generation:
+        owed = await asyncio.to_thread(
+            lambda: self._enrichment.owed(
+                sorted(entries, key=lambda item: item.evidence.size_bytes),
+                verify_files=verify_files,
+            )
+        )
+        if generation == self._generation:
+            for identity in owed:
+                if identity != self._current:
                     self._pending.setdefault(identity, True)
         self._wake.set()
 
@@ -146,7 +159,15 @@ class ModelEnrichmentWorker:
 
         async def operation() -> dict[str, object]:
             """Run follow-up work only after the enrichment released its metadata lease."""
-            result = await self._enrichment.refresh(model_id, automatic=automatic)
+            before = await asyncio.to_thread(self._repository.revision)
+            try:
+                result = await self._enrichment.refresh(model_id, automatic=automatic)
+            finally:
+                # A job that changed a catalog row announced itself with that commit.
+                if self._published is not None and before == await asyncio.to_thread(
+                    self._repository.revision
+                ):
+                    await self._published((model_id,))
             if result.get("status") == "found" and self._after_refresh is not None:
                 await self._after_refresh(model_id)
             return result
@@ -197,7 +218,7 @@ class ModelEnrichmentWorker:
             try:
                 await asyncio.wait_for(self._wake.wait(), timeout=self._interval)
             except TimeoutError:
-                await self.refill()
+                await self.refill(verify_files=False)
 
     async def _refill_reconsidered(self) -> None:
         """Queue the models a changed preference made stale without waiting for an idle poll.

@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 import sqlite3
 from typing import TYPE_CHECKING
@@ -26,6 +27,7 @@ from ..domain.provider_metadata import (
     ProviderMetadataPresentation,
     ProviderMetadataRecord,
 )
+from ..domain.thumbnail_safety import SAFE_TIER
 from ..domain.thumbnail_sources import ThumbnailOwnership, ThumbnailSourceOrigin
 from .catalog_row_projection import catalog_text
 from .metadata_codec import decode_metadata, encode_metadata, normalized_hash
@@ -83,13 +85,13 @@ class SqliteModelProviderMetadata:
             old = self._rows(connection, fingerprint)
             if old == rows:
                 if prepared_assets_changed:
-                    self._database.advance_revision(connection)
+                    self._database.advance_for_content(connection, fingerprint)
                 return
             connection.execute(
                 "DELETE FROM model_provider_metadata WHERE sha256=?", (fingerprint,)
             )
             write_provider_metadata_rows(connection, fingerprint, rows)
-            self._database.advance_revision(connection)
+            self._database.advance_for_content(connection, fingerprint)
 
     def metadata(self, sha256: str, provider: str) -> ModelMetadata | None:
         """Return only a provider's actual labels; association-only evidence supplies no labels."""
@@ -135,14 +137,58 @@ class SqliteModelProviderMetadata:
             if self._clear_thumbnails(connection, origin):
                 self._database.advance_revision(connection)
 
-    def delete_for_hash(self, sha256: str) -> None:
-        """Drop disproved provider matches independently of local and user presentation."""
+    def records(self, sha256: str) -> tuple[ProviderMetadataRecord, ...]:
+        """Return each provider's own labels and image, before any presentation precedence."""
         with self._database.connect() as connection:
-            cursor = connection.execute(
-                "DELETE FROM model_provider_metadata WHERE sha256=?",
-                (normalized_hash(sha256),),
+            rows = sorted(
+                self._rows(connection, normalized_hash(sha256)),
+                key=lambda item: item.presentation_order,
             )
-            if cursor.rowcount:
+        return tuple(
+            ProviderMetadataRecord(decode_metadata(row.payload), row.thumbnail_origin)
+            for row in rows
+            if row.payload is not None
+        )
+
+    def stamp_tiers(self, tier: Callable[[str], int]) -> None:
+        """Give every provider image stored without a content tier the one its origin implies.
+
+        An image stored before tiers existed was fetched under some thumbnail setting; ``tier``
+        maps a file's content hash to the strictest tier that setting allowed.
+        """
+        with self._database.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            stamped = False
+            for row in connection.execute(
+                "SELECT * FROM model_provider_metadata WHERE thumbnail_origin IN ('civitai','openmodeldb','legacy')"
+            ).fetchall():
+                item = stored_provider_metadata_row(row)
+                if item.payload is None:
+                    continue
+                metadata = decode_metadata(item.payload)
+                if metadata.thumbnail_tier is not None or not metadata.thumbnails:
+                    continue
+                sha256 = catalog_text(row, "sha256")
+                connection.execute(
+                    "UPDATE model_provider_metadata SET payload=? WHERE sha256=? AND provider=?",
+                    (
+                        encode_metadata(
+                            replace(
+                                metadata,
+                                # OpenModelDB images carry no rating and are all safe.
+                                thumbnail_tier=(
+                                    SAFE_TIER
+                                    if item.thumbnail_origin == "openmodeldb"
+                                    else tier(sha256)
+                                ),
+                            )
+                        ),
+                        sha256,
+                        item.provider,
+                    ),
+                )
+                stamped = True
+            if stamped:
                 self._database.advance_revision(connection)
 
     def presentation(
@@ -180,11 +226,26 @@ class SqliteModelProviderMetadata:
         ownership: list[ThumbnailOwnership] = []
         for row in connection.execute("SELECT * FROM model_provider_metadata"):
             record = stored_provider_metadata_row(row)
-            if record.payload is not None and record.thumbnail_origin is not None:
+            if record.payload is None:
+                continue
+            metadata = decode_metadata(record.payload)
+            if record.thumbnail_origin is not None:
+                ownership.append(
+                    ThumbnailOwnership(record.thumbnail_origin, metadata.thumbnails)
+                )
+            # A fetched image the safety setting does not show is still kept on disk.
+            fetched = tuple(
+                image for item in metadata.previews for image in item.thumbnails
+            )
+            if fetched:
                 ownership.append(
                     ThumbnailOwnership(
-                        record.thumbnail_origin,
-                        decode_metadata(record.payload).thumbnails,
+                        (
+                            "openmodeldb"
+                            if record.provider == "openmodeldb"
+                            else "civitai"
+                        ),
+                        fetched,
                     )
                 )
         return tuple(ownership)
@@ -203,18 +264,35 @@ class SqliteModelProviderMetadata:
 
     def _clear_thumbnails(self, connection: sqlite3.Connection, origin: str) -> bool:
         """Rewrite borrowed-image metadata in the same transaction as the provider operation."""
+        # The provider's offer goes with its images: a cleared cache stays cleared until a
+        # person asks for a refresh, instead of refilling itself.
         rows = connection.execute(
-            "SELECT * FROM model_provider_metadata WHERE thumbnail_origin=?", (origin,)
+            "SELECT * FROM model_provider_metadata WHERE thumbnail_origin=? OR (provider=? AND payload IS NOT NULL)",
+            (origin, origin),
         ).fetchall()
+        changed = False
         for row in rows:
             item = stored_provider_metadata_row(row)
             if item.payload is None:
                 raise ValueError("Provider image has no metadata.")
-            payload = encode_metadata(
-                replace(decode_metadata(item.payload), thumbnails=())
+            metadata = decode_metadata(item.payload)
+            owned = item.thumbnail_origin == origin
+            cleared = replace(
+                metadata,
+                thumbnails=() if owned else metadata.thumbnails,
+                thumbnail_tier=None if owned else metadata.thumbnail_tier,
+                previews=() if item.provider == origin else metadata.previews,
             )
+            if cleared == metadata:
+                continue
+            changed = True
             connection.execute(
-                "UPDATE model_provider_metadata SET payload=?,thumbnail_origin=NULL WHERE sha256=? AND provider=?",
-                (payload, catalog_text(row, "sha256"), item.provider),
+                "UPDATE model_provider_metadata SET payload=?,thumbnail_origin=? WHERE sha256=? AND provider=?",
+                (
+                    encode_metadata(cleared),
+                    None if owned else item.thumbnail_origin,
+                    catalog_text(row, "sha256"),
+                    item.provider,
+                ),
             )
-        return bool(rows)
+        return changed

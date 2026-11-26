@@ -76,6 +76,7 @@ class SqliteModelCatalogRepository:
                 if kinds is None or catalog_text(row, "kind") in kinds
             }
             changed = False
+            touched: list[str] = []
             seen: set[str] = set()
             for evidence in entries:
                 identity = evidence.location_id
@@ -113,6 +114,7 @@ class SqliteModelCatalogRepository:
                     "INSERT OR REPLACE INTO model_files VALUES (?,?,?,?,?,?,?,?)",
                     (identity, *fields, fingerprint),
                 )
+                touched.append(identity)
                 connection.execute("DELETE FROM local_metadata WHERE id=?", (identity,))
                 connection.execute(
                     "DELETE FROM model_architectures WHERE id=?", (identity,)
@@ -123,6 +125,7 @@ class SqliteModelCatalogRepository:
                     )
                 changed = True
             for identity in existing.keys() - seen:
+                touched.append(identity)
                 connection.execute("DELETE FROM model_files WHERE id=?", (identity,))
                 connection.execute(
                     "DELETE FROM model_architectures WHERE id=?", (identity,)
@@ -133,7 +136,7 @@ class SqliteModelCatalogRepository:
                 )
                 changed = True
             if changed:
-                self.database.advance_revision(connection)
+                self.database.advance_revision(connection, touched)
             return self.database.revision(connection)
 
     def list_entries(
@@ -168,6 +171,17 @@ class SqliteModelCatalogRepository:
                     for row in rows
                     if kinds is None or catalog_text(row, "kind") in kinds
                 ),
+            )
+
+    def has_content(self, kind: str, sha256: str) -> bool:
+        """Answer from the content index whether one exact file of a kind is installed."""
+        with self.database.connect() as connection:
+            return (
+                connection.execute(
+                    "SELECT 1 FROM model_files WHERE sha256=? AND kind=? LIMIT 1",
+                    (sha256.lower(), kind),
+                ).fetchone()
+                is not None
             )
 
     def find_entry(self, location_id: str) -> ModelCatalogEntry | None:
@@ -213,13 +227,38 @@ class SqliteModelCatalogRepository:
                 "INSERT OR REPLACE INTO local_metadata VALUES (?,?,?)",
                 (evidence.location_id, signature, payload),
             )
-            self.database.advance_revision(connection)
+            self.database.advance_revision(connection, (evidence.location_id,))
             return True
 
     def revision(self) -> int:
         """Read the committed revision shared by every catalog consumer."""
         with self.database.connect() as connection:
             return self.database.revision(connection)
+
+    def changes_since(self, held: int) -> tuple[int, frozenset[str] | None]:
+        """Return the current revision and the models changed after a held one, if nameable."""
+        with self.database.connect() as connection:
+            return self.database.changes_since(connection, held)
+
+    def find_entries(self, identities: Sequence[str]) -> tuple[ModelCatalogEntry, ...]:
+        """Read the named models as they are now; one that no longer exists is left out."""
+        with self.database.connect() as connection:
+            found: list[ModelCatalogEntry] = []
+            for identity in identities:
+                row = connection.execute(
+                    _CATALOG_JOIN + " WHERE f.id=?", (identity,)
+                ).fetchone()
+                if row is None:
+                    continue
+                sha256 = (
+                    catalog_text(row, "sha256") if row["sha256"] is not None else None
+                )
+                found.append(
+                    catalog_entry(
+                        row, self.provider_cache.presentation(connection, sha256)
+                    )
+                )
+            return tuple(found)
 
     def detector_associations(self) -> dict[str, str]:
         """Read exact host-value preferences independently from disposable file evidence."""
@@ -266,7 +305,7 @@ class SqliteModelCatalogRepository:
                 "INSERT OR REPLACE INTO thumbnail_choices VALUES (?,?)",
                 (evidence.location_id, payload),
             )
-            self.database.advance_revision(connection)
+            self.database.advance_revision(connection, (evidence.location_id,))
             return True
 
     def save_fingerprint(self, evidence: ModelEvidence, sha256: str) -> bool:
@@ -285,7 +324,7 @@ class SqliteModelCatalogRepository:
                 ),
             )
             if cursor.rowcount:
-                self.database.advance_revision(connection)
+                self.database.advance_revision(connection, (evidence.location_id,))
                 return True
             row = connection.execute(
                 "SELECT sha256,size_bytes,modified_ns FROM model_files WHERE id=?",
@@ -317,17 +356,17 @@ class SqliteModelCatalogRepository:
             ).fetchone()
             if existing is not None and existing["payload"] == payload:
                 if prepared_assets_changed:
-                    self.database.advance_revision(connection)
+                    self.database.advance_for_content(connection, fingerprint)
                 return
             connection.execute(
                 "INSERT OR REPLACE INTO model_metadata VALUES (?,?,?)",
                 (fingerprint, owner, payload),
             )
-            self.database.advance_revision(connection)
+            self.database.advance_for_content(connection, fingerprint)
 
-    def clear_provider_metadata(self, sha256: str) -> None:
-        """Drop stale provider evidence without touching user metadata or thumbnail choices."""
-        self.provider_cache.delete_for_hash(sha256)
+    def provider_records(self, sha256: str) -> tuple[ProviderMetadataRecord, ...]:
+        """Read stored provider matches so a lookup adds to them instead of replacing them."""
+        return self.provider_cache.records(sha256)
 
     def save_provider_metadata(
         self,

@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from .enrichment_service import ModelPreviewPreparer
+from .thumbnail_fill import ModelPreviewPreparer
 from .metadata_activity import ModelMetadataActivity
 from ..domain.models import ThumbnailReference
 
@@ -40,3 +40,10 @@ class CoordinatedModelPreviews:
         """Keep maintenance waiting until transport and physical preparation finish."""
         async with self._activity.work():
             return await self._previews.prepare(url)
+
+    async def blur(
+        self, thumbnails: tuple[ThumbnailReference, ...]
+    ) -> tuple[ThumbnailReference, ...]:
+        """Keep maintenance waiting until the blurred files are published."""
+        async with self._activity.work():
+            return await self._previews.blur(thumbnails)

@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+
 import asyncio
 import json
 import logging
@@ -45,8 +47,19 @@ class OpenModelDbProvider:
         self._snapshot: ProviderCatalogSnapshot | None = None
         self._catalog: OpenModelDbCatalog | None = None
 
-    async def lookup(self, sha256: str) -> ProviderModelVersion | None:
-        """Match only verified content identities, preserving validated stale data during outages."""
+    async def lookup(
+        self,
+        sha256: str,
+        weights_hash: Callable[[], Awaitable[str | None]],
+        *,
+        ask_again: bool = False,
+    ) -> ProviderModelVersion | None:
+        """Match only verified content identities, preserving validated stale data during outages.
+
+        OpenModelDB lists full-file hashes only, so the weights hash is never computed. The
+        match is read from the held catalog, which remembers no misses to ask about again.
+        """
+        del weights_hash, ask_again
         digest = normalized_hash(sha256)
         catalog = await self.catalog()
         match = catalog.resource_for_sha256(digest)

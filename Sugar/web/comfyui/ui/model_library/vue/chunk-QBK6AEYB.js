@@ -1,6 +1,6 @@
 import {
   chooseModelThumbnail
-} from "./chunk-XU3535ZK.js";
+} from "./chunk-5LUG4ZB5.js";
 
 // frontend/comfyui/ui/model_library/ModelPickerLayout.ts
 var MODEL_PICKER_WALL_PROFILE = {

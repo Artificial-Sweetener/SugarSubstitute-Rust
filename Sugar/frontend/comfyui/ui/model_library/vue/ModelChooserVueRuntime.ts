@@ -15,15 +15,16 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Open the standalone picker popup in its own scoped Vue application. */
 import type { ModelPickerSession } from '../ModelPickerSession.js';
-import { createApp, h } from 'vue';
-import type { ModelCatalogItem } from '../ModelCatalog.js';
+import { createApp, h, shallowRef } from 'vue';
+import type { LiveModels, ModelCatalogItem } from '../ModelCatalog.js';
 import type { ModelPickerRectangle } from '../ModelPickerPlacement.js';
 import { ModelChooser } from './ModelChooser.js';
 import { shownModels } from './ShownModels.js';
 import type { ModelContextOptions } from '../ModelMenu.js';
 
 export interface ModelChooserRequest {
-  readonly items: readonly ModelCatalogItem[];
+  /** The models to choose from; the popup follows them while it is open. */
+  readonly items: LiveModels;
   /** Names the popup and its search box. */
   readonly label: string;
   /** The viewport point or rectangle the popup opens beside. */
@@ -58,10 +59,15 @@ export function openModelChooser(
   const container = document.createElement('div');
   document.body.append(container);
   let open = true;
+  const items = shallowRef(request.items.current());
+  const unwatch = request.items.watch(() => {
+    items.value = request.items.current();
+  });
   /** Unmount first, so the caller may move focus or edit without the popup in the way. */
   const settle = (item: ModelCatalogItem | null): void => {
     if (!open) return;
     open = false;
+    unwatch();
     app.unmount();
     container.remove();
     settled(item);
@@ -70,6 +76,7 @@ export function openModelChooser(
     render: () =>
       h(ModelChooser, {
         ...request,
+        items: items.value,
         onChoose: (item: ModelCatalogItem) => settle(item),
         onDismiss: () => settle(null),
       }),

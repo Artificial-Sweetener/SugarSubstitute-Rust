@@ -62,13 +62,6 @@ def catalog_entry(
     user = stored_metadata(row, "user_metadata")
     local = stored_metadata(row, "local_metadata")
     decoded = user or provider.metadata or local
-    if decoded and provider.metadata:
-        decoded = replace(
-            decoded,
-            provider_nsfw=provider.metadata.provider_nsfw,
-            provider_nsfw_level=provider.metadata.provider_nsfw_level,
-            model_type=provider.metadata.model_type,
-        )
     origin: ThumbnailSourceOrigin | None = (
         "user"
         if user is not None
@@ -78,6 +71,23 @@ def catalog_entry(
             else "local" if local is not None else None
         )
     )
+    if decoded and provider.metadata:
+        decoded = replace(
+            decoded,
+            provider_nsfw=provider.metadata.provider_nsfw,
+            provider_nsfw_level=provider.metadata.provider_nsfw_level,
+            model_type=provider.metadata.model_type,
+            thumbnail_tier=provider.metadata.thumbnail_tier,
+            previews=provider.metadata.previews,
+        )
+        if not decoded.thumbnails and provider.metadata.thumbnails:
+            decoded = replace(decoded, thumbnails=provider.metadata.thumbnails)
+            origin = provider.thumbnail_origin
+    local_thumbnails = local.thumbnails if local is not None else ()
+    if decoded is not None and not decoded.thumbnails and local_thumbnails:
+        # A match that brought no image leaves the image beside the file in place.
+        decoded = replace(decoded, thumbnails=local_thumbnails)
+        origin = "local"
     if provider.links:
         decoded = replace(
             decoded or ModelMetadata(title=evidence.file_title),
@@ -110,6 +120,7 @@ def catalog_entry(
             else None
         ),
         nsfw_override=_nsfw_override(row["nsfw_override"]),
+        local_thumbnails=local_thumbnails,
     )
 
 

@@ -20,7 +20,10 @@ import { jest } from '@jest/globals';
 import { decodeModelCatalog } from '../../../frontend/comfyui/ui/model_library/ModelCatalog.js';
 
 /** Build only validated catalog identities for client priority contracts. */
-function priorityChoices(ids: readonly string[]) {
+function priorityChoices(
+  ids: readonly string[],
+  state: 'pending' | 'retrying' | 'ready' | 'not_found' = 'pending',
+) {
   return decodeModelCatalog({
     schemaVersion: 1,
     revision: 0,
@@ -40,6 +43,7 @@ function priorityChoices(ids: readonly string[]) {
       description: '',
       trainedWords: [],
       thumbnails: [],
+      image: { state, blurred: false, reveal: [] },
     })),
   }).items;
 }
@@ -67,7 +71,7 @@ test('observes completed metadata without changing any workflow field', async ()
     (message) => progress.push(message),
     new AbortController().signal,
   );
-  expect(progress).toEqual(['No provider match was found.']);
+  expect(progress).toEqual(['Not found.']);
   expect(requests).toEqual([
     `/sugarcubes/v1/models/${'b'.repeat(64)}/metadata/refresh`,
     '/sugarcubes/v1/models',
@@ -100,6 +104,68 @@ test('prioritizes bounded unique catalog identities and retries failed requests'
   expect(requests).toHaveLength(4);
   expect(requests[2]?.options?.body).toBe(JSON.stringify({ modelIds: identities.slice(128) }));
   expect(requests[3]?.options?.body).toBe(JSON.stringify({ modelIds: identities.slice(0, 128) }));
+});
+
+test('a library with nothing waiting sends no priority requests', async () => {
+  const requests: string[] = [];
+  const client = new ModelCatalogClient(async (path) => {
+    requests.push(path);
+    return response({}, 202);
+  });
+  const ids = ['a'.repeat(64), 'b'.repeat(64)];
+  await client.prioritize(priorityChoices(ids, 'ready'));
+  await client.prioritize(priorityChoices(ids, 'not_found'));
+  expect(requests).toEqual([]);
+  // Only the model still waiting is named.
+  await client.prioritize([
+    ...priorityChoices([ids[0] ?? ''], 'ready'),
+    ...priorityChoices([ids[1] ?? ''], 'retrying'),
+  ]);
+  expect(requests).toEqual(['/sugarcubes/v1/models/metadata/prioritize']);
+});
+
+test('two prompts naming different models on every catalog change name each model once', async () => {
+  const bodies: string[] = [];
+  const client = new ModelCatalogClient(async (_path, options) => {
+    bodies.push(String(options?.body));
+    return response({}, 202);
+  });
+  const first = priorityChoices(['a'.repeat(64)]);
+  const second = priorityChoices(['b'.repeat(64)]);
+  // Each prompt editor names its own LoRAs again every time the catalog changes.
+  for (let revision = 0; revision < 4; revision++) {
+    await client.prioritize(first, 'once');
+    await client.prioritize(second, 'once');
+  }
+  expect(bodies).toEqual([
+    JSON.stringify({ modelIds: ['a'.repeat(64)] }),
+    JSON.stringify({ modelIds: ['b'.repeat(64)] }),
+  ]);
+  // A model that stopped waiting and waits again later is named once more.
+  await client.prioritize(priorityChoices(['a'.repeat(64)], 'ready'), 'once');
+  await client.prioritize(first, 'once');
+  expect(bodies).toHaveLength(3);
+});
+
+test('a manual refresh that finds nothing says the card was kept when there is one', async () => {
+  const fetch: ModelApiFetch = async (path) =>
+    path.endsWith('/metadata/refresh')
+      ? response(
+          {
+            jobId: 'a'.repeat(32),
+            status: 'completed',
+            result: { status: 'not_found', kept: true },
+          },
+          202,
+        )
+      : response({ schemaVersion: 1, revision: 1, models: [], fieldContracts: [] });
+  const progress: string[] = [];
+  await new ModelCatalogClient(fetch).refreshMetadata(
+    'b'.repeat(64),
+    (message) => progress.push(message),
+    new AbortController().signal,
+  );
+  expect(progress).toEqual(['Not found. Your card is unchanged.']);
 });
 
 test('rejects corrupt job identities and reports provider failure', async () => {

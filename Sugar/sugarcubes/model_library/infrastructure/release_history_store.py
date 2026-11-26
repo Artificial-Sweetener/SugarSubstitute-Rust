@@ -17,9 +17,9 @@
 
 from __future__ import annotations
 
-from contextlib import closing
 from pathlib import Path
-import sqlite3
+
+from .library_sqlite import library_database
 
 from ..application.release_history import ReleaseHistorySnapshot
 from .release_history_codec import decode_history, encode_history
@@ -32,14 +32,14 @@ class SqliteReleaseHistory:
         """Create a dedicated cache without modifying catalog or workflow usage state."""
         self.path = path
         path.parent.mkdir(parents=True, exist_ok=True)
-        with closing(sqlite3.connect(path, timeout=5)) as connection, connection:
+        with library_database(path, timeout=5).transaction() as connection:
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS release_history (key TEXT PRIMARY KEY, payload TEXT NOT NULL)"
             )
 
     def read(self, key: str) -> ReleaseHistorySnapshot | None:
         """Validate cached provider evidence at the storage boundary."""
-        with closing(sqlite3.connect(self.path, timeout=5)) as connection:
+        with library_database(self.path, timeout=5).transaction() as connection:
             row = connection.execute(
                 "SELECT payload FROM release_history WHERE key=?", (key,)
             ).fetchone()
@@ -54,7 +54,7 @@ class SqliteReleaseHistory:
         """Commit one validated successful response, leaving earlier history intact on failure."""
         payload = encode_history(snapshot)
         decode_history(payload)
-        with closing(sqlite3.connect(self.path, timeout=5)) as connection, connection:
+        with library_database(self.path, timeout=5).transaction() as connection:
             connection.execute(
                 "INSERT INTO release_history (key,payload) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET payload=excluded.payload",
                 (key, payload),
@@ -62,5 +62,5 @@ class SqliteReleaseHistory:
 
     def clear(self) -> None:
         """Remove disposable provider history while retaining user update decisions."""
-        with closing(sqlite3.connect(self.path, timeout=5)) as connection, connection:
+        with library_database(self.path, timeout=5).transaction() as connection:
             connection.execute("DELETE FROM release_history")

@@ -21,7 +21,15 @@ from dataclasses import dataclass
 import re
 from urllib.parse import urlsplit
 
-from ..domain.thumbnail_safety import CivitaiThumbnailSafety, allows_civitai_image
+from ..domain.models import PreviewCandidate
+from ..domain.thumbnail_safety import (
+    CivitaiThumbnailSafety,
+    allows_civitai_image,
+    civitai_image_tier,
+)
+
+# How many of a version's images are remembered as thumbnail candidates.
+PREVIEW_CANDIDATE_LIMIT = 16
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,3 +137,38 @@ def select_civitai_thumbnail(
             url = url.replace("/original=true/", "/width=512/", 1)
         return CivitaiThumbnail(image_id, url)
     return None
+
+
+def civitai_preview_candidates(images: object) -> tuple[PreviewCandidate, ...]:
+    """Remember every reviewed image with its content tier, in provider order."""
+    if not isinstance(images, list):
+        return ()
+    candidates: dict[str, PreviewCandidate] = {}
+    for image in images:
+        if not isinstance(image, dict):
+            continue
+        url = image.get("url")
+        if not isinstance(url, str) or not valid_preview_url(url):
+            continue
+        image_type, nsfw, level = (
+            image.get("type"),
+            image.get("nsfw"),
+            image.get("nsfwLevel"),
+        )
+        if (
+            image_type is not None
+            and not isinstance(image_type, str)
+            or nsfw is not None
+            and not isinstance(nsfw, bool)
+            or level is not None
+            and (not isinstance(level, (str, int)) or isinstance(level, bool))
+        ):
+            continue
+        if image_type is not None and image_type.casefold() not in ("image", "video"):
+            continue
+        candidates.setdefault(
+            url, PreviewCandidate(url, civitai_image_tier(nsfw=nsfw, level=level))
+        )
+        if len(candidates) == PREVIEW_CANDIDATE_LIMIT:
+            break
+    return tuple(candidates.values())

@@ -26,6 +26,7 @@ import { ModelPickerAppearance } from './ModelPickerAppearance.js';
 import { readComfyModelFields } from './ComfyModelFieldAdapter.js';
 import { ComfyNodeVNodeIndex } from '../surface/ComfyVueTree.js';
 import { sameModelFiles } from './ModelCatalog.js';
+import { liveCatalogModels } from './LiveCatalogModels.js';
 import { modelPickerChoices, orderModelsByTitle } from './ModelPickerChoices.js';
 import { mountModelPicker } from './vue/ModelPickerVueRuntime.js';
 import { mountModelGallery } from './vue/ModelGalleryVueRuntime.js';
@@ -67,7 +68,7 @@ export class ModelPickerHost {
     /** Prepare discovery without mounting until the host preference enables it. */
     constructor(options) {
         this.#options = options;
-        this.#sessions = new ModelPickerSessions(options.document, () => this.#snapshot, options.app);
+        this.#sessions = new ModelPickerSessions(options.document, () => this.#held(), options.app);
         this.#page = options.document.defaultView
             ? new ModelPageActivity(options.document.defaultView, () => this.#reconcile(), () => this.dispose())
             : null;
@@ -75,7 +76,7 @@ export class ModelPickerHost {
             ? new ModelEmptyPickerDiscovery({
                 ...options.discovery,
                 document: options.document,
-                snapshot: () => this.#snapshot,
+                snapshot: () => this.#held(),
                 sessions: this.#sessions,
                 compatibility: (binding, snapshot) => comfyModelCompatibilityContext(options.app, binding, snapshot),
                 reportError: options.reportError,
@@ -147,7 +148,7 @@ export class ModelPickerHost {
     }
     /** Contribute mounted field actions without rediscovering models or duplicating commands. */
     contextContributions(root) {
-        return mountedModelContextContributions(this.#mounts.values(), root, this.#options.app, this.#snapshot, () => this.#resolveCubeFields());
+        return mountedModelContextContributions(this.#mounts.values(), root, this.#options.app, this.#held(), () => this.#resolveCubeFields());
     }
     /**
      * Mount the picker's popup surface and wall for an owner that keeps its own candidates.
@@ -178,10 +179,11 @@ export class ModelPickerHost {
      * when it is dismissed or the catalog cannot be read.
      */
     async chooseModel(kind, label, anchor) {
-        const snapshot = this.#snapshot ?? (await this.#options.catalog.load());
+        const catalog = this.#options.catalog;
+        const held = catalog.current() ?? (await catalog.load());
         if (this.#disposed)
             return null;
-        const items = orderModelsByTitle(snapshot.items.filter((item) => item.kind === kind));
+        const items = liveCatalogModels(catalog, held, (snapshot) => orderModelsByTitle(snapshot.items.filter((item) => item.kind === kind)), this.#options.reportError);
         return new Promise((resolve) => {
             // A model chosen here belongs to no workflow field, so a chosen version applies nowhere.
             const session = new ModelPickerSession(this.#options.document, () => null);
@@ -212,6 +214,14 @@ export class ModelPickerHost {
         // A model chosen here belongs to no workflow field, so a chosen version applies nowhere.
         this.#menu ??= new ModelMenu(this.#context(), new ModelPickerSession(this.#options.document, () => null));
         return this.#menu.project(item);
+    }
+    /**
+     * The catalog as its owner holds it now. Field pickers are published to only while this host
+     * is active; menus, dialogs and choosers it opens at any other time still read the current
+     * catalog, not the last one this host was published.
+     */
+    #held() {
+        return this.#options.catalog.current() ?? this.#snapshot;
     }
     /**
      * Every wall this host mounts reports the models it has on screen, and the model library looks

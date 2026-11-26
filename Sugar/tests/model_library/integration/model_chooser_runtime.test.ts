@@ -20,6 +20,7 @@ import { openModelChooser } from '../../../frontend/comfyui/ui/model_library/vue
 import type { ModelCatalogItem } from '../../../frontend/comfyui/ui/model_library/ModelCatalog.js';
 import { modelPickerChoices } from '../../../frontend/comfyui/ui/model_library/ModelPickerChoices.js';
 import { ModelFixtureResizeObserver } from '../support/resize_observer.js';
+import { liveModels } from '../support/live_models.js';
 
 beforeAll(() => {
   Object.defineProperty(window, 'ResizeObserver', {
@@ -47,10 +48,11 @@ const context = {
 /** Open the chooser over the fixture models and collect how it settles. */
 function open(models: readonly ModelCatalogItem[] = items) {
   const settled: (ModelCatalogItem | null)[] = [];
+  const catalog = liveModels(models);
   const chooser = openModelChooser(
     document,
     {
-      items: models,
+      items: catalog.models,
       label: 'Search LoRA',
       anchor: { left: 40, top: 40, width: 1, height: 1 },
       context,
@@ -73,7 +75,7 @@ function open(models: readonly ModelCatalogItem[] = items) {
     input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
     await nextTick();
   };
-  return { chooser, input, settled, tiles, type, press };
+  return { chooser, input, settled, tiles, type, press, catalog };
 }
 
 test('opens as the picker popup with a named search box, folders and every model', async () => {
@@ -163,4 +165,49 @@ test('right-clicking a card opens the same model menu as the model picker, and c
   menu!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
   expect(f.settled).toEqual([]);
   f.chooser.dismiss();
+});
+
+test('an open chooser shows what the catalog publishes, without being reopened', async () => {
+  const f = open();
+  await nextTick();
+  const [first, ...rest] = items;
+  if (!first) throw new Error('The fixture has no models.');
+  const tile = (): HTMLElement | null =>
+    document.querySelector<HTMLElement>(`.sc-model-tile[data-model-value="${first.value}"]`);
+  expect(tile()?.textContent).toContain('No Thumbnail');
+  f.catalog.publish([
+    { ...first, image: { state: 'not_found', blurred: false, reveal: [] } },
+    ...rest,
+  ]);
+  await nextTick();
+  expect(tile()?.textContent).toContain('Not Found');
+  expect(tile()?.textContent).not.toContain('No Thumbnail');
+  f.catalog.publish([
+    { ...first, image: { state: 'retrying', blurred: false, reveal: [] } },
+    ...rest,
+  ]);
+  await nextTick();
+  expect(tile()?.querySelector('.sc-model-blank-flash')?.textContent).toBe('Retrying…');
+  f.chooser.dismiss();
+  // A closed chooser no longer follows the catalog.
+  expect(f.catalog.watchers()).toBe(0);
+});
+
+test('a chooser cannot be handed the catalog as it was when it opened', () => {
+  /** Never run: the compiler is the proof. A chooser takes models that follow the catalog. */
+  const frozen = (models: readonly ModelCatalogItem[]): void => {
+    openModelChooser(
+      document,
+      {
+        // @ts-expect-error An array is the catalog as it was; a mounted surface must follow it.
+        items: models,
+        label: 'Search LoRA',
+        anchor: { left: 0, top: 0, width: 1, height: 1 },
+        context,
+        session: null,
+      },
+      () => undefined,
+    );
+  };
+  expect(typeof frozen).toBe('function');
 });

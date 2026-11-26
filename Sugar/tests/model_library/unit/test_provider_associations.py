@@ -17,6 +17,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+
+from tests.model_library.support.enrichment import no_weights_hash
 from sugarcubes.model_library.domain.provider_metadata import ProviderMetadataRecord
 
 import asyncio
@@ -53,7 +56,13 @@ class ExactProvider:
         self.match = match
         self.hashes: list[str] = []
 
-    async def lookup(self, sha256: str) -> ProviderModelVersion | None:
+    async def lookup(
+        self,
+        sha256: str,
+        weights_hash: Callable[[], Awaitable[str | None]],
+        *,
+        ask_again: bool = False,
+    ) -> ProviderModelVersion | None:
         """Record exact content evidence for each supported lookup."""
         self.hashes.append(sha256)
         return self.match
@@ -89,7 +98,7 @@ def test_every_supported_hash_match_is_retained_in_reference_order() -> None:
             RegisteredModelProvider(frozenset(), civitai),
         )
     )
-    result = asyncio.run(registry.lookup("a" * 64, "upscale_models"))
+    result = asyncio.run(registry.lookup("a" * 64, "upscale_models", no_weights_hash))
     assert result == (first, second)
     assert [
         (link.provider_id, link.model_id, link.version_id)
@@ -97,7 +106,7 @@ def test_every_supported_hash_match_is_retained_in_reference_order() -> None:
         for link in version.metadata(()).links()
     ] == [("openmodeldb", "4x-Fixture", "4x-Fixture"), ("civitai", "10", "20")]
     assert upscaler.hashes == ["a" * 64] and civitai.hashes == ["a" * 64, "a" * 64]
-    asyncio.run(registry.lookup("b" * 64, "loras"))
+    asyncio.run(registry.lookup("b" * 64, "loras", no_weights_hash))
     assert upscaler.hashes == ["a" * 64]
 
 

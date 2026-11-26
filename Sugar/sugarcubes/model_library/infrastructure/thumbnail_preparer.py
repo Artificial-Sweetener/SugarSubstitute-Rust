@@ -20,7 +20,7 @@ from __future__ import annotations
 from io import BytesIO
 import hashlib
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageFilter, ImageOps
 
 from ..domain.banner_crop import choose_banner_crop
 from ..domain.models import ThumbnailReference
@@ -29,6 +29,7 @@ from .thumbnail_assets import ModelThumbnailAssets
 from .preview_frame import first_preview_frame
 
 _PREPARATION_POLICY = b"portable-model-thumbnail-v1\0"
+_BLUR_POLICY = b"portable-model-thumbnail-blur-v1\0"
 
 
 class ModelThumbnailPreparer:
@@ -56,6 +57,37 @@ class ModelThumbnailPreparer:
             hashlib.sha256(_PREPARATION_POLICY + content).hexdigest(),
             lambda: self._prepare(content),
         )
+
+    def blur(
+        self, thumbnails: tuple[ThumbnailReference, ...]
+    ) -> tuple[ThumbnailReference, ...]:
+        """Make one blurred file per prepared sharp file, from the files already on disk.
+
+        The blur is strong enough that the sharp image cannot be recovered from it, and it is
+        a file of its own, so a consumer shown only blurred files never receives the original.
+        """
+        if not thumbnails:
+            raise ValueError(
+                "A blurred thumbnail needs prepared files to be made from."
+            )
+        return self._assets.prepare_source(
+            self._origin,
+            hashlib.sha256(
+                _BLUR_POLICY + "\0".join(item.asset_id for item in thumbnails).encode()
+            ).hexdigest(),
+            lambda: tuple(self._blurred(item) for item in thumbnails),
+        )
+
+    def _blurred(self, item: ThumbnailReference) -> ThumbnailReference:
+        """Blur one prepared file in proportion to its size, keeping its geometry."""
+        asset = self._assets.resolve(item.asset_id)
+        if asset is None:
+            raise ValueError("A prepared thumbnail is missing from its asset store.")
+        with Image.open(asset.path) as stored:
+            image = stored.convert("RGB").filter(
+                ImageFilter.GaussianBlur(max(stored.width, stored.height) / 14)
+            )
+        return self._publish(image, f"{item.role}-blurred")
 
     def _prepare(self, content: bytes) -> tuple[ThumbnailReference, ...]:
         """Decode and publish variants while holding the source owner's collection lease."""

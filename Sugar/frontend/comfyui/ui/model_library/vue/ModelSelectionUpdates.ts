@@ -25,9 +25,15 @@ export function useModelSelectionUpdates(
   updates: ModelUpdatePort | null,
   feedback: ModelPickerFeedback | null,
 ): void {
+  // A republished catalog replaces the selected model's object whenever its image or labels
+  // change. Only another model, or another installed version of it, is a new selection.
   watch(
-    selected,
-    (item) => {
+    () => {
+      const item = selected();
+      return item ? `${item.kind}\n${item.id}\n${item.providerVersionId}` : '';
+    },
+    () => {
+      const item = selected();
       if (
         !item ||
         !['checkpoints', 'diffusion_models', 'loras'].includes(item.kind) ||

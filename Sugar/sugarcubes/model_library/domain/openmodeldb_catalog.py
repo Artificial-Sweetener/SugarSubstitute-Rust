@@ -21,7 +21,9 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Mapping
 
+from .models import PreviewCandidate
 from .provider_models import ProviderModelVersion
+from .thumbnail_safety import SAFE_TIER
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +95,11 @@ class OpenModelDbModel:
             description=self.description or "",
             trained_words=(),
             preview_url=self.thumbnail_url,
+            previews=(
+                (PreviewCandidate(self.thumbnail_url, SAFE_TIER),)
+                if self.thumbnail_url
+                else ()
+            ),
         )
 
 

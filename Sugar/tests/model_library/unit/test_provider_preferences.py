@@ -144,7 +144,9 @@ def test_existing_complete_policy_migrates_without_resetting_saved_choices(
         **legacy,
         "missingModelLookupEnabled": False,
         "downloadsEnabled": False,
+        "thumbnailRevealOnHover": False,
     }
+    assert not reopened.reveal_on_hover()
 
 
 @pytest.mark.parametrize(

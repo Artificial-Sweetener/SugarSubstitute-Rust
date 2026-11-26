@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+from tests.model_library.support.enrichment import no_weights_hash
 import asyncio
 import json
 from pathlib import Path
@@ -71,6 +72,7 @@ def test_host_and_http_share_persistent_policy_without_provider_traffic(
                     "downloadsEnabled": True,
                     "thumbnailDownloadsEnabled": True,
                     "thumbnailSafety": "sfw_only",
+                    "thumbnailRevealOnHover": False,
                 }
                 assert (
                     await (await client.get("/sugarcubes/v1/models/preferences")).json()
@@ -90,10 +92,18 @@ def test_host_and_http_share_persistent_policy_without_provider_traffic(
                 assert response.status == 200
                 assert (await response.json())["thumbnailSafety"] == "allow_soft"
                 assert not runtime.preferences.metadata_lookup_enabled()
+                assert not runtime.preferences.reveal_on_hover()
+                response = await client.patch(
+                    "/sugarcubes/v1/models/preferences",
+                    json={"thumbnailRevealOnHover": True},
+                )
+                assert response.status == 200
+                assert (await response.json())["thumbnailRevealOnHover"] is True
                 for payload in (
                     {},
                     {"metadataLookupEnabled": "false"},
                     {"thumbnailSafety": "invalid"},
+                    {"thumbnailRevealOnHover": "true"},
                     {"apiKey": "bad"},
                 ):
                     assert (
@@ -199,7 +209,7 @@ def test_explicit_missing_model_lookup_is_independent_of_metadata_opt_out(
     async def exercise() -> None:
         """Observe real hash lookup, history parsing, and live preference changes at HTTP seam."""
         try:
-            assert await provider.lookup("a" * 64) is None
+            assert await provider.lookup("a" * 64, no_weights_hash) is None
             assert not session.requests
             offer = await runtime.desktop_acquisitions.artifacts.offer(
                 "a" * 64, "loras"

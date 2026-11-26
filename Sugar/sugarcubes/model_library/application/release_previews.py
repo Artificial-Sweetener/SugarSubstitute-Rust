@@ -21,7 +21,7 @@ import asyncio
 import logging
 
 from .release_service import ModelReleaseService
-from .enrichment_service import ModelPreviewPreparer
+from .thumbnail_fill import ModelPreviewPreparer
 from .blocking_model_work import complete_blocking_model_work
 from .metadata_activity import ModelMetadataActivity
 from ..domain.models import ThumbnailReference

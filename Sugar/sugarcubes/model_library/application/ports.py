@@ -70,6 +70,18 @@ class ModelCatalogRepository(Protocol):
     def revision(self) -> int:
         """Return a monotonic token for catalog consumers."""
 
+    def changes_since(self, held: int) -> tuple[int, frozenset[str] | None]:
+        """Return the current revision and the models changed after a held one.
+
+        The models are None when the change cannot be named model by model.
+        """
+
+    def find_entries(self, identities: Sequence[str]) -> tuple[ModelCatalogEntry, ...]:
+        """Read the named models as they are now, leaving out any that no longer exist."""
+
+    def has_content(self, kind: str, sha256: str) -> bool:
+        """Say whether a file of this kind with exactly this content is in the catalog."""
+
     def find_entry(self, location_id: str) -> ModelCatalogEntry | None:
         """Resolve a catalog identity without accepting caller-provided filesystem paths."""
 
@@ -90,8 +102,8 @@ class ModelCatalogRepository(Protocol):
     ) -> None:
         """Publish a deliberate user choice independently of every provider match."""
 
-    def clear_provider_metadata(self, sha256: str) -> None:
-        """Remove a disproved provider association while retaining user and local presentation."""
+    def provider_records(self, sha256: str) -> tuple[ProviderMetadataRecord, ...]:
+        """Read every stored provider match for a file's content, in presentation order."""
 
     def save_provider_metadata(
         self,

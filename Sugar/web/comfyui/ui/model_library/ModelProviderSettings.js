@@ -63,6 +63,16 @@ export class ModelProviderSettings {
             // Thumbnail safety applies only while thumbnails are downloaded.
             enabled: this.#ready((value) => value.thumbnailDownloadsEnabled),
         });
+        catalog.contribute('model_sources.safety.civitai_thumbnail_reveal', {
+            controls: [
+                {
+                    kind: 'switch',
+                    value: this.#field('thumbnailRevealOnHover', (value) => value.thumbnailRevealOnHover),
+                },
+            ],
+            // There is something to reveal only while thumbnails are shown blurred.
+            enabled: this.#ready((value) => value.thumbnailDownloadsEnabled && value.thumbnailSafety === 'blur'),
+        });
         this.#load();
     }
     /** A live value for one policy field, written as one change to the server. */

@@ -87,13 +87,12 @@ def register_model_library_routes(
         )
 
     async def changes(request: web.Request) -> web.Response:
-        """Long-poll a cheap committed token shared by every model-picker consumer."""
+        """Long-poll for a newer revision and name the models that changed since the held one."""
         try:
             after = int(request.query.get("afterRevision", "-1"))
-            revision = await runtime.updates.wait(after)
+            return web.json_response(await runtime.catalog_changes(after))
         except ValueError:
             return _error("Invalid model catalog revision.", 400)
-        return web.json_response({"schemaVersion": 1, "revision": revision})
 
     async def refresh_metadata(request: web.Request) -> web.Response:
         """Queue one explicit background provider lookup through the library use case."""

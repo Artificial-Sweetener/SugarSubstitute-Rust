@@ -36,6 +36,7 @@ from .infrastructure.comfy_roots import ComfyModelRoots
 from .infrastructure.runtime import ModelLibraryRuntime
 from .infrastructure.comfy_model_usage import ComfyModelUsageObserver
 from .infrastructure.comfy_credentials import host_civitai_credential_store
+from .infrastructure.library_sqlite import close_library_databases
 from .host_api import (
     active_model_library,
     model_library_for_host,
@@ -97,6 +98,8 @@ def install_model_library(prompt_server: object) -> ModelLibraryRuntime:
         await runtime.release_previews.close()
         usage_observer.close()
         release_model_library(runtime)
+        # Every owner of the library's databases has stopped; release the files.
+        close_library_databases(runtime.repository.asset_root.parent)
 
     host_app.on_cleanup.append(close_library)
     host_app.on_startup.append(start_library)

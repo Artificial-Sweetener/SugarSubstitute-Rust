@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+from tests.model_library.support.enrichment import no_weights_hash
 from sugarcubes.model_library.infrastructure.relationship_catalog import (
     model_relationships,
 )
@@ -30,8 +31,12 @@ import pytest
 
 from sugarcubes.model_library.application.enrichment_service import (
     ModelEnrichmentService,
+)
+from sugarcubes.model_library.application.thumbnail_fill import (
     ModelPreviewUnavailableError,
 )
+from sugarcubes.model_library.domain.thumbnail_safety import CivitaiThumbnailSafety
+from collections.abc import Awaitable, Callable
 from sugarcubes.model_library.application.catalog_service import ModelCatalogService
 from sugarcubes.model_library.domain.models import (
     ModelEvidence,
@@ -55,7 +60,11 @@ from sugarcubes.model_library.infrastructure.fingerprints import (
     ApprovedModelFingerprints,
 )
 from tests.model_library.support.model_roots import FixtureFileRoots
-from tests.model_library.support.enrichment import ObservedProvider, ObservedPreviews
+from tests.model_library.support.enrichment import (
+    ObservedPreviews,
+    ObservedProvider,
+    thumbnail_fill,
+)
 from sugarcubes.model_library.infrastructure.openmodeldb_codec import (
     parse_openmodeldb_catalog,
     approved_openmodeldb_preview,
@@ -131,7 +140,7 @@ def test_explicit_enrichment_uses_verified_content_and_preserves_user_metadata(
         repository,
         ModelFingerprintService(repository, ApprovedModelFingerprints(roots)),
         provider,
-        ObservedPreviews(),
+        thumbnail_fill(repository, ObservedPreviews()),
     )
     result = asyncio.run(service.refresh(repository.list_entries()[0])).to_payload()
     assert result["status"] == "found"
@@ -139,8 +148,14 @@ def test_explicit_enrichment_uses_verified_content_and_preserves_user_metadata(
     current = repository.list_entries()[0]
     assert current.sha256 == digest
     assert current.metadata is not None and current.metadata.title == "User title"
+    links = current.metadata.links()
+    assert [link.provider_id for link in links] == ["civitai"]
     provider.version = None
-    assert asyncio.run(service.refresh(current)).status == "not_found"
+    missed = asyncio.run(service.refresh(current))
+    assert missed.status == "not_found" and missed.kept
+    kept = repository.list_entries()[0]
+    assert kept.metadata is not None and kept.metadata.title == "User title"
+    assert kept.metadata.links() == links
 
 
 def test_stale_fingerprints_never_reach_provider_requests(tmp_path: Path) -> None:
@@ -157,7 +172,7 @@ def test_stale_fingerprints_never_reach_provider_requests(tmp_path: Path) -> Non
         repository,
         ModelFingerprintService(repository, ApprovedModelFingerprints(roots)),
         provider,
-        ObservedPreviews(),
+        thumbnail_fill(repository, ObservedPreviews()),
     )
     with pytest.raises(ValueError, match="changed"):
         asyncio.run(service.refresh(entry))
@@ -170,6 +185,10 @@ class UnexpectedFingerprintRead:
     async def fingerprint(self, evidence: ModelEvidence) -> str:
         """Make unnecessary fingerprint work observable in reuse proofs."""
         raise AssertionError("Verified catalog hashes must be reused.")
+
+    async def weights_fingerprint(self, evidence: ModelEvidence) -> str | None:
+        """Make an unnecessary weights read observable in reuse proofs."""
+        raise AssertionError("No provider in this proof asks for a weights hash.")
 
 
 def test_verified_fingerprint_reuse_still_checks_catalog_freshness(
@@ -188,7 +207,7 @@ def test_verified_fingerprint_reuse_still_checks_catalog_freshness(
         repository,
         ModelFingerprintService(repository, UnexpectedFingerprintRead()),
         provider,
-        ObservedPreviews(),
+        thumbnail_fill(repository, ObservedPreviews()),
     )
     assert asyncio.run(service.refresh(entry)).status == "not_found"
     assert provider.hashes == ["a" * 64]
@@ -208,13 +227,25 @@ class UnavailablePreviews:
             "Fixture image is unavailable.", reason="fixture offline", expected=True
         )
 
+    async def blur(
+        self, thumbnails: tuple[ThumbnailReference, ...]
+    ) -> tuple[ThumbnailReference, ...]:
+        """Reject blurring through the same recoverable failure."""
+        raise ModelPreviewUnavailableError(
+            "Fixture image is unavailable.", reason="fixture offline", expected=True
+        )
+
     def available(self, thumbnails: tuple[ThumbnailReference, ...]) -> bool:
         """Retain known fixture fallback assets while only new transport is unavailable."""
         return True
 
 
 def test_preview_failure_preserves_metadata_and_previous_image(tmp_path: Path) -> None:
-    """Complete metadata refresh with an observable warning when image transport fails."""
+    """Complete metadata refresh with an observable warning when image transport fails.
+
+    The stored image has no known tier, so a strict setting filters it and the safe image the
+    provider offers is wanted; failing to fetch that one leaves the stored image in place.
+    """
     content = b"fixture-only-no-weights"
     (tmp_path / "fixture.safetensors").write_bytes(content)
     roots = FixtureFileRoots(tmp_path)
@@ -227,7 +258,9 @@ def test_preview_failure_preserves_metadata_and_previous_image(tmp_path: Path) -
         digest,
         (
             ProviderMetadataRecord(
-                ModelMetadata(title="Old title", thumbnails=fallback)
+                ModelMetadata(
+                    title="Old title", provider="civitai", thumbnails=fallback
+                )
             ),
         ),
     )
@@ -246,13 +279,21 @@ def test_preview_failure_preserves_metadata_and_previous_image(tmp_path: Path) -
         repository,
         ModelFingerprintService(repository, ApprovedModelFingerprints(roots)),
         ObservedProvider(version),
-        UnavailablePreviews(),
+        thumbnail_fill(
+            repository, UnavailablePreviews(), lambda: CivitaiThumbnailSafety.SFW_ONLY
+        ),
     )
-    result = asyncio.run(service.refresh(repository.list_entries()[0])).to_payload()
-    assert result["status"] == "found" and "warning" in result
+    result = asyncio.run(
+        service.refresh(repository.list_entries()[0], replace_labels=True)
+    ).to_payload()
+    assert result["status"] == "found"
+    assert result["warning"] == "Metadata refreshed. The thumbnail will be tried again."
     metadata = repository.list_entries()[0].metadata
     assert metadata is not None
     assert metadata.title == "Fresh title" and metadata.thumbnails == fallback
+    assert [(item.url, item.thumbnails) for item in metadata.previews] == [
+        ("https://image.civitai.com/fixture.jpg", ())
+    ]
 
 
 class HashLookupFixture:
@@ -263,7 +304,13 @@ class HashLookupFixture:
         self.version = version
         self.calls = 0
 
-    async def lookup(self, sha256: str) -> ProviderModelVersion | None:
+    async def lookup(
+        self,
+        sha256: str,
+        weights_hash: Callable[[], Awaitable[str | None]],
+        *,
+        ask_again: bool = False,
+    ) -> ProviderModelVersion | None:
         """Count actual provider calls without network or model bytes."""
         self.calls += 1
         return self.version
@@ -308,12 +355,14 @@ def test_openmodeldb_exact_hash_normalization_and_kind_precedence() -> None:
             RegisteredModelProvider(frozenset(), fallback),
         )
     )
-    result = asyncio.run(providers.lookup("a" * 64, "upscale_models"))
+    result = asyncio.run(providers.lookup("a" * 64, "upscale_models", no_weights_hash))
     assert result == (version,)
     assert result[0].metadata(()).links()[0].provider_id == "openmodeldb"
     assert fallback.calls == 1
-    assert asyncio.run(providers.lookup("a" * 64, "checkpoints")) == ()
+    assert asyncio.run(providers.lookup("a" * 64, "checkpoints", no_weights_hash)) == ()
     assert upscalers.calls == 1 and fallback.calls == 2
     upscalers.version = None
-    assert asyncio.run(providers.lookup("a" * 64, "upscale_models")) == ()
+    assert (
+        asyncio.run(providers.lookup("a" * 64, "upscale_models", no_weights_hash)) == ()
+    )
     assert fallback.calls == 3

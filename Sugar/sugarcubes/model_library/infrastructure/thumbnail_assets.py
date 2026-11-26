@@ -109,11 +109,12 @@ class ModelThumbnailAssets:
     def resolve(self, asset_id: str) -> PreparedAsset | None:
         """Resolve an approved regular file with one authoritative size and timestamp snapshot."""
         identity = normalized_hash(asset_id)
+        # The identity is validated hex, so the name cannot leave the namespace; a link placed
+        # there is not a regular file and is refused without being followed. One stat, with no
+        # path resolution: every stored image of a library is checked this way in a row.
         path = self._root / f"{identity}.webp"
-        if not path.resolve().is_relative_to(self._root):
-            return None
         try:
-            evidence = path.stat()
+            evidence = path.lstat()
         except FileNotFoundError:
             return None
         if not stat.S_ISREG(evidence.st_mode):

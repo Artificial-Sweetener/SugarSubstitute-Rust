@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+from tests.model_library.support.enrichment import no_weights_hash
 from sugarcubes.model_library.infrastructure.relationship_catalog import (
     model_relationships,
 )
@@ -74,7 +75,7 @@ def test_metadata_and_history_share_the_provider_cooldown(
         """Observe the same public provider across both request operations."""
         provider = CivitaiModelProvider()
         with pytest.raises(ValueError, match="HTTP 429"):
-            await provider.lookup("a" * 64)
+            await provider.lookup("a" * 64, no_weights_hash)
         with pytest.raises(ValueError, match="cooldown"):
             await provider.releases("1")
 
@@ -93,7 +94,9 @@ def test_discovery_cannot_bypass_metadata_rate_limits(
         """Use one transport exactly as the production runtime composes its collaborators."""
         transport = CivitaiTransport()
         with pytest.raises(ValueError, match="HTTP 429"):
-            await CivitaiModelProvider(transport=transport).lookup("a" * 64)
+            await CivitaiModelProvider(transport=transport).lookup(
+                "a" * 64, no_weights_hash
+            )
         with pytest.raises(ValueError, match="cooldown"):
             await CivitaiFamilyDiscovery(transport, model_relationships()).discover(
                 ModelSuggestionContext("checkpoints", "sdxl"),
@@ -123,10 +126,10 @@ def test_metadata_and_history_follow_the_current_thumbnail_policy(
     async def exercise() -> None:
         """Change user policy without replacing either the metadata or transport owner."""
         provider = CivitaiModelProvider(thumbnail_policy=lambda: policies[0])
-        default = await provider.lookup("a" * 64)
+        default = await provider.lookup("a" * 64, no_weights_hash)
         assert default is not None and default.preview_url is None
         policies[0] = CivitaiThumbnailSafety.ALLOW_SOFT
-        allowed = await provider.lookup("a" * 64)
+        allowed = await provider.lookup("a" * 64, no_weights_hash)
         assert (
             allowed is not None
             and allowed.preview_url == "https://image.civitai.com/soft.jpg"
@@ -228,7 +231,7 @@ def test_credentials_stay_off_the_image_cdn_and_redirects_are_disabled(
     async def exercise() -> None:
         """Use the same provider instance for metadata and preview transport."""
         provider = CivitaiModelProvider(lambda: "fixture-token")
-        assert await provider.lookup("a" * 64) is not None
+        assert await provider.lookup("a" * 64, no_weights_hash) is not None
         session.response = TransportResponse(200, b"image bytes", "image/webp")
         assert (
             await provider.read_preview("https://image.civitai.com/fixture.webp")
@@ -253,13 +256,13 @@ def test_missing_results_and_cooldowns_do_not_repeat_requests(
         """Run successive public lookups with deterministic remote responses."""
         provider = CivitaiModelProvider()
         if status == 404:
-            assert await provider.lookup("a" * 64) is None
-            assert await provider.lookup("a" * 64) is None
+            assert await provider.lookup("a" * 64, no_weights_hash) is None
+            assert await provider.lookup("a" * 64, no_weights_hash) is None
         else:
             with pytest.raises(ValueError, match="unavailable"):
-                await provider.lookup("a" * 64)
+                await provider.lookup("a" * 64, no_weights_hash)
             with pytest.raises(ValueError, match="cooldown"):
-                await provider.lookup("b" * 64)
+                await provider.lookup("b" * 64, no_weights_hash)
 
     asyncio.run(exercise())
     assert len(session.requests) == 1
@@ -292,12 +295,12 @@ def test_openmodeldb_cache_revalidation_and_offline_fallback(
     async def exercise() -> None:
         """Exercise the public lookup contract while controlling only transport responses."""
         provider = OpenModelDbProvider(cache)
-        result = await provider.lookup("a" * 64)
+        result = await provider.lookup("a" * 64, no_weights_hash)
         assert (
             result is not None
             and result.preview_url == "https://openmodeldb.info/thumbs/fixture.jpg"
         )
-        assert await provider.lookup("b" * 64) is None
+        assert await provider.lookup("b" * 64, no_weights_hash) is None
         assert len(session.requests) == 1
         assert any(
             headers.get("If-None-Match") == '"fixture-etag"'
@@ -311,8 +314,8 @@ def test_openmodeldb_cache_revalidation_and_offline_fallback(
         cache.save(ProviderCatalogSnapshot(payload, 0, None))
         session.response = TransportResponse(503, b"{}")
         fallback = OpenModelDbProvider(cache)
-        assert await fallback.lookup("a" * 64) is not None
-        assert await fallback.lookup("a" * 64) is not None
+        assert await fallback.lookup("a" * 64, no_weights_hash) is not None
+        assert await fallback.lookup("a" * 64, no_weights_hash) is not None
         assert len(session.requests) == 3
         preview_session = TransportSession(
             TransportResponse(200, b"image bytes", "image/webp"), expected_timeout=10
@@ -359,7 +362,7 @@ def test_metadata_payload_size_and_unapproved_preview_addresses_fail_closed(
         """Reject oversized metadata and unsafe preview requests through public operations."""
         provider = CivitaiModelProvider()
         with pytest.raises(ValueError, match="size limit"):
-            await provider.lookup("a" * 64)
+            await provider.lookup("a" * 64, no_weights_hash)
         with pytest.raises(ValueError, match="not approved"):
             await provider.read_preview("http://127.0.0.1/secret")
 

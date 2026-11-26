@@ -56,4 +56,4 @@ class SqliteModelContentOverrides:
                     "INSERT INTO model_content_overrides VALUES (?,?) ON CONFLICT(sha256) DO UPDATE SET nsfw=excluded.nsfw",
                     (digest, int(nsfw)),
                 )
-            self.database.advance_revision(connection)
+            self.database.advance_for_content(connection, digest)

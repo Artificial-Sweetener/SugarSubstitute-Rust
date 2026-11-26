@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .models import ModelMetadata, ThumbnailReference
+from .models import ModelMetadata, PreviewCandidate, ThumbnailReference
 from .provider_links import ModelProviderLink
 
 
@@ -42,8 +42,16 @@ class ProviderModelVersion:
     tags: tuple[str, ...] = ()
     provider_nsfw: bool | None = None
     provider_nsfw_level: int | None = None
+    # Every image the provider offers, whatever the current safety setting allows.
+    previews: tuple[PreviewCandidate, ...] = ()
 
-    def metadata(self, thumbnails: tuple[ThumbnailReference, ...]) -> ModelMetadata:
+    def metadata(
+        self,
+        thumbnails: tuple[ThumbnailReference, ...],
+        *,
+        thumbnail_tier: int | None = None,
+        previews: tuple[PreviewCandidate, ...] | None = None,
+    ) -> ModelMetadata:
         """Project enriched labels while retaining exact Comfy filenames elsewhere."""
         return ModelMetadata(
             title=self.title,
@@ -61,4 +69,6 @@ class ProviderModelVersion:
             model_type=self.model_type,
             provider_nsfw=self.provider_nsfw,
             provider_nsfw_level=self.provider_nsfw_level,
+            thumbnail_tier=thumbnail_tier,
+            previews=self.previews if previews is None else previews,
         )

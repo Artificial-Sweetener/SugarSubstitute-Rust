@@ -13,18 +13,17 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Own automatic freshness using exact evidence, thumbnail policy and prepared assets."""
+"""Decide whether a file still has a provider it has never been asked about."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Protocol
 
-from .enrichment_service import ModelPreviewPreparer
-from ..domain.enrichment_freshness import ModelEnrichmentRecord
+from ..domain.enrichment_freshness import LEARNED_POLICY, ModelEnrichmentRecord
 from ..domain.models import ModelCatalogEntry, ModelEvidence
 
-_KINDS = frozenset(
+LOOKED_UP_KINDS = frozenset(
     {
         "checkpoints",
         "diffusion_models",
@@ -52,77 +51,42 @@ class ModelEnrichmentCache(Protocol):
 
 
 class ModelEnrichmentFreshness:
-    """Keep freshness independent of transient retries and user presentation overrides."""
+    """Ask each provider about a file once.
+
+    What a provider said is kept: no setting, clock or missing file sends a model that was
+    asked back to its provider. A file is looked up again only when its content changes or a
+    provider it was never asked becomes available.
+    """
 
     def __init__(
         self,
         cache: ModelEnrichmentCache,
-        previews: ModelPreviewPreparer,
-        policy: Callable[[str], str],
-        provider_scope: Callable[[str], str],
         providers: Callable[[str], tuple[str, ...]],
     ) -> None:
-        """Bind durable decisions, prepared asset availability and the current provider policy."""
+        """Bind durable decisions and the providers currently enabled for a model kind."""
         self._cache = cache
-        self._previews = previews
-        self._policy = policy
-        self._provider_scope = provider_scope
         self._providers = providers
 
-    def policy(self, kind: str) -> str:
-        """Capture one selection policy identity for an enrichment operation."""
-        return self._policy(kind)
-
-    def provider_scope(self, kind: str) -> str:
-        """Distinguish a confirmed miss from a lookup performed with providers disabled."""
-        return self._provider_scope(kind)
-
     def providers(self, kind: str) -> tuple[str, ...]:
-        """Retain explicit provider ownership independently of opaque policy identities."""
+        """Name the providers a file of this kind is asked."""
         return self._providers(kind)
 
+    def read(self, entry: ModelCatalogEntry) -> ModelEnrichmentRecord | None:
+        """Return the stored decision for this exact file content, if any."""
+        record = self._cache.read(entry.evidence)
+        return record if record is not None and record.sha256 == entry.sha256 else None
+
     def needs_refresh(self, entry: ModelCatalogEntry) -> bool:
-        """Reconsider stale matches while keeping confirmed misses fresh for unchanged content."""
-        if entry.evidence.kind not in _KINDS:
+        """Report a file some enabled provider has never been asked about."""
+        if entry.evidence.kind not in LOOKED_UP_KINDS:
             return False
-        record = self._cache.read(entry.evidence)
-        if (
-            record is None
-            or entry.sha256 != record.sha256
-            or record.provider_scope != self.provider_scope(entry.evidence.kind)
-            or record.providers != self.providers(entry.evidence.kind)
+        record = self.read(entry)
+        if record is None or not set(self.providers(entry.evidence.kind)) <= set(
+            record.providers
         ):
             return True
-        if record.metadata is None:
-            return False
-        return record.policy != self.policy(
-            entry.evidence.kind
-        ) or not self._previews.available(record.metadata.thumbnails)
-
-    def preserve_previews(self, entry: ModelCatalogEntry, policy: str) -> bool:
-        """Retain valid local images and compatible provider images without hiding broken assets."""
-        if entry.metadata is None or not self._previews.available(
-            entry.metadata.thumbnails
-        ):
-            return False
-        if entry.thumbnail_origin in ("local", "user") or not entry.metadata.provider:
-            return True
-        record = self._cache.read(entry.evidence)
-        return record is not None and (
-            record.policy == policy
-            or (entry.thumbnail_origin in (None, "legacy") and record.local_preview)
-        )
-
-    def local_preview(self, entry: ModelCatalogEntry) -> bool:
-        """Retain the origin of a local fallback across later provider-label refreshes."""
-        if entry.thumbnail_origin is not None:
-            return entry.thumbnail_origin in ("local", "user")
-        record = self._cache.read(entry.evidence)
-        return (
-            entry.thumbnail_origin in ("local", "user")
-            or bool(entry.metadata and not entry.metadata.provider)
-            or bool(record and record.local_preview)
-        )
+        # A miss recorded before files were also asked for by their weights is asked once more.
+        return record.metadata is None and record.policy != LEARNED_POLICY
 
     def record(self, evidence: ModelEvidence, record: ModelEnrichmentRecord) -> None:
         """Persist completed freshness evidence through its single storage boundary."""

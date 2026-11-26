@@ -34,12 +34,11 @@ from .detector_assets import BundledDetectorAssets
 from ..application.detector_service import ModelDetectorService
 from .thumbnail_preparer import ModelThumbnailPreparer
 from .local_presentation import LocalModelPresentation
-from ..application.enrichment_service import (
-    ModelEnrichmentService,
-    ModelProvider,
-    ModelPreviewPreparer,
-)
+from ..application.enrichment_service import ModelEnrichmentService, ModelProvider
+from ..application.thumbnail_fill import ModelPreviewPreparer, ModelThumbnailFill
 from ..application.automatic_enrichment import AutomaticModelEnrichment
+from ..application.legacy_card_repair import LegacyCardRepair
+from ..domain.thumbnail_safety import former_policy_tier
 from .enrichment_attempts import SqliteEnrichmentAttempts
 from .enrichment_worker import ModelEnrichmentWorker
 from .fingerprints import ApprovedModelFingerprints
@@ -195,7 +194,6 @@ class ModelLibraryRuntime:
             installer,
             usage,
             release_history,
-            lambda: self.preferences.image_policy().value,
             self.metadata_activity,
         )
         self.catalog = ModelCatalogService(
@@ -203,6 +201,8 @@ class ModelLibraryRuntime:
             self.repository,
             self.relationships,
             self.releases.cached_version_count,
+            lambda entries: self.owed_work.card_images(entries),
+            self.preferences.reveal_on_hover,
         )
         self.model_updates = ModelUpdateService(usage, self.repository, self.releases)
         self.queued_model_usage = QueuedModelUsageRecorder(
@@ -279,34 +279,42 @@ class ModelLibraryRuntime:
                     RegisteredModelProvider(frozenset(), provider),
                 )
             ),
-            provider_previews,
+            ModelThumbnailFill(
+                self.repository, provider_previews, self.preferences.image_policy
+            ),
             activity=self.metadata_activity,
         )
         enrichment_attempts = SqliteEnrichmentAttempts(
             self.repository.asset_root.parent / "enrichment.sqlite3"
         )
+        enrichment_attempts.release_abandoned()
         enrichment_decisions = SqliteModelEnrichmentCache(
             self.repository.asset_root.parent / "enrichment-cache.sqlite3"
         )
+        former = enrichment_decisions.former_policies()
+        self.repository.provider_cache.stamp_tiers(
+            lambda sha256: former_policy_tier(former.get(sha256, ""))
+        )
+        self.owed_work = AutomaticModelEnrichment(
+            self.repository,
+            self.enrichment,
+            enrichment_attempts,
+            ModelEnrichmentFreshness(
+                enrichment_decisions, self.preferences.enrichment_providers
+            ),
+            enabled=self.preferences.enrichment_enabled,
+            repair=LegacyCardRepair(
+                self.repository, provider.version_previews, enrichment_attempts
+            ),
+        )
         self.automatic_enrichment = ModelEnrichmentWorker(
             self.repository,
-            AutomaticModelEnrichment(
-                self.repository,
-                self.enrichment,
-                enrichment_attempts,
-                ModelEnrichmentFreshness(
-                    enrichment_decisions,
-                    provider_previews,
-                    self.preferences.enrichment_policy,
-                    self.preferences.enrichment_provider_scope,
-                    self.preferences.enrichment_providers,
-                ),
-                enabled=self.preferences.enrichment_enabled,
-            ),
+            self.owed_work,
             self.jobs,
             after_refresh=ModelEnrichmentUpdateCheck(self.update_feed).check,
+            published=self.updates.invalidate,
         )
-        self.preferences.watch(self.automatic_enrichment.reconsider)
+        self.preferences.watch(self._preferences_changed)
         self.civitai_cache = ModelProviderCacheService(
             CivitaiCacheStorage(
                 self.repository.provider_cache,
@@ -328,6 +336,14 @@ class ModelLibraryRuntime:
             ModelFolderObservations(roots), self.repository, self.jobs, self.refresh
         )
 
+    def _preferences_changed(self) -> None:
+        """Show a saved setting at once: cards are redrawn and newly owed images are queued.
+
+        Runs on whichever thread saved the settings.
+        """
+        self.repository.database.invalidate()
+        self.automatic_enrichment.reconsider()
+
     async def list_models(
         self, kinds: Sequence[str] | None, held_revision: int | None = None
     ) -> dict[str, object]:
@@ -346,6 +362,13 @@ class ModelLibraryRuntime:
         result["scan"] = self.start_initial_scan().to_payload()
         result["enrichment"] = self.automatic_enrichment.status()
         return result
+
+    async def catalog_changes(self, held_revision: int) -> dict[str, object]:
+        """Wait for a newer revision and name the models that changed since the held one."""
+        revision = await self.updates.wait(held_revision)
+        if revision == held_revision:
+            return {"schemaVersion": 1, "revision": revision}
+        return await asyncio.to_thread(self.catalog.changed_models, held_revision)
 
     def start_initial_scan(self) -> ModelJob:
         """Warm the shared index once when Comfy starts, independent of which frontend connects."""

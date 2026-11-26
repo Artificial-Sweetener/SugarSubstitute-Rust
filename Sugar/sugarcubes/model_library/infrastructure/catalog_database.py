@@ -17,13 +17,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 import sqlite3
+from threading import local
 
-from .catalog_row_projection import catalog_integer
+from .library_sqlite import library_database
+
+from .catalog_row_projection import catalog_integer, catalog_text
 from .provider_metadata_migration import migrate_provider_metadata
+
+# How many revisions back a consumer can be and still be told which models changed.
+_REMEMBERED_REVISIONS = 1024
+# A change touching more models than this is recorded as touching everything.
+_LARGEST_NAMED_CHANGE = 256
+# Marks in the change log: a change to everything, and a change no model shows.
+_EVERYTHING = "*"
+_NOTHING = ""
 
 
 class ModelCatalogDatabase:
@@ -31,7 +42,8 @@ class ModelCatalogDatabase:
 
     def __init__(self, model_root: Path) -> None:
         """Initialize the established schema without replacing unsupported user data."""
-        self._advancing: set[int] = set()
+        # What the operation running on this thread has done so far.
+        self._operation = local()
         self._commit_listener: Callable[[], None] | None = None
         self.asset_root = (
             model_root.resolve() / ".sugarcubes" / "model-library" / "v1" / "assets"
@@ -79,6 +91,11 @@ class ModelCatalogDatabase:
                 CREATE TABLE IF NOT EXISTS model_content_overrides (
                     sha256 TEXT PRIMARY KEY, nsfw INTEGER NOT NULL CHECK(nsfw IN (0,1))
                 );
+                CREATE TABLE IF NOT EXISTS catalog_changes (
+                    revision INTEGER NOT NULL, id TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS catalog_change_revision
+                    ON catalog_changes(revision);
                 CREATE TABLE IF NOT EXISTS model_download_preferences (
                     id INTEGER PRIMARY KEY CHECK(id=1), pattern TEXT NOT NULL
                 );
@@ -91,17 +108,27 @@ class ModelCatalogDatabase:
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
-        """Bound lock waits, roll back incomplete writes and release every database handle."""
-        connection = sqlite3.connect(self._path, timeout=30)
-        connection.row_factory = sqlite3.Row
+        """Run one catalog operation: commit at its end, roll back if it fails.
+
+        An operation that advanced the revision is announced once, after its commit.
+        """
+        database = library_database(self._path, timeout=30, rows=True)
+        outermost = not getattr(self._operation, "open", False)
+        self._operation.open = True
         try:
-            with connection:
+            with database.transaction() as connection:
                 yield connection
-            if id(connection) in self._advancing and self._commit_listener is not None:
-                self._commit_listener()
+        except BaseException:
+            if outermost:
+                self._operation.advanced = False
+            raise
         finally:
-            self._advancing.discard(id(connection))
-            connection.close()
+            if outermost:
+                self._operation.open = False
+        if outermost and getattr(self._operation, "advanced", False):
+            self._operation.advanced = False
+            if self._commit_listener is not None:
+                self._commit_listener()
 
     def watch_commits(self, listener: Callable[[], None]) -> None:
         """Report every committed revision advance to the one publication owner.
@@ -110,10 +137,65 @@ class ModelCatalogDatabase:
         """
         self._commit_listener = listener
 
-    def advance_revision(self, connection: sqlite3.Connection) -> None:
-        """Advance the shared token inside the same transaction as its catalog mutation."""
-        self._advancing.add(id(connection))
+    def advance_revision(
+        self, connection: sqlite3.Connection, changed: Iterable[str] | None = None
+    ) -> None:
+        """Advance the shared token and record which models the change touched.
+
+        Both are written in the same transaction as the change itself, so a consumer holding
+        an earlier revision can be told exactly which models to read again. ``changed`` names
+        those models by catalog identity. None says the change cannot be named model by
+        model, and a consumer reads the whole catalog again.
+        """
+        self._operation.advanced = True
         connection.execute("UPDATE catalog_state SET revision=revision+1 WHERE id=1")
+        revision = self.revision(connection)
+        named = None if changed is None else tuple(dict.fromkeys(changed))
+        if named is None or len(named) > _LARGEST_NAMED_CHANGE:
+            named = (_EVERYTHING,)
+        connection.executemany(
+            "INSERT INTO catalog_changes VALUES (?,?)",
+            ((revision, identity) for identity in (named or (_NOTHING,))),
+        )
+        connection.execute(
+            "DELETE FROM catalog_changes WHERE revision<=?",
+            (revision - _REMEMBERED_REVISIONS,),
+        )
+
+    def advance_for_content(self, connection: sqlite3.Connection, sha256: str) -> None:
+        """Advance the token for a change to what is known about one file content.
+
+        Every catalog entry with that content shows the change; copies of a file share it.
+        """
+        self.advance_revision(
+            connection,
+            tuple(
+                catalog_text(row, "id")
+                for row in connection.execute(
+                    "SELECT id FROM model_files WHERE sha256=?", (sha256,)
+                )
+            ),
+        )
+
+    def changes_since(
+        self, connection: sqlite3.Connection, held: int
+    ) -> tuple[int, frozenset[str] | None]:
+        """Return the current revision and the models changed after a held one.
+
+        The models are None when they cannot be named: a change touched everything, or the
+        held revision is older than the log remembers.
+        """
+        revision = self.revision(connection)
+        if held >= revision:
+            return revision, frozenset()
+        rows = connection.execute(
+            "SELECT revision,id FROM catalog_changes WHERE revision>?", (held,)
+        ).fetchall()
+        recorded = {catalog_integer(row, "revision") for row in rows}
+        identities = {catalog_text(row, "id") for row in rows}
+        if len(recorded) != revision - held or _EVERYTHING in identities:
+            return revision, None
+        return revision, frozenset(identities - {_NOTHING})
 
     def revision(self, connection: sqlite3.Connection) -> int:
         """Validate committed state at the database boundary."""
@@ -124,7 +206,7 @@ class ModelCatalogDatabase:
             raise ValueError("Model catalog revision is missing.")
         return catalog_integer(row, "revision")
 
-    def invalidate(self) -> None:
-        """Commit an explicit cache invalidation even when visible catalog rows are unchanged."""
+    def invalidate(self, changed: Iterable[str] | None = None) -> None:
+        """Announce a change that no catalog row holds, for the named models or for all of them."""
         with self.connect() as connection:
-            self.advance_revision(connection)
+            self.advance_revision(connection, changed)

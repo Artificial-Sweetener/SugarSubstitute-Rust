@@ -33,6 +33,12 @@ def migrate_provider_metadata(connection: sqlite3.Connection) -> None:
         link_order INTEGER, payload TEXT, link_payload TEXT, thumbnail_origin TEXT,
         PRIMARY KEY(sha256,provider)
     )""")
+    # A provider family's release history changes what every installed version of it shows;
+    # finding those versions is one indexed read instead of a scan of every stored match.
+    connection.execute(
+        """CREATE INDEX IF NOT EXISTS provider_model_family ON model_provider_metadata(
+        json_extract(payload,'$.providerModelId'))"""
+    )
     for row in connection.execute(
         "SELECT sha256,payload FROM model_metadata WHERE owner='provider'"
     ).fetchall():

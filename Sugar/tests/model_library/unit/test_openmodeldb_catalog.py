@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+from tests.model_library.support.enrichment import no_weights_hash
 import asyncio
 import json
 from pathlib import Path
@@ -214,7 +215,7 @@ def test_catalog_and_metadata_share_one_coalesced_snapshot(
         """Exercise public operations with only the HTTP boundary replaced."""
         provider = OpenModelDbProvider(cache)
         catalog, version = await asyncio.gather(
-            provider.catalog(), provider.lookup("A" * 64)
+            provider.catalog(), provider.lookup("A" * 64, no_weights_hash)
         )
         assert catalog.model("4x-Fixture") is not None
         assert version is not None and version.version == "4× · SPAN"
@@ -262,7 +263,7 @@ def test_invalid_cache_is_replaced_and_invalid_refresh_retains_valid_stale_catal
         cache.save(ProviderCatalogSnapshot(snapshot.payload, 0, snapshot.etag))
         session.response = TransportResponse(200, b'{"invalid":{}}')
         provider = OpenModelDbProvider(cache)
-        assert await provider.lookup("a" * 64) is not None
+        assert await provider.lookup("a" * 64, no_weights_hash) is not None
         assert (await provider.catalog()).model("4x-Fixture") is not None
         assert len(session.requests) == 3
 

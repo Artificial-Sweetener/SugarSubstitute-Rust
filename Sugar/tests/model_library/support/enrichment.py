@@ -17,8 +17,32 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+
+from sugarcubes.model_library.application.ports import ModelCatalogRepository
+from sugarcubes.model_library.application.thumbnail_fill import (
+    ModelPreviewPreparer,
+    ModelThumbnailFill,
+)
 from sugarcubes.model_library.domain.provider_models import ProviderModelVersion
 from sugarcubes.model_library.domain.models import ThumbnailReference
+from sugarcubes.model_library.domain.thumbnail_safety import CivitaiThumbnailSafety
+
+
+def thumbnail_fill(
+    repository: ModelCatalogRepository,
+    previews: ModelPreviewPreparer,
+    policy: Callable[[], CivitaiThumbnailSafety] = lambda: (
+        CivitaiThumbnailSafety.ALLOW_ALL
+    ),
+) -> ModelThumbnailFill:
+    """Compose the production thumbnail fill over a test repository and preview boundary."""
+    return ModelThumbnailFill(repository, previews, policy)
+
+
+async def no_weights_hash() -> str | None:
+    """Stand in for a file that has no weights-only hash."""
+    return None
 
 
 class ObservedProvider:
@@ -29,7 +53,14 @@ class ObservedProvider:
         self.version = version
         self.hashes: list[str] = []
 
-    async def lookup(self, sha256: str, kind: str) -> tuple[ProviderModelVersion, ...]:
+    async def lookup(
+        self,
+        sha256: str,
+        kind: str,
+        weights_hash: Callable[[], Awaitable[str | None]],
+        *,
+        ask_again: bool = False,
+    ) -> tuple[ProviderModelVersion, ...]:
         """Return the configured result for verified content evidence."""
         self.hashes.append(sha256)
         return (self.version,) if self.version is not None else ()
@@ -41,6 +72,21 @@ class ObservedPreviews:
     async def prepare(self, url: str) -> tuple[ThumbnailReference, ...]:
         """Return a deterministic prepared reference."""
         return (ThumbnailReference("a" * 64, "standard", 128, 128, "image/webp"),)
+
+    async def blur(
+        self, thumbnails: tuple[ThumbnailReference, ...]
+    ) -> tuple[ThumbnailReference, ...]:
+        """Return one deterministic blurred reference per sharp reference."""
+        return tuple(
+            ThumbnailReference(
+                "b" * 64,
+                f"{item.role}-blurred",
+                item.width,
+                item.height,
+                item.content_type,
+            )
+            for item in thumbnails
+        )
 
     def available(self, thumbnails: tuple[ThumbnailReference, ...]) -> bool:
         """Keep deterministic prepared references available at the external asset boundary."""

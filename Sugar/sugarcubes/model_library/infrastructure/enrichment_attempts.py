@@ -17,11 +17,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 import json
 import sqlite3
+
+from .library_sqlite import library_database
 
 from ..domain.models import ModelEvidence
 from .metadata_codec import normalized_hash
@@ -49,6 +51,10 @@ class SqliteEnrichmentAttempts:
                     sha256 TEXT NOT NULL, status TEXT NOT NULL, retry_at REAL NOT NULL,
                     policy TEXT NOT NULL DEFAULT '', PRIMARY KEY(sha256,policy)
                 );
+                CREATE TABLE IF NOT EXISTS thumbnail_attempts (
+                    id TEXT PRIMARY KEY, failures INTEGER NOT NULL, retry_at REAL NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS card_repairs (sha256 TEXT PRIMARY KEY);
             """)
             columns = {
                 row[1]
@@ -150,7 +156,6 @@ class SqliteEnrichmentAttempts:
         *,
         policy: str,
         providers: tuple[str, ...],
-        preview_failures: int = 0,
     ) -> None:
         """Record the old file's result without overwriting a lease for changed evidence."""
         signature = f"{policy}:{enrichment_evidence_signature(evidence)}"
@@ -161,16 +166,80 @@ class SqliteEnrichmentAttempts:
             )
             if sha256 is not None:
                 connection.execute(
-                    "INSERT OR REPLACE INTO content_attempts VALUES (?,?,?,?,?,?)",
+                    "INSERT OR REPLACE INTO content_attempts VALUES (?,?,?,?,?,0)",
                     (
                         normalized_hash(sha256),
                         status,
                         retry_at,
                         policy,
                         json.dumps(providers),
-                        preview_failures,
                     ),
                 )
+
+    def release_abandoned(self) -> int:
+        """Release every lease still marked running; return how many there were.
+
+        A lease lasts fifteen minutes so that two consumers never look one file up at once.
+        A host that was killed mid-lookup leaves its leases behind, and nothing is running
+        them. The library calls this once as it starts, before it queues any work, so a model
+        interrupted by a crash is looked up again at once and not a quarter of an hour later.
+        """
+        with self._connect() as connection:
+            return connection.execute(
+                "UPDATE file_attempts SET status='abandoned',retry_at=0 WHERE status='running'"
+            ).rowcount
+
+    def failed_lookups(self) -> frozenset[str]:
+        """Name files whose last lookup failed, so their cards can say a retry is coming."""
+        with self._connect() as connection:
+            return frozenset(
+                str(row[0])
+                for row in connection.execute(
+                    "SELECT id FROM file_attempts WHERE status='failed'"
+                )
+            )
+
+    def thumbnail_failures(self) -> Mapping[str, tuple[int, float]]:
+        """Read every remembered thumbnail failure with the moment its retry is due."""
+        with self._connect() as connection:
+            return {
+                str(row[0]): (int(row[1]), float(row[2]))
+                for row in connection.execute(
+                    "SELECT id,failures,retry_at FROM thumbnail_attempts"
+                )
+            }
+
+    def thumbnail_failed(self, model_id: str, failures: int, retry_at: float) -> None:
+        """Remember one more failed fetch for a model and when it may be tried again."""
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT OR REPLACE INTO thumbnail_attempts VALUES (?,?,?)",
+                (normalized_hash(model_id), failures, retry_at),
+            )
+
+    def thumbnail_fetched(self, model_id: str) -> None:
+        """Forget a model's thumbnail failures once its image arrived."""
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM thumbnail_attempts WHERE id=?",
+                (normalized_hash(model_id),),
+            )
+
+    def repaired(self) -> frozenset[str]:
+        """Name the file contents whose stored card already had its one repair."""
+        with self._connect() as connection:
+            return frozenset(
+                str(row[0])
+                for row in connection.execute("SELECT sha256 FROM card_repairs")
+            )
+
+    def mark_repaired(self, sha256: str) -> None:
+        """Record a completed repair so the provider is never asked for that offer again."""
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO card_repairs VALUES (?)",
+                (normalized_hash(sha256),),
+            )
 
     def clear_provider(self, provider: str) -> None:
         """Release both file leases and content cooldowns owned by the selected provider."""
@@ -188,9 +257,5 @@ class SqliteEnrichmentAttempts:
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
         """Commit small retry transactions and release file handles even after failures."""
-        connection = sqlite3.connect(self._path, timeout=5)
-        try:
-            with connection:
-                yield connection
-        finally:
-            connection.close()
+        with library_database(self._path, timeout=5).transaction() as connection:
+            yield connection

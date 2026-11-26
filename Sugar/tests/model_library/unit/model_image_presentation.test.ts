@@ -149,7 +149,7 @@ test('a catalog image stays on screen until the element of its replacement can p
   await settled();
   expect(images()).toEqual([incoming]);
   expect(incoming?.getAttribute('src')).toBe('/b.webp');
-  expect(root.querySelector('.sc-model-no-image')).toBeNull();
+  expect(root.querySelector('.sc-model-blank')).toBeNull();
   app.unmount();
   // With nothing shown yet, a broken image is the fallback.
   const empty = document.createElement('div');
@@ -159,7 +159,7 @@ test('a catalog image stays on screen until the element of its replacement can p
   });
   second.mount(empty);
   await settled();
-  expect(empty.querySelector('.sc-model-no-image')?.textContent).toBe('No image');
+  expect(empty.querySelector('.sc-model-blank')?.textContent).toBe('No Thumbnail');
   second.unmount();
 });
 

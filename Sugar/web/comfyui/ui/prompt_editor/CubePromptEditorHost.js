@@ -23,6 +23,8 @@ export class CubePromptEditorHost {
     #releaseRegions = null;
     #catalogSnapshot = null;
     #loraCatalog = null;
+    /** Open surfaces drawing catalog models, told whenever the catalog they read changes. */
+    #catalogWatchers = new Set();
     #stopCatalog = null;
     #canvasKeys = null;
     #sceneQueue = null;
@@ -51,7 +53,10 @@ export class CubePromptEditorHost {
         const models = canvas?.models;
         this.#models ??= models ?? null;
         this.#modelCompletions ??= models
-            ? promptModelCompletions(models, (backendValue) => this.#loraCatalog ? promptLoraModel(this.#loraCatalog, backendValue) : null)
+            ? promptModelCompletions(models, (backendValue) => this.#loraCatalog ? promptLoraModel(this.#loraCatalog, backendValue) : null, (changed) => {
+                this.#catalogWatchers.add(changed);
+                return () => this.#catalogWatchers.delete(changed);
+            })
             : null;
         const wildcards = canvas?.prompts?.wildcards;
         if (wildcards && !this.#wildcards) {
@@ -315,8 +320,9 @@ export class CubePromptEditorHost {
             const replaced = this.#loraCatalog;
             const images = replaced ? promptLoraMediaRevision(replaced) : 0;
             const catalog = preparePromptLoraCatalog(snapshot, this.#document.baseURI, (items) => {
+                // Every prompt names its own LoRAs each time the catalog changes; each is named once.
                 if (items.length)
-                    void this.#catalog.prioritize(items).catch(this.#report);
+                    void this.#catalog.prioritize(items, 'once').catch(this.#report);
             }, replaced ?? undefined);
             this.#loraCatalog = catalog;
             const imagesChanged = catalog === replaced && promptLoraMediaRevision(catalog) !== images;
@@ -326,6 +332,8 @@ export class CubePromptEditorHost {
                 else
                     current.editor?.setLoraCatalog(catalog);
             }
+            for (const changed of [...this.#catalogWatchers])
+                changed();
         }
     }
     /** Hide only the native editing control while retaining its host-facing value contract. */

@@ -84,8 +84,22 @@ class ThumbnailReference:
 
 
 @dataclass(frozen=True, slots=True)
+class PreviewCandidate:
+    """Remember one image a provider offers, its content tier, and its prepared files if fetched."""
+
+    url: str
+    tier: int
+    thumbnails: tuple[ThumbnailReference, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class ModelMetadata:
-    """Keep provider presentation separate from exact file-selection evidence."""
+    """Keep provider presentation separate from exact file-selection evidence.
+
+    ``thumbnails`` is the image a model was first shown with; ``thumbnail_tier`` is its content
+    tier when a provider supplied it. ``previews`` are every image the provider offered, so a
+    changed safety setting chooses among them without asking the provider again.
+    """
 
     title: str
     version: str = ""
@@ -102,6 +116,8 @@ class ModelMetadata:
     model_type: str = ""
     provider_nsfw: bool | None = None
     provider_nsfw_level: int | None = None
+    thumbnail_tier: int | None = None
+    previews: tuple[PreviewCandidate, ...] = ()
 
     def links(self) -> tuple[ModelProviderLink, ...]:
         """Preserve explicit ordered associations and the original primary provider."""
@@ -128,6 +144,8 @@ class ModelCatalogEntry:
     thumbnail_origin: ThumbnailSourceOrigin | None = None
     architecture: ModelArchitecture | None = None
     nsfw_override: bool | None = None
+    # The image beside the model file, shown when the image above it cannot be.
+    local_thumbnails: tuple[ThumbnailReference, ...] = ()
 
     def to_payload(self) -> dict[str, object]:
         """Retain literal values and missing metadata in the public catalog."""

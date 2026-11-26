@@ -88,7 +88,7 @@ def test_continuing_changes_reach_a_consumer_once_per_interval_with_the_newest_r
         assert first == 1
         for _ in range(25):
             await updates.invalidate()
-        pace.now += 1.0
+        pace.now += 0.1
         second = await updates.wait(first)
         assert second == 26
         for _ in range(4):
@@ -96,7 +96,7 @@ def test_continuing_changes_reach_a_consumer_once_per_interval_with_the_newest_r
         assert await updates.wait(second) == 30
 
     asyncio.run(exercise())
-    assert pace.pauses == [pytest.approx(2.0), pytest.approx(3.0)]
+    assert pace.pauses == [pytest.approx(0.15), pytest.approx(0.25)]
 
 
 def test_a_consumer_behind_the_last_announcement_is_not_paced(tmp_path: Path) -> None:

@@ -105,3 +105,108 @@ test('publishes each committed generation to every consumer from the shared requ
   stopFirst();
   stopSecond();
 });
+
+/** One catalog model as the server publishes it. */
+function model(id: string, title: string): Record<string, unknown> {
+  return {
+    id,
+    kind: 'loras',
+    value: `${title}.safetensors`,
+    rootId: '',
+    relativePath: `${title}.safetensors`,
+    folder: '',
+    title,
+    version: '',
+    baseModel: '',
+    provider: '',
+    providerUrl: '',
+    description: '',
+    trainedWords: [],
+    thumbnails: [],
+    image: { state: 'pending', blurred: false, reveal: [] },
+  };
+}
+
+test('a change that names its models is applied without reading the catalog again', async () => {
+  const first = 'a'.repeat(64);
+  const second = 'b'.repeat(64);
+  const requests: string[] = [];
+  let answered = false;
+  const fetch: ModelApiFetch = async (path, options) => {
+    requests.push(path);
+    if (path === '/sugarcubes/v1/models')
+      return response({
+        schemaVersion: 1,
+        revision: 4,
+        models: [model(first, 'one'), model(second, 'two')],
+        fieldContracts: [],
+      });
+    if (!answered) {
+      answered = true;
+      return response({
+        schemaVersion: 1,
+        revision: 5,
+        models: [
+          { ...model(second, 'two'), image: { state: 'not_found', blurred: false, reveal: [] } },
+        ],
+        removed: [],
+      });
+    }
+    return new Promise<Response>((_resolve, reject) => {
+      options?.signal?.addEventListener(
+        'abort',
+        () => reject(new DOMException('Cancelled', 'AbortError')),
+        { once: true },
+      );
+    });
+  };
+  const client = new ModelCatalogClient(fetch);
+  const held = await client.load();
+  const seen: number[] = [];
+  const release = client.watch((snapshot) => seen.push(snapshot.revision), jest.fn());
+  await settle();
+  const current = client.current();
+  expect(seen).toEqual([5]);
+  expect(current?.revision).toBe(5);
+  // The model the change did not name is the same object; the named one is replaced.
+  expect(current?.items[0]).toBe(held.items[0]);
+  expect(current?.items[1]?.image?.state).toBe('not_found');
+  // One catalog read in all: the change was applied, not followed by a reload.
+  expect(requests.filter((path) => path === '/sugarcubes/v1/models')).toHaveLength(1);
+  expect(requests.at(-1)).toBe('/sugarcubes/v1/models/changes?afterRevision=5');
+  release();
+});
+
+test('every surface hears of a catalog one of them read, without waiting for the change feed', async () => {
+  let revision = 4;
+  const fetch: ModelApiFetch = async (path, options) => {
+    if (path === '/sugarcubes/v1/models')
+      return response({ schemaVersion: 1, revision, models: [], fieldContracts: [] });
+    if (path.endsWith('/thumbnail')) {
+      revision = 5;
+      return response({ saved: true });
+    }
+    return new Promise<Response>((_resolve, reject) => {
+      options?.signal?.addEventListener(
+        'abort',
+        () => reject(new DOMException('Cancelled', 'AbortError')),
+        { once: true },
+      );
+    });
+  };
+  const client = new ModelCatalogClient(fetch);
+  await client.load();
+  const chooser = jest.fn();
+  const release = client.watch(chooser, jest.fn());
+  await settle();
+  expect(chooser).not.toHaveBeenCalled();
+  // The change feed is still waiting; the person's own action publishes the new catalog.
+  await client.replaceThumbnail(
+    'c'.repeat(64),
+    new File(['image'], 'thumbnail.png'),
+    new AbortController().signal,
+  );
+  expect(chooser).toHaveBeenCalledTimes(1);
+  expect(client.current()?.revision).toBe(5);
+  release();
+});

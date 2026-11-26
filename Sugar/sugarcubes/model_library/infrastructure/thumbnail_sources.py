@@ -24,6 +24,8 @@ import json
 from pathlib import Path
 import sqlite3
 
+from .library_sqlite import library_database
+
 from ..domain.models import ThumbnailReference
 from ..domain.thumbnail_sources import (
     ThumbnailOwnership,
@@ -204,13 +206,10 @@ class SqliteThumbnailSources:
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
         """Release bounded SQLite leases on success, decode failure or cache collection errors."""
-        connection = sqlite3.connect(self._path, timeout=10)
-        try:
-            connection.execute("PRAGMA foreign_keys=ON")
-            with connection:
-                yield connection
-        finally:
-            connection.close()
+        with library_database(
+            self._path, timeout=10, foreign_keys=True
+        ).transaction() as connection:
+            yield connection
 
 
 def _identity(value: object) -> str:
@@ -224,7 +223,7 @@ def _validate_reference(item: ThumbnailReference) -> None:
     """Reject invalid owned references before they can address physical assets."""
     normalized_hash(item.asset_id)
     if (
-        item.role not in ("standard", "banner")
+        item.role not in ("standard", "banner", "standard-blurred", "banner-blurred")
         or not isinstance(item.width, int)
         or isinstance(item.width, bool)
         or item.width <= 0

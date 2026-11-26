@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+from tests.model_library.support.enrichment import no_weights_hash
 import asyncio
 import json
 from pathlib import Path
@@ -79,7 +80,7 @@ def test_each_new_consumer_request_retries_an_unavailable_catalog(
         session.response = TransportResponse(
             200, json.dumps(catalog_payload()).encode()
         )
-        assert await provider.lookup("a" * 64) is not None
+        assert await provider.lookup("a" * 64, no_weights_hash) is not None
         assert len(session.requests) == 3
 
     asyncio.run(exercise())
@@ -100,7 +101,7 @@ def test_stale_evidence_survives_failure_and_recovers_on_the_next_load(
 
     async def exercise() -> None:
         """Fail one revalidation then accept new evidence with replacement validators."""
-        assert await provider.lookup("a" * 64) is not None
+        assert await provider.lookup("a" * 64, no_weights_hash) is not None
         assert cache.read() == old
         new_payload = catalog_payload()
         new_payload.pop("2x-Duplicate")

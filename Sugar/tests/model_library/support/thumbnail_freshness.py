@@ -37,8 +37,12 @@ from sugarcubes.model_library.infrastructure.enrichment_cache import (
 from sugarcubes.model_library.application.catalog_service import ModelCatalogService
 from sugarcubes.model_library.application.enrichment_service import (
     ModelEnrichmentService,
-    ModelPreviewUnavailableError,
 )
+from sugarcubes.model_library.application.thumbnail_fill import (
+    ModelPreviewUnavailableError,
+    ModelThumbnailFill,
+)
+from sugarcubes.model_library.domain.thumbnail_safety import CivitaiThumbnailSafety
 from sugarcubes.model_library.application.fingerprint_service import (
     ModelFingerprintService,
 )
@@ -72,6 +76,8 @@ class PreparedFixturePreviews:
         self.assets = assets
         self.urls: list[str] = []
         self.unavailable = False
+        # A flat picture blurs to itself; a proof about blurred files replaces it.
+        self.picture = Image.new("RGB", (96, 144), "navy")
 
     async def prepare(self, url: str) -> tuple[ThumbnailReference, ...]:
         """Prepare a small image or an intentional recoverable transport failure."""
@@ -83,10 +89,16 @@ class PreparedFixturePreviews:
                 expected=True,
             )
         stream = BytesIO()
-        Image.new("RGB", (96, 144), "navy").save(stream, "PNG")
+        self.picture.save(stream, "PNG")
         return ModelThumbnailPreparer(self.assets, origin="civitai").prepare(
             stream.getvalue()
         )
+
+    async def blur(
+        self, thumbnails: tuple[ThumbnailReference, ...]
+    ) -> tuple[ThumbnailReference, ...]:
+        """Publish real blurred variants of prepared files already on disk."""
+        return ModelThumbnailPreparer(self.assets, origin="civitai").blur(thumbnails)
 
     def available(self, thumbnails: tuple[ThumbnailReference, ...]) -> bool:
         """Observe actual files instead of trusting stored thumbnail references."""
@@ -113,7 +125,7 @@ class EnrichmentFreshnessFixture:
             ModelThumbnailAssets(self.repository.asset_root)
         )
         self.clock = [1000.0]
-        self.policy = ["civitai-thumbnail-v1:sfw_only"]
+        self.policy = [CivitaiThumbnailSafety.SFW_ONLY]
         self.provider_scope = ["fixture-provider"]
         self.service = ModelEnrichmentService(
             self.repository,
@@ -121,7 +133,7 @@ class EnrichmentFreshnessFixture:
                 self.repository, ApprovedModelFingerprints(self.roots)
             ),
             self.provider,
-            self.previews,
+            ModelThumbnailFill(self.repository, self.previews, lambda: self.policy[0]),
         )
         self.automatic = self.restart()
         self.identity = self.repository.list_entries()[0].evidence.location_id
@@ -138,17 +150,16 @@ class EnrichmentFreshnessFixture:
                 SqliteModelEnrichmentCache(
                     self.repository.asset_root.parent / "enrichment-cache.sqlite3"
                 ),
-                self.previews,
-                lambda _kind: self.policy[0],
-                lambda _kind: self.provider_scope[0],
                 lambda _kind: tuple(self.provider_scope[0].split(",")),
             ),
             lambda: self.clock[0],
         )
 
 
-def fixture_provider_version(*, preview: bool = True) -> ProviderModelVersion:
-    """Return validated provider evidence with an optional eligible image."""
+def fixture_provider_version(
+    *, preview: bool = True, nsfw_level: int = 1
+) -> ProviderModelVersion:
+    """Return validated provider evidence with an optional image of the given rating."""
     return parse_civitai_version(
         {
             "id": 20,
@@ -156,7 +167,12 @@ def fixture_provider_version(*, preview: bool = True) -> ProviderModelVersion:
             "name": "v2",
             "model": {"name": "Fixture"},
             "images": (
-                [{"url": "https://image.civitai.com/fixture.jpg", "nsfwLevel": 1}]
+                [
+                    {
+                        "url": "https://image.civitai.com/fixture.jpg",
+                        "nsfwLevel": nsfw_level,
+                    }
+                ]
                 if preview
                 else []
             ),

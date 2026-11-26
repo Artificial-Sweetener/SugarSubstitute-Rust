@@ -23,6 +23,8 @@ import json
 from pathlib import Path
 import sqlite3
 
+from .library_sqlite import library_database
+
 from ..domain.provider_preferences import ModelProviderPreferences
 from .provider_preference_codec import (
     decode_provider_preferences,
@@ -88,9 +90,5 @@ class SqliteModelProviderPreferences:
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
         """Commit bounded transactions and release handles after both success and failure."""
-        connection = sqlite3.connect(self._path, timeout=5)
-        try:
-            with connection:
-                yield connection
-        finally:
-            connection.close()
+        with library_database(self._path, timeout=5).transaction() as connection:
+            yield connection

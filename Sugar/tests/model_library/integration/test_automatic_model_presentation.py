@@ -60,6 +60,12 @@ class PreparedFixturePreview:
         self.prepared.set()
         return result
 
+    async def blur(
+        self, thumbnails: tuple[ThumbnailReference, ...]
+    ) -> tuple[ThumbnailReference, ...]:
+        """Make blurred files through production preparation, without external traffic."""
+        return self.preparer.blur(thumbnails)
+
     def available(self, thumbnails: tuple[ThumbnailReference, ...]) -> bool:
         """Delegate fixture asset checks to the production prepared-image owner."""
         return self.preparer.available(thumbnails)

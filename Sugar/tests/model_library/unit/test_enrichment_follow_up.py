@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
 from typing import cast
 
 from sugarcubes.model_library.application.automatic_enrichment import (
@@ -41,10 +42,15 @@ class _Repository:
     def __init__(self) -> None:
         """Count how often the scheduler asked for every entry."""
         self.listings = 0
+        self.committed = 0
 
     def find_entry(self, identity: str) -> object:
         """Report every identity as present."""
         return object()
+
+    def revision(self) -> int:
+        """Report the catalog revision the proof last set."""
+        return self.committed
 
     def list_entries(self) -> tuple[ModelCatalogEntry, ...]:
         """Report an empty library and count the request."""
@@ -70,9 +76,11 @@ class _LeasedEnrichment:
             await self.release.wait()
             return {"modelId": model_id, "status": "found"}
 
-    def needs_refresh(self, entry: ModelCatalogEntry) -> bool:
+    def owed(
+        self, entries: Sequence[ModelCatalogEntry], *, verify_files: bool = True
+    ) -> tuple[str, ...]:
         """Leave the backlog empty."""
-        return False
+        return ()
 
 
 def test_follow_up_takes_its_own_lease_so_waiting_maintenance_cannot_deadlock_it() -> (
@@ -154,30 +162,63 @@ def test_a_changed_preference_is_reconsidered_without_waiting_for_the_idle_poll(
     assert asyncio.run(exercise()) >= 1
 
 
-class _RecordedEnrichment:
-    """Record which models the scheduler refreshed, finishing each at once."""
+_OTHER = "b" * 64
 
-    def __init__(self) -> None:
-        """Start with nothing refreshed."""
+
+class _RecordedEnrichment:
+    """Record which models the scheduler worked on, finishing each at once."""
+
+    def __init__(self, owed: tuple[str, ...]) -> None:
+        """Start with nothing done and a fixed set of models that are owed work."""
         self.refreshed: asyncio.Queue[str] = asyncio.Queue()
+        self._owed = owed
 
     async def refresh(
         self, model_id: str, *, automatic: bool = True
     ) -> dict[str, object]:
-        """Report the refresh and answer as an unchanged model does."""
+        """Report the work and answer as an unchanged model does."""
         self.refreshed.put_nowait(model_id)
         return {"modelId": model_id, "status": "cached"}
 
-    def needs_refresh(self, entry: ModelCatalogEntry) -> bool:
-        """Leave the backlog empty."""
-        return False
+    def owed(
+        self, entries: Sequence[ModelCatalogEntry], *, verify_files: bool = True
+    ) -> tuple[str, ...]:
+        """Report the same owed models on every refill."""
+        return self._owed
 
 
-def test_models_on_screen_are_refreshed_first_after_a_preference_change() -> None:
-    """Refresh what a consumer last showed again as soon as a preference changes."""
+def test_models_on_screen_are_worked_on_first_after_a_preference_change() -> None:
+    """Move an owed model a consumer is showing ahead of the rest of the backlog."""
 
     async def exercise() -> list[str]:
-        enrichment = _RecordedEnrichment()
+        enrichment = _RecordedEnrichment((_OTHER, _MODEL))
+        jobs = ModelBackgroundJobs()
+        worker = ModelEnrichmentWorker(
+            cast(ModelCatalogRepository, _Repository()),
+            cast(AutomaticModelEnrichment, enrichment),
+            jobs,
+            interval=86400,
+        )
+        try:
+            worker.prioritize([_MODEL])
+            worker.start()
+            worker.reconsider()
+            return [
+                await await_outcome(enrichment.refreshed.get()),
+                await await_outcome(enrichment.refreshed.get()),
+            ]
+        finally:
+            await worker.close()
+            await jobs.close()
+
+    assert asyncio.run(exercise()) == [_MODEL, _OTHER]
+
+
+def test_naming_a_model_that_is_owed_nothing_queues_no_work() -> None:
+    """Leave the queue empty when consumers report models that are already complete."""
+
+    async def exercise() -> object:
+        enrichment = _RecordedEnrichment(())
         jobs = ModelBackgroundJobs()
         worker = ModelEnrichmentWorker(
             cast(ModelCatalogRepository, _Repository()),
@@ -187,12 +228,64 @@ def test_models_on_screen_are_refreshed_first_after_a_preference_change() -> Non
         )
         try:
             worker.start()
-            worker.prioritize([_MODEL])
-            first = await await_outcome(enrichment.refreshed.get())
-            worker.reconsider()
-            return [first, await await_outcome(enrichment.refreshed.get())]
+            worker.prioritize([_MODEL, _OTHER])
+            for _ in range(5):
+                await asyncio.sleep(0)
+            return worker.status()["queued"], enrichment.refreshed.qsize()
         finally:
             await worker.close()
             await jobs.close()
 
-    assert asyncio.run(exercise()) == [_MODEL, _MODEL]
+    assert asyncio.run(exercise()) == (0, 0)
+
+
+class _CommittingEnrichment:
+    """Finish each job at once, committing a catalog change only when told to."""
+
+    def __init__(self, repository: _Repository, commits: bool) -> None:
+        """Bind the catalog whose revision a committing job advances."""
+        self._repository = repository
+        self._commits = commits
+
+    async def refresh(
+        self, model_id: str, *, automatic: bool = True
+    ) -> dict[str, object]:
+        """Answer as a lookup that found nothing, with or without a catalog commit."""
+        if self._commits:
+            self._repository.committed += 1
+        return {"modelId": model_id, "status": "not_found"}
+
+    def owed(
+        self, entries: Sequence[ModelCatalogEntry], *, verify_files: bool = True
+    ) -> tuple[str, ...]:
+        """Leave the backlog empty."""
+        return ()
+
+
+def test_a_job_is_announced_once_whether_or_not_it_changed_a_catalog_row() -> None:
+    """Announce a job that changed no row; one that committed has already announced itself."""
+
+    async def exercise(commits: bool) -> list[tuple[str, ...]]:
+        repository = _Repository()
+        jobs = ModelBackgroundJobs()
+        announced: list[tuple[str, ...]] = []
+
+        async def published(models: Sequence[str]) -> None:
+            announced.append(tuple(models))
+
+        worker = ModelEnrichmentWorker(
+            cast(ModelCatalogRepository, repository),
+            cast(AutomaticModelEnrichment, _CommittingEnrichment(repository, commits)),
+            jobs,
+            published=published,
+        )
+        try:
+            job = await worker.refresh(_MODEL)
+            await await_outcome(jobs.wait(job.job_id))
+        finally:
+            await jobs.close()
+        return announced
+
+    # What a card shows can change with no row changing, so a quiet job names its model.
+    assert asyncio.run(exercise(False)) == [(_MODEL,)]
+    assert asyncio.run(exercise(True)) == []

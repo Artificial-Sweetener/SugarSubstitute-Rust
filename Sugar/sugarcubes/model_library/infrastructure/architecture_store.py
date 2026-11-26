@@ -80,5 +80,5 @@ class SqliteModelArchitectures:
                 "INSERT OR REPLACE INTO model_architectures VALUES (?,?,?,?,?,?)",
                 (evidence.location_id, *values),
             )
-            self._database.advance_revision(connection)
+            self._database.advance_revision(connection, (evidence.location_id,))
             return True

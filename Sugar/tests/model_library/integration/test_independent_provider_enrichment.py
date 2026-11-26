@@ -21,6 +21,7 @@ from sugarcubes.model_library.infrastructure.relationship_catalog import (
     model_relationships,
 )
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from pathlib import Path
 
@@ -36,14 +37,18 @@ from sugarcubes.model_library.application.provider_registry import (
     RegisteredModelProvider,
 )
 from sugarcubes.model_library.domain.provider_models import ProviderModelVersion
-from sugarcubes.model_library.domain.models import ThumbnailReference
+from sugarcubes.model_library.domain.models import (
+    PreviewCandidate,
+    ThumbnailReference,
+)
+from sugarcubes.model_library.domain.thumbnail_safety import SAFE_TIER
 from sugarcubes.model_library.infrastructure.catalog_store import (
     SqliteModelCatalogRepository,
 )
 from sugarcubes.model_library.infrastructure.fingerprints import (
     ApprovedModelFingerprints,
 )
-from tests.model_library.support.enrichment import ObservedPreviews
+from tests.model_library.support.enrichment import ObservedPreviews, thumbnail_fill
 from tests.model_library.support.model_roots import FixtureFileRoots
 
 
@@ -54,7 +59,13 @@ class ExactHashProvider:
         """Retain the complete match with independent provider identity and labels."""
         self.version = version
 
-    async def lookup(self, sha256: str) -> ProviderModelVersion:
+    async def lookup(
+        self,
+        sha256: str,
+        weights_hash: Callable[[], Awaitable[str | None]],
+        *,
+        ask_again: bool = False,
+    ) -> ProviderModelVersion:
         """Return deterministic evidence without contacting external providers."""
         return self.version
 
@@ -101,6 +112,9 @@ def test_civitai_image_fallback_preserves_openmodeldb_labels_and_independent_rec
         version="v2",
         page_url="https://civitai.com/models/10",
         preview_url="https://image.civitai.com/fixture.jpg",
+        previews=(
+            PreviewCandidate("https://image.civitai.com/fixture.jpg", SAFE_TIER),
+        ),
     )
     providers = ModelMetadataProviders(
         tuple(
@@ -115,7 +129,7 @@ def test_civitai_image_fallback_preserves_openmodeldb_labels_and_independent_rec
         repository,
         ModelFingerprintService(repository, ApprovedModelFingerprints(roots)),
         providers,
-        previews,
+        thumbnail_fill(repository, previews),
     )
     result = asyncio.run(service.refresh(repository.list_entries()[0]))
     current = repository.list_entries()[0]
@@ -135,7 +149,17 @@ def test_civitai_image_fallback_preserves_openmodeldb_labels_and_independent_rec
     ) == first.metadata(())
     assert repository.provider_cache.metadata(
         current.sha256, "civitai"
-    ) == second.metadata(current.metadata.thumbnails)
+    ) == second.metadata(
+        current.metadata.thumbnails,
+        thumbnail_tier=SAFE_TIER,
+        previews=(
+            PreviewCandidate(
+                "https://image.civitai.com/fixture.jpg",
+                SAFE_TIER,
+                current.metadata.thumbnails,
+            ),
+        ),
+    )
     reopened = SqliteModelCatalogRepository(tmp_path)
     assert reopened.list_entries() == (current,)
     reopened.provider_cache.clear_metadata("openmodeldb")
@@ -149,6 +173,7 @@ def test_civitai_image_fallback_preserves_openmodeldb_labels_and_independent_rec
     reopened.provider_cache.clear_thumbnails("civitai")
     final = reopened.list_entries()[0]
     assert final.metadata is not None and final.metadata.thumbnails == ()
+    assert final.metadata.thumbnail_tier is None and final.metadata.previews == ()
     assert (
         final.metadata.title == second.title
         and final.metadata.links() == second.metadata(()).links()

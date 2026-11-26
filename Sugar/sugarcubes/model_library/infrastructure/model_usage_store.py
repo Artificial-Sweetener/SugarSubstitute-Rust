@@ -18,9 +18,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from contextlib import closing
 from pathlib import Path
 import sqlite3
+
+from .library_sqlite import library_database
 
 from ..domain.model_updates import ModelUpdateState
 from .model_usage_codec import decode_usage, encode_usage
@@ -32,30 +33,38 @@ class SqliteModelUsageRepository:
     def __init__(self, path: Path) -> None:
         """Create a single-state transactional store without touching model weights."""
         self.path = path
+        # The whole state is one stored document, read several times for every model checked.
+        # This store is its only writer, so the decoded state is held between its own writes.
+        self._held: ModelUpdateState | None = None
         path.parent.mkdir(parents=True, exist_ok=True)
-        with closing(sqlite3.connect(path, timeout=5)) as connection, connection:
+        with library_database(path, timeout=5).transaction() as connection:
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS model_updates (id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL)"
             )
 
     def load(self) -> ModelUpdateState:
         """Read saved preferences or the enabled domain default for a new store."""
-        with closing(sqlite3.connect(self.path, timeout=5)) as connection:
-            return self._read(connection)
+        with library_database(self.path, timeout=5).transaction() as connection:
+            if self._held is None:
+                self._held = self._read(connection)
+            return self._held
 
     def change(
         self, transition: Callable[[ModelUpdateState], ModelUpdateState]
     ) -> ModelUpdateState:
         """Serialize concurrent state transitions and roll back failed validation or policy."""
-        with closing(sqlite3.connect(self.path, timeout=5)) as connection, connection:
+        with library_database(self.path, timeout=5).transaction() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            state = transition(self._read(connection))
+            state = transition(self._held or self._read(connection))
             payload = encode_usage(state)
-            decode_usage(payload)
+            stored = decode_usage(payload)
+            # Forget the held state first: a failed write must not leave it ahead of the file.
+            self._held = None
             connection.execute(
                 "INSERT INTO model_updates (id,payload) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",
                 (payload,),
             )
+            self._held = stored
             return state
 
     @staticmethod

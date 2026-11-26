@@ -3,7 +3,7 @@ import {
 } from "./chunk-VHI72ZTE.js";
 import {
   ModelDiscoveryPortrait
-} from "./chunk-PTITF4WQ.js";
+} from "./chunk-S4CSKJCM.js";
 import {
   CivitaiCredentialLayer
 } from "./chunk-CON27HKR.js";

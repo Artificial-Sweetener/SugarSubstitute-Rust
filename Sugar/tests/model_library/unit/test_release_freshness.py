@@ -117,13 +117,14 @@ def test_failed_refresh_keeps_last_success_and_does_not_mark_day_checked(
         """Require a successful replacement before advancing freshness."""
         nonlocal now
         await subject.releases("10")
-        original = store.read(":10")
+        original = store.read("10")
         assert original is not None
         now += timedelta(days=1)
         provider.offline = True
         with pytest.raises(TimeoutError, match="offline"):
             await subject.releases("10")
-        assert store.read(":10") == original
+        assert store.read("10") == original
+        assert store.read(":10") is None
         provider.offline = False
         provider.latest = "22"
         assert (await subject.releases("10"))[0].version.version_id == "22"
@@ -187,6 +188,37 @@ def test_shared_refresh_survives_cancelled_waiter(tmp_path: Path) -> None:
         assert (await second)[0].version.version_id == "21"
         await subject.releases("10")
         assert provider.calls == 1
+        await subject.close()
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize(
+    "former", ["allow_all", "allow_soft", "sfw_only", "disabled", ""]
+)
+def test_history_stored_under_a_former_thumbnail_setting_is_still_read(
+    tmp_path: Path, former: str
+) -> None:
+    """Serve a model's history kept under an older setting-prefixed key without asking again."""
+    now = datetime(2026, 10, 5, 12, tzinfo=UTC)
+    provider = UpdateProvider()
+    store = SqliteReleaseHistory(tmp_path / "history.sqlite3")
+    kept = ReleaseHistorySnapshot(now, (release("20"),))
+    store.save(f"{former}:10", kept)
+    subject = ModelReleaseHistory(provider, store, clock=lambda: now)
+
+    async def exercise() -> None:
+        """Read the same day, then refresh the next day under the model id alone."""
+        nonlocal now
+        assert subject.cached("10") == kept
+        assert await subject.releases("10") == kept.releases
+        assert provider.calls == 0
+        now += timedelta(days=1)
+        assert (await subject.releases("10"))[0].version.version_id == "21"
+        assert provider.calls == 1
+        refreshed = store.read("10")
+        assert refreshed is not None and subject.cached("10") == refreshed
+        assert store.read(f"{former}:10") == kept
         await subject.close()
 
     asyncio.run(exercise())

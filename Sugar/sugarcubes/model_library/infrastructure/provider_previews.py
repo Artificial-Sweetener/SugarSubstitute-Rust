@@ -21,7 +21,7 @@ import sqlite3
 
 import aiohttp
 
-from ..application.enrichment_service import ModelPreviewUnavailableError
+from ..application.thumbnail_fill import ModelPreviewUnavailableError
 from ..application.blocking_model_work import complete_blocking_model_work
 from ..domain.models import ThumbnailReference
 from .civitai_client import CivitaiModelProvider
@@ -49,6 +49,25 @@ class ModelProviderPreviewPreparer:
     def available(self, thumbnails: tuple[ThumbnailReference, ...]) -> bool:
         """Delegate prepared-image freshness to the same owner that publishes variants."""
         return self._civitai_images.available(thumbnails)
+
+    async def blur(
+        self, thumbnails: tuple[ThumbnailReference, ...]
+    ) -> tuple[ThumbnailReference, ...]:
+        """Make blurred files from prepared ones off the event loop, without any network access.
+
+        Raises:
+            ModelPreviewUnavailableError: A prepared file is missing or could not be read.
+        """
+        try:
+            return await complete_blocking_model_work(
+                self._civitai_images.blur, thumbnails
+            )
+        except (OSError, ValueError, sqlite3.Error) as error:
+            raise ModelPreviewUnavailableError(
+                "The blurred thumbnail could not be prepared.",
+                reason=type(error).__name__,
+                expected=False,
+            ) from error
 
     async def prepare(self, url: str) -> tuple[ThumbnailReference, ...]:
         """Decode a bounded provider image away from the Comfy HTTP event loop.

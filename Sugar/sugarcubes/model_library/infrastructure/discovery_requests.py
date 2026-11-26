@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import uuid
 
-from ..application.enrichment_service import ModelPreviewPreparer
+from ..application.thumbnail_fill import ModelPreviewPreparer
 from ..application.model_suggestion_service import ModelSuggestionService
 from ..domain.model_suggestions import (
     ModelSuggestionAccessPolicy,

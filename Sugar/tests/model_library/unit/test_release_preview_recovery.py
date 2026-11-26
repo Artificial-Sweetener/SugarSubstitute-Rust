@@ -29,7 +29,7 @@ from pathlib import Path
 import pytest
 
 from sugarcubes.model_library.application.catalog_service import ModelCatalogService
-from sugarcubes.model_library.application.enrichment_service import (
+from sugarcubes.model_library.application.thumbnail_fill import (
     ModelPreviewUnavailableError,
 )
 from sugarcubes.model_library.application.release_previews import ModelReleasePreviews

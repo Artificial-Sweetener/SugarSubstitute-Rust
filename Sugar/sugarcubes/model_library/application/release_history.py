@@ -71,6 +71,10 @@ class MemoryReleaseHistory:
         self._snapshots[key] = snapshot
 
 
+# History was once stored per thumbnail setting; those records are still read.
+_FORMER_SCOPES = ("allow_all", "allow_soft", "sfw_only", "disabled", "")
+
+
 class ModelReleaseHistory:
     """Share daily freshness across installed versions, browsers and picker instances."""
 
@@ -80,20 +84,29 @@ class ModelReleaseHistory:
         repository: ReleaseHistoryRepository,
         *,
         clock: Callable[[], datetime] = lambda: datetime.now().astimezone(),
-        scope: Callable[[], str] = lambda: "",
         activity: ModelMetadataActivity | None = None,
     ) -> None:
-        """Use host calendar days and isolate history when provider visibility policy changes."""
+        """Use host calendar days; a model's history is the same under every thumbnail setting."""
         self.provider = provider
         self.repository = repository
         self.clock = clock
-        self.scope = scope
         self._activity = activity or ModelMetadataActivity()
         self._pending: dict[str, asyncio.Task[tuple[ModelProviderRelease, ...]]] = {}
 
     def cached(self, model_id: str) -> ReleaseHistorySnapshot | None:
-        """Read the current policy's successful history without refreshing or provider traffic."""
-        return self.repository.read(f"{self.scope()}:{model_id}")
+        """Read the last successful history without refreshing or provider traffic."""
+        return self._read(model_id)
+
+    def _read(self, model_id: str) -> ReleaseHistorySnapshot | None:
+        """Read a model's history, including one stored under a former thumbnail setting."""
+        return self.repository.read(model_id) or next(
+            (
+                snapshot
+                for scope in _FORMER_SCOPES
+                if (snapshot := self.repository.read(f"{scope}:{model_id}")) is not None
+            ),
+            None,
+        )
 
     async def releases(
         self, model_id: str, *, refresh: bool = False
@@ -102,10 +115,10 @@ class ModelReleaseHistory:
         now = self.clock()
         if now.tzinfo is None:
             raise ValueError("Release check timestamps must be timezone-aware.")
-        key = f"{self.scope()}:{model_id}"
+        key = model_id
         pending = self._pending.get(key)
         if pending is None:
-            snapshot = self.repository.read(key)
+            snapshot = self._read(model_id)
             if (
                 not refresh
                 and snapshot is not None

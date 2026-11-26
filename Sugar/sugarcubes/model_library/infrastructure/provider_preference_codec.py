@@ -26,7 +26,8 @@ from ..domain.thumbnail_safety import CivitaiThumbnailSafety
 _LEGACY_FIELDS = frozenset(
     {"metadataLookupEnabled", "thumbnailDownloadsEnabled", "thumbnailSafety"}
 )
-_FIELDS = _LEGACY_FIELDS | {"missingModelLookupEnabled", "downloadsEnabled"}
+_EARLIER_FIELDS = _LEGACY_FIELDS | {"missingModelLookupEnabled", "downloadsEnabled"}
+_FIELDS = _EARLIER_FIELDS | {"thumbnailRevealOnHover"}
 
 
 def provider_preferences_payload(value: ModelProviderPreferences) -> dict[str, object]:
@@ -38,6 +39,7 @@ def provider_preferences_payload(value: ModelProviderPreferences) -> dict[str, o
         "downloadsEnabled": value.downloads_enabled,
         "thumbnailDownloadsEnabled": value.thumbnail_downloads_enabled,
         "thumbnailSafety": value.thumbnail_safety.value,
+        "thumbnailRevealOnHover": value.thumbnail_reveal_on_hover,
     }
 
 
@@ -51,6 +53,7 @@ def provider_preference_patch(value: object) -> ModelProviderPreferencePatch:
         ("missingModelLookupEnabled", "missing_model_lookup_enabled"),
         ("downloadsEnabled", "downloads_enabled"),
         ("thumbnailDownloadsEnabled", "thumbnail_downloads_enabled"),
+        ("thumbnailRevealOnHover", "thumbnail_reveal_on_hover"),
     ):
         if external not in value:
             continue
@@ -63,6 +66,8 @@ def provider_preference_patch(value: object) -> ModelProviderPreferencePatch:
             patch["missing_model_lookup_enabled"] = enabled
         elif internal == "downloads_enabled":
             patch["downloads_enabled"] = enabled
+        elif internal == "thumbnail_reveal_on_hover":
+            patch["thumbnail_reveal_on_hover"] = enabled
         else:
             patch["thumbnail_downloads_enabled"] = enabled
     if "thumbnailSafety" in value:
@@ -75,7 +80,11 @@ def provider_preference_patch(value: object) -> ModelProviderPreferencePatch:
 
 def decode_provider_preferences(value: object) -> ModelProviderPreferences:
     """Extend exact legacy snapshots with reference defaults and reject all corrupt saved policy."""
-    if not isinstance(value, dict) or set(value) not in (_FIELDS, _LEGACY_FIELDS):
+    if not isinstance(value, dict) or set(value) not in (
+        _FIELDS,
+        _EARLIER_FIELDS,
+        _LEGACY_FIELDS,
+    ):
         raise ValueError("Invalid stored provider preferences.")
     patch = provider_preference_patch(value)
     defaults = ModelProviderPreferences()
@@ -87,4 +96,7 @@ def decode_provider_preferences(value: object) -> ModelProviderPreferences:
             "missing_model_lookup_enabled", defaults.missing_model_lookup_enabled
         ),
         downloads_enabled=patch.get("downloads_enabled", defaults.downloads_enabled),
+        thumbnail_reveal_on_hover=patch.get(
+            "thumbnail_reveal_on_hover", defaults.thumbnail_reveal_on_hover
+        ),
     )

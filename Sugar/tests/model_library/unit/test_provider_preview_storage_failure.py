@@ -23,10 +23,11 @@ import sqlite3
 
 import pytest
 
-from sugarcubes.model_library.application.enrichment_service import (
+from sugarcubes.model_library.application.thumbnail_fill import (
     ModelPreviewUnavailableError,
 )
 from sugarcubes.model_library.infrastructure.civitai_client import CivitaiModelProvider
+from sugarcubes.model_library.infrastructure.library_sqlite import LibraryDatabase
 from sugarcubes.model_library.infrastructure.civitai_transport import CivitaiTransport
 from sugarcubes.model_library.infrastructure.openmodeldb_client import (
     OpenModelDbProvider,
@@ -56,8 +57,8 @@ def test_busy_source_database_preserves_recoverable_preview_failure(
         assert url == "https://image.civitai.com/fixture.jpg"
         return b"fixture source"
 
-    def busy(*_args: object, **_kwargs: object) -> sqlite3.Connection:
-        """Fail only the external SQLite connection boundary after runtime composition."""
+    def busy(_database: LibraryDatabase) -> sqlite3.Connection:
+        """Fail only the storage boundary, as a database another process holds locked does."""
         raise sqlite3.OperationalError("database is locked")
 
     assets = ModelThumbnailAssets(tmp_path / "assets")
@@ -68,7 +69,7 @@ def test_busy_source_database_preserves_recoverable_preview_failure(
         ModelThumbnailPreparer(assets, origin="openmodeldb"),
     )
     monkeypatch.setattr(CivitaiTransport, "read_preview", content)
-    monkeypatch.setattr(sqlite3, "connect", busy)
+    monkeypatch.setattr(LibraryDatabase, "transaction", busy)
     with pytest.raises(ModelPreviewUnavailableError) as error:
         asyncio.run(previews.prepare("https://image.civitai.com/fixture.jpg"))
     assert isinstance(error.value.__cause__, sqlite3.OperationalError)

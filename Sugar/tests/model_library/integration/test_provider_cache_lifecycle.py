@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+from tests.model_library.support.enrichment import no_weights_hash
 import asyncio
 from pathlib import Path
 from threading import Event
@@ -189,13 +190,13 @@ def test_cache_actions_reset_process_misses_only_when_new_lookup_is_intended(
 
     async def exercise() -> None:
         """Exercise the actual shared provider before and after the maintenance job."""
-        assert await provider.lookup("a" * 64) is None
-        assert await provider.lookup("a" * 64) is None
+        assert await provider.lookup("a" * 64, no_weights_hash) is None
+        assert await provider.lookup("a" * 64, no_weights_hash) is None
         assert len(calls) == 1
         job = runtime.cache_actions.start(action)
         await runtime.jobs.wait(job.job_id)
         assert job.status == "completed"
-        assert await provider.lookup("a" * 64) is None
+        assert await provider.lookup("a" * 64, no_weights_hash) is None
         assert len(calls) == requests
         await runtime.automatic_enrichment.close()
         await runtime.jobs.close()

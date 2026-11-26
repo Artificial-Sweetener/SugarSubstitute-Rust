@@ -163,6 +163,12 @@ class DiscoveryPreviewFixture:
         self.urls.append(url)
         return self.preparer.prepare(self.content)
 
+    async def blur(
+        self, thumbnails: tuple[ThumbnailReference, ...]
+    ) -> tuple[ThumbnailReference, ...]:
+        """Make blurred files through production preparation, without external traffic."""
+        return self.preparer.blur(thumbnails)
+
     def available(self, thumbnails: tuple[ThumbnailReference, ...]) -> bool:
         """Use the same real asset checks as production provider previews."""
         return self.preparer.available(thumbnails)

@@ -70,7 +70,6 @@ class ModelReleaseService:
     history_store: ReleaseHistoryRepository = field(
         default_factory=MemoryReleaseHistory
     )
-    history_scope: Callable[[], str] = lambda: ""
     history_activity: ModelMetadataActivity = field(
         default_factory=ModelMetadataActivity
     )
@@ -84,7 +83,6 @@ class ModelReleaseService:
             ModelReleaseHistory(
                 self.provider,
                 self.history_store,
-                scope=self.history_scope,
                 activity=self.history_activity,
             ),
         )

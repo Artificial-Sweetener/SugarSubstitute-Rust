@@ -176,14 +176,15 @@ class ModelUpdateService:
         record = self._record(family.current, dispatched=False)
         if record is None or not self.usage.load().enabled:
             return ()
-        proposal = self._proposal(record, family.releases, self.catalog.list_entries())
+        # One indexed question about one file; the whole catalog is not read per model.
+        proposal = self._proposal(record, family.releases, self.catalog.has_content)
         return (proposal,) if proposal else ()
 
     @staticmethod
     def _proposal(
         record: ModelUsageRecord,
         family: tuple[ModelProviderRelease, ...],
-        installed: tuple[ModelCatalogEntry, ...],
+        installed: Callable[[str, str], bool],
     ) -> ModelUpdateProposal | None:
         """Apply dismissal, page opt-out and installed-artifact suppression for every trigger."""
         candidate = family[-1] if family else None
@@ -194,9 +195,7 @@ class ModelUpdateService:
             in (record.version_id, record.dismissed_version_id)
         ):
             return None
-        if candidate.offers[0].sha256 in {
-            item.sha256 for item in installed if item.evidence.kind == record.kind
-        }:
+        if installed(record.kind, candidate.offers[0].sha256):
             return None
         return ModelUpdateProposal(record, candidate)
 
@@ -264,7 +263,15 @@ class ModelUpdateService:
             for record in state.records
             if record.updates_disabled_for_model
         }
-        installed = self.catalog.list_entries()
+        # Many records are checked here, so the catalog is read once for all of them.
+        present = {
+            (entry.evidence.kind, entry.sha256) for entry in self.catalog.list_entries()
+        }
+
+        def installed(kind: str, sha256: str) -> bool:
+            """Answer from the one catalog read above."""
+            return (kind, sha256) in present
+
         proposals: list[ModelUpdateProposal] = []
         for record in sorted(
             state.records,

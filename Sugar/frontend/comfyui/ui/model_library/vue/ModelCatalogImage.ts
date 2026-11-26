@@ -19,6 +19,7 @@ import type { PropType } from 'vue';
 import type { ModelThumbnail } from '../ModelCatalog.js';
 import { useModelImage } from './ModelImage.js';
 import { ModelImageElement } from './ModelImageElement.js';
+import { ModelBlankCard } from './ModelBlankCard.js';
 
 /**
  * A catalog image: a field banner or a wall tile. The image on screen is replaced only once its
@@ -41,9 +42,7 @@ export const ModelCatalogImage = defineComponent({
     return () => {
       const { url, unavailable } = image();
       if (url) return h(ModelImageElement, { ...attrs, url });
-      return unavailable && props.fallback
-        ? h('span', { class: 'sc-model-no-image' }, 'No image')
-        : null;
+      return unavailable && props.fallback ? h(ModelBlankCard, { state: 'none' }) : null;
     };
   },
 });

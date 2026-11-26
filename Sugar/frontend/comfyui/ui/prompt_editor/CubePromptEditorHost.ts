@@ -95,6 +95,8 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
   #releaseRegions: (() => void) | null = null;
   #catalogSnapshot: object | null = null;
   #loraCatalog: LoraResourceAdapter | null = null;
+  /** Open surfaces drawing catalog models, told whenever the catalog they read changes. */
+  readonly #catalogWatchers = new Set<() => void>();
   #stopCatalog: (() => void) | null = null;
   #canvasKeys: ComfyCanvasEditorKeyBoundary | null = null;
   #sceneQueue: PromptSceneQueue | null = null;
@@ -134,8 +136,14 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
     const models = canvas?.models;
     this.#models ??= models ?? null;
     this.#modelCompletions ??= models
-      ? promptModelCompletions(models, (backendValue) =>
-          this.#loraCatalog ? promptLoraModel(this.#loraCatalog, backendValue) : null,
+      ? promptModelCompletions(
+          models,
+          (backendValue) =>
+            this.#loraCatalog ? promptLoraModel(this.#loraCatalog, backendValue) : null,
+          (changed) => {
+            this.#catalogWatchers.add(changed);
+            return () => this.#catalogWatchers.delete(changed);
+          },
         )
       : null;
     const wildcards = canvas?.prompts?.wildcards;
@@ -404,7 +412,8 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
         snapshot,
         this.#document.baseURI,
         (items) => {
-          if (items.length) void this.#catalog.prioritize(items).catch(this.#report);
+          // Every prompt names its own LoRAs each time the catalog changes; each is named once.
+          if (items.length) void this.#catalog.prioritize(items, 'once').catch(this.#report);
         },
         replaced ?? undefined,
       );
@@ -414,6 +423,7 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
         if (imagesChanged) current.editor?.refreshLoraMedia();
         else current.editor?.setLoraCatalog(catalog);
       }
+      for (const changed of [...this.#catalogWatchers]) changed();
     }
   }
 

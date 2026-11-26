@@ -31,6 +31,7 @@ class ModelProviderPreferencePatch(TypedDict, total=False):
     downloads_enabled: bool
     thumbnail_downloads_enabled: bool
     thumbnail_safety: CivitaiThumbnailSafety
+    thumbnail_reveal_on_hover: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +43,8 @@ class ModelProviderPreferences:
     thumbnail_safety: CivitaiThumbnailSafety = CivitaiThumbnailSafety.SFW_ONLY
     missing_model_lookup_enabled: bool = True
     downloads_enabled: bool = True
+    # Whether a blurred thumbnail sharpens while the pointer is over it.
+    thumbnail_reveal_on_hover: bool = False
 
     def image_policy(self) -> CivitaiThumbnailSafety:
         """Disable new provider images without losing the user's selected safety level."""

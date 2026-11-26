@@ -72,7 +72,75 @@ function decodeItem(value) {
         trainedWords: value.trainedWords.map(text),
         tags: value.tags === undefined ? [] : decodeTags(value.tags),
         thumbnails: value.thumbnails.map(decodeThumbnail),
+        image: decodeCardImage(value.image, value.thumbnails.length > 0),
     };
+}
+const IMAGE_STATES = [
+    'ready',
+    'pending',
+    'retrying',
+    'filtered',
+    'not_found',
+    'none',
+];
+/** Accept catalogs without card states, reading them as an image or as no image. */
+function decodeCardImage(value, pictured) {
+    if (value === undefined)
+        return { state: pictured ? 'ready' : 'none', blurred: false, reveal: [] };
+    if (!isRecord(value) ||
+        typeof value.blurred !== 'boolean' ||
+        !Array.isArray(value.reveal) ||
+        !IMAGE_STATES.some((state) => state === value.state))
+        throw new Error('Invalid model card image.');
+    return {
+        state: value.state,
+        blurred: value.blurred,
+        reveal: value.reveal.map(decodeThumbnail),
+    };
+}
+/** Validate a change answer before any of it reaches the held catalog. */
+export function decodeModelCatalogUpdate(value) {
+    if (!isRecord(value) ||
+        value.schemaVersion !== 1 ||
+        typeof value.revision !== 'number' ||
+        !Number.isSafeInteger(value.revision) ||
+        value.revision < 0)
+        throw new Error('Invalid model catalog update response.');
+    if (value.models === undefined)
+        return { revision: value.revision, changes: null };
+    if (!Array.isArray(value.models) || !Array.isArray(value.removed))
+        throw new Error('Invalid model catalog changes.');
+    return {
+        revision: value.revision,
+        changes: {
+            revision: value.revision,
+            items: value.models.map(decodeItem),
+            removed: value.removed.map(text),
+        },
+    };
+}
+/**
+ * Apply the models a change names to the catalog it follows. Every other entry stays the same
+ * object, so consumers redo nothing for them. A change at or before the held revision is
+ * already applied and returns the held catalog itself.
+ */
+export function applyModelCatalogChanges(held, changes) {
+    if (changes.revision <= held.revision)
+        return held;
+    const removed = new Set(changes.removed);
+    const changed = new Map(changes.items.map((item) => [item.id, item]));
+    const items = held.items
+        .filter((item) => !removed.has(item.id))
+        .map((item) => {
+        const next = changed.get(item.id);
+        changed.delete(item.id);
+        return next ?? item;
+    });
+    return continueModelCatalog(held, {
+        ...held,
+        revision: changes.revision,
+        items: [...items, ...changed.values()],
+    });
 }
 /** Validate additive tensor evidence while preserving older public catalog payloads. */
 function decodeArchitecture(value) {

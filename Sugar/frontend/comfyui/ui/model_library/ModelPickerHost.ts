@@ -33,6 +33,7 @@ import type { ComfyModelFieldBinding } from './ComfyModelFieldAdapter.js';
 import { ModelCatalogClient } from './ModelCatalogClient.js';
 import { sameModelFiles } from './ModelCatalog.js';
 import type { ModelCatalogItem, ModelCatalogSnapshot } from './ModelCatalog.js';
+import { liveCatalogModels } from './LiveCatalogModels.js';
 import { modelPickerChoices, orderModelsByTitle } from './ModelPickerChoices.js';
 import { mountModelPicker } from './vue/ModelPickerVueRuntime.js';
 import type { MountedModelPicker } from './vue/ModelPickerVueRuntime.js';
@@ -127,7 +128,7 @@ export class ModelPickerHost {
   /** Prepare discovery without mounting until the host preference enables it. */
   constructor(options: ModelPickerHostOptions) {
     this.#options = options;
-    this.#sessions = new ModelPickerSessions(options.document, () => this.#snapshot, options.app);
+    this.#sessions = new ModelPickerSessions(options.document, () => this.#held(), options.app);
     this.#page = options.document.defaultView
       ? new ModelPageActivity(
           options.document.defaultView,
@@ -139,7 +140,7 @@ export class ModelPickerHost {
       ? new ModelEmptyPickerDiscovery({
           ...options.discovery,
           document: options.document,
-          snapshot: () => this.#snapshot,
+          snapshot: () => this.#held(),
           sessions: this.#sessions,
           compatibility: (binding, snapshot) =>
             comfyModelCompatibilityContext(options.app, binding, snapshot),
@@ -228,7 +229,7 @@ export class ModelPickerHost {
       this.#mounts.values(),
       root,
       this.#options.app,
-      this.#snapshot,
+      this.#held(),
       () => this.#resolveCubeFields(),
     );
   }
@@ -267,9 +268,15 @@ export class ModelPickerHost {
     label: string,
     anchor: ModelPickerRectangle,
   ): Promise<ModelCatalogItem | null> {
-    const snapshot = this.#snapshot ?? (await this.#options.catalog.load());
+    const catalog = this.#options.catalog;
+    const held = catalog.current() ?? (await catalog.load());
     if (this.#disposed) return null;
-    const items = orderModelsByTitle(snapshot.items.filter((item) => item.kind === kind));
+    const items = liveCatalogModels(
+      catalog,
+      held,
+      (snapshot) => orderModelsByTitle(snapshot.items.filter((item) => item.kind === kind)),
+      this.#options.reportError,
+    );
     return new Promise((resolve) => {
       // A model chosen here belongs to no workflow field, so a chosen version applies nowhere.
       const session = new ModelPickerSession(this.#options.document, () => null);
@@ -301,6 +308,15 @@ export class ModelPickerHost {
       new ModelPickerSession(this.#options.document, () => null),
     );
     return this.#menu.project(item);
+  }
+
+  /**
+   * The catalog as its owner holds it now. Field pickers are published to only while this host
+   * is active; menus, dialogs and choosers it opens at any other time still read the current
+   * catalog, not the last one this host was published.
+   */
+  #held(): ModelCatalogSnapshot | null {
+    return this.#options.catalog.current() ?? this.#snapshot;
   }
 
   /**

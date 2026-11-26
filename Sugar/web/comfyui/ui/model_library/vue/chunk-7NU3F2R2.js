@@ -1,15 +1,15 @@
 import {
   useModelSelectionUpdates
-} from "./chunk-5NNW6U22.js";
+} from "./chunk-DGJTEEOR.js";
 import {
   ModelTransferView
-} from "./chunk-2BBFEVHD.js";
+} from "./chunk-4P35URDN.js";
 import {
   modelPickerPlacement
 } from "./chunk-JK626FTQ.js";
 import {
   ModelPickerPopupContent
-} from "./chunk-LENWKHDC.js";
+} from "./chunk-VTTQW3W4.js";
 import {
   useModelContext
 } from "./chunk-2WMWUCGK.js";
@@ -18,14 +18,14 @@ import {
 } from "./chunk-P7J5YKTZ.js";
 import {
   useModelBrowsing
-} from "./chunk-TGMBNLE7.js";
+} from "./chunk-TJCGDYFQ.js";
 import {
   MODEL_BANNER_SIZE,
   chooseModelThumbnail
-} from "./chunk-XU3535ZK.js";
+} from "./chunk-5LUG4ZB5.js";
 import {
   ModelCatalogImage
-} from "./chunk-25SOMJ7D.js";
+} from "./chunk-K7ZHJNG4.js";
 import {
   Teleport,
   computed,
@@ -388,6 +388,7 @@ var ModelPickerField = defineComponent({
     const opensBelow = ref(true);
     const popupId = useId();
     const currentItem = computed(() => props.items.find((item) => item.value === current.value));
+    const hovering = ref(false);
     useModelSelectionUpdates(() => currentItem.value, props.updates, props.feedback);
     emit("contextReady", () => currentItem.value ? context.project(currentItem.value) : []);
     const compatibility = ref(props.compatibility?.() ?? null);
@@ -510,7 +511,13 @@ var ModelPickerField = defineComponent({
           [h("span", { class: "sc-model-find-icon", "aria-hidden": "true" }), "Find models"]
         );
       const item = currentItem.value;
-      const banner = item ? chooseModelThumbnail(item, "banner", MODEL_BANNER_SIZE) : null;
+      const revealed = hovering.value && !!item?.image?.reveal.length;
+      const banner = item ? chooseModelThumbnail(
+        revealed ? { ...item, thumbnails: item.image?.reveal ?? [] } : item,
+        "banner",
+        MODEL_BANNER_SIZE
+      ) : null;
+      const waiting = !banner && (item?.image?.state === "pending" || item?.image?.state === "retrying");
       const label = item ? [item.title, item.version].filter(Boolean).join(" - ") : current.value;
       return h(
         "div",
@@ -518,8 +525,18 @@ var ModelPickerField = defineComponent({
           ref: surface,
           class: [
             "sc-model-field",
-            { "sc-model-field-open": open.value, "sc-model-field-transferring": !!transfer.value }
+            {
+              "sc-model-field-open": open.value,
+              "sc-model-field-transferring": !!transfer.value,
+              "sc-model-field-waiting": waiting && !open.value && !transfer.value
+            }
           ],
+          onPointerenter: () => {
+            hovering.value = true;
+          },
+          onPointerleave: () => {
+            hovering.value = false;
+          },
           "data-sc-style-combo-frame": "",
           [FIELD_MENU_OWNER]: "",
           "aria-busy": !!transfer.value,

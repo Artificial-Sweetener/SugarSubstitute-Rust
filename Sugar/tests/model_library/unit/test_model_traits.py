@@ -15,6 +15,7 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Prove model lineage, compatibility, maturity and organizing paths stay independent."""
 
+from tests.model_library.support.enrichment import no_weights_hash
 from dataclasses import replace
 import asyncio
 
@@ -66,7 +67,7 @@ def test_lookup_enriches_model_classification_without_changing_identity(
         }
     )
     monkeypatch.setattr(aiohttp, "ClientSession", session.factory)
-    version = asyncio.run(CivitaiModelProvider().lookup("a" * 64))
+    version = asyncio.run(CivitaiModelProvider().lookup("a" * 64, no_weights_hash))
     assert version is not None and version.model_id == "2"
     if isinstance(parent, dict) and parent["id"] == 2:
         assert version.provider_nsfw is True and version.provider_nsfw_level == 31

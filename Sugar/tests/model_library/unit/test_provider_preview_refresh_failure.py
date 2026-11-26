@@ -67,7 +67,8 @@ from sugarcubes.model_library.infrastructure.thumbnail_assets import (
 from sugarcubes.model_library.infrastructure.thumbnail_preparer import (
     ModelThumbnailPreparer,
 )
-from tests.model_library.support.enrichment import ObservedProvider
+from sugarcubes.model_library.domain.thumbnail_safety import CivitaiThumbnailSafety
+from tests.model_library.support.enrichment import ObservedProvider, thumbnail_fill
 from tests.model_library.support.model_roots import FixtureFileRoots
 
 _SERVICE_LOGGER = "sugarcubes.model_library.application.enrichment_service"
@@ -104,7 +105,10 @@ def _refresh(
     previews: ModelProviderPreviewPreparer,
     fallback: tuple[ThumbnailReference, ...],
 ) -> tuple[dict[str, object], tuple[ThumbnailReference, ...]]:
-    """Refresh one upscaler that already has a prepared preview, returning what was kept."""
+    """Refresh one upscaler whose stored preview a strict setting filters, returning what was kept.
+
+    The stored image has no known tier, so the safe image OpenModelDB offers is fetched.
+    """
     content = b"fixture-only-no-weights"
     (tmp_path / "fixture.pth").write_bytes(content)
     roots = FixtureFileRoots(tmp_path)
@@ -120,7 +124,7 @@ def _refresh(
         repository,
         ModelFingerprintService(repository, ApprovedModelFingerprints(roots)),
         ObservedProvider(_openmodeldb_version(digest)),
-        previews,
+        thumbnail_fill(repository, previews, lambda: CivitaiThumbnailSafety.SFW_ONLY),
     )
     result = asyncio.run(service.refresh(repository.list_entries()[0])).to_payload()
     metadata = repository.list_entries()[0].metadata
@@ -147,12 +151,12 @@ def _preparer(
 
 
 def _refresh_warnings(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
-    """Return the enrichment service's preview refresh warnings."""
+    """Return the enrichment service's thumbnail fill warnings."""
     return [
         record
         for record in caplog.records
         if record.name == _SERVICE_LOGGER
-        and getattr(record, "operation", None) == "model_preview_refresh"
+        and getattr(record, "operation", None) == "model_thumbnail_fill"
     ]
 
 
@@ -206,9 +210,9 @@ def test_expected_network_failure_logs_one_plain_warning_without_a_traceback(
     assert warning.levelno == logging.WARNING
     assert warning.exc_info is None and warning.exc_text is None
     assert getattr(warning, "cause") == cause
-    assert getattr(warning, "provider") == "openmodeldb"
+    assert getattr(warning, "model_id") == result["modelId"]
     message = warning.getMessage()
-    assert "operation=model_preview_refresh" in message and f"cause={cause}" in message
+    assert "operation=model_thumbnail_fill" in message and f"cause={cause}" in message
     assert "Traceback" not in caplog.text
 
 

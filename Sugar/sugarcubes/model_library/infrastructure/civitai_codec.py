@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from ..domain.provider_models import ProviderModelVersion
 from ..domain.thumbnail_safety import CivitaiThumbnailSafety
-from .civitai_image_codec import select_civitai_thumbnail
+from .civitai_image_codec import civitai_preview_candidates, select_civitai_thumbnail
 from .model_content_codec import optional_nsfw, optional_nsfw_level
 
 
@@ -58,6 +58,7 @@ def parse_civitai_version(
         tags=tuple(tag for tag in tags if isinstance(tag, str)),
         provider_nsfw=optional_nsfw(model.get("nsfw")),
         provider_nsfw_level=optional_nsfw_level(model.get("nsfwLevel")),
+        previews=civitai_preview_candidates(payload.get("images")),
     )
 
 

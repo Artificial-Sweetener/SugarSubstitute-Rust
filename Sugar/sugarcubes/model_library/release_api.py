@@ -26,7 +26,7 @@ from aiohttp import web
 
 from .infrastructure.runtime import ModelLibraryRuntime
 from .infrastructure.model_release_payloads import model_release_history_payload
-from .application.enrichment_service import ModelPreviewUnavailableError
+from .application.thumbnail_fill import ModelPreviewUnavailableError
 
 _LOGGER = logging.getLogger(__name__)
 

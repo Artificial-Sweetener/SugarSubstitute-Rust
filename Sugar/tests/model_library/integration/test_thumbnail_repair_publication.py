@@ -24,6 +24,7 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
 from sugarcubes.model_library.api import register_model_library_routes
+from sugarcubes.model_library.domain.thumbnail_safety import CivitaiThumbnailSafety
 from sugarcubes.model_library.infrastructure.runtime import ModelLibraryRuntime
 from tests.model_library.support.thumbnail_freshness import (
     EnrichmentFreshnessFixture,
@@ -32,14 +33,16 @@ from tests.model_library.support.thumbnail_freshness import (
 from tests.support.no_progress import await_outcome
 
 
-def test_background_repair_wakes_catalog_consumers_and_serves_the_same_asset(
+def test_background_fill_wakes_catalog_consumers_and_serves_the_fetched_asset(
     tmp_path: Path,
 ) -> None:
-    """Rebuild missing bytes through the real scheduler without changing any model selection."""
+    """Fetch a newly allowed image through the real scheduler without asking the provider again."""
 
     async def exercise() -> None:
         """Observe prepared files and change notifications through production runtime routes."""
-        fixture = EnrichmentFreshnessFixture(tmp_path, fixture_provider_version())
+        fixture = EnrichmentFreshnessFixture(
+            tmp_path, fixture_provider_version(nsfw_level=8)
+        )
         runtime = ModelLibraryRuntime(
             fixture.roots,
             enrichment_provider=fixture.provider,
@@ -51,22 +54,23 @@ def test_background_repair_wakes_catalog_consumers_and_serves_the_same_asset(
             )
             await runtime.jobs.wait(first.job_id)
             entry = runtime.repository.list_entries()[0]
-            assert entry.metadata is not None
-            selected = entry.metadata.thumbnails[-1]
-            asset_url = f"/sugarcubes/v1/models/assets/{selected.asset_id}"
-            asset = runtime.assets.resolve(selected.asset_id)
-            assert asset is not None
-            asset.path.unlink()
-            revision = runtime.repository.revision()
+            # The default setting filters the only image the provider offers.
+            assert entry.metadata is not None and entry.metadata.thumbnails == ()
+            assert not fixture.previews.urls
+            await runtime.automatic_enrichment.refill()
+            assert runtime.automatic_enrichment.status()["queued"] == 0
             routes = web.RouteTableDef()
             register_model_library_routes(routes, runtime)
             app = web.Application()
             app.add_routes(routes)
             async with TestClient(TestServer(app)) as client:
-                unavailable = await client.get(asset_url)
-                assert unavailable.status == 404
+                await asyncio.to_thread(
+                    runtime.preferences.configure,
+                    {"thumbnail_safety": CivitaiThumbnailSafety.ALLOW_ALL},
+                )
                 await runtime.automatic_enrichment.refill()
                 assert runtime.automatic_enrichment.status()["queued"] == 1
+                revision = runtime.repository.revision()
                 runtime.automatic_enrichment.start()
                 changed = await await_outcome(
                     client.get(
@@ -79,15 +83,23 @@ def test_background_repair_wakes_catalog_consumers_and_serves_the_same_asset(
                     isinstance(payload.get("revision"), int)
                     and payload["revision"] > revision
                 )
-                restored = await client.get(asset_url)
-                assert (
-                    restored.status == 200
-                    and restored.headers["Content-Type"] == "image/webp"
-                )
                 current = runtime.repository.list_entries()[0]
+                assert current.metadata is not None and current.metadata.thumbnails
+                selected = current.metadata.thumbnails[-1]
+                fetched = await client.get(
+                    f"/sugarcubes/v1/models/assets/{selected.asset_id}"
+                )
+                assert (
+                    fetched.status == 200
+                    and fetched.headers["Content-Type"] == "image/webp"
+                )
                 assert current.evidence.value == entry.evidence.value
-                assert current.metadata == entry.metadata
-                assert len(fixture.provider.hashes) == 2
+                assert current.metadata.links() == entry.metadata.links()
+                assert current.metadata.title == entry.metadata.title
+                assert fixture.previews.urls == [
+                    "https://image.civitai.com/fixture.jpg"
+                ]
+                assert len(fixture.provider.hashes) == 1
         finally:
             await runtime.automatic_enrichment.close()
             await runtime.jobs.close()

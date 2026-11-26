@@ -1,9 +1,9 @@
 import {
-  ModelUpdateButton
-} from "./chunk-P7J5YKTZ.js";
-import {
   shownModels
 } from "./chunk-HP45EZMK.js";
+import {
+  ModelUpdateButton
+} from "./chunk-P7J5YKTZ.js";
 import {
   ModelGalleryTitle
 } from "./chunk-P6VGNXE5.js";
@@ -11,13 +11,16 @@ import {
   MODEL_PICKER_WALL_PROFILE,
   layoutModelGallery,
   visibleModelRows
-} from "./chunk-UAMK4WPC.js";
+} from "./chunk-QBK6AEYB.js";
 import {
   chooseModelThumbnail
-} from "./chunk-XU3535ZK.js";
+} from "./chunk-5LUG4ZB5.js";
 import {
   ModelCatalogImage
-} from "./chunk-25SOMJ7D.js";
+} from "./chunk-K7ZHJNG4.js";
+import {
+  ModelBlankCard
+} from "./chunk-FGK24KN5.js";
 import {
   computed,
   defineComponent,
@@ -58,6 +61,7 @@ var ModelPickerWall = defineComponent({
     const height = ref(580);
     const scrollTop = ref(0);
     const rows = computed(() => layoutModelGallery(props.items, width.value, props.profile));
+    const hovered = ref(null);
     let observer = null;
     onMounted(() => {
       const element = viewport.value;
@@ -139,11 +143,13 @@ var ModelPickerWall = defineComponent({
           (row) => row.tiles.map((tile) => {
             const item = props.items[tile.index];
             if (!item) return null;
+            const revealed = hovered.value === item.id && !!item.image?.reveal.length;
             const image = chooseModelThumbnail(
-              item,
+              revealed ? { ...item, thumbnails: item.image?.reveal ?? [] } : item,
               "standard",
               Math.max(tile.width, tile.height) * devicePixelRatio
             );
+            const state = item.image?.state ?? "none";
             return h(
               "div",
               {
@@ -168,7 +174,13 @@ var ModelPickerWall = defineComponent({
                   width: `${String(tile.width)}px`,
                   height: `${String(tile.height)}px`
                 },
-                onPointerenter: () => emit("highlight", tile.index),
+                onPointerenter: () => {
+                  hovered.value = item.id;
+                  emit("highlight", tile.index);
+                },
+                onPointerleave: () => {
+                  if (hovered.value === item.id) hovered.value = null;
+                },
                 onClick: () => emit("activate", item.value),
                 onContextmenu: (event) => {
                   event.preventDefault();
@@ -177,7 +189,7 @@ var ModelPickerWall = defineComponent({
                 }
               },
               [
-                image ? h(ModelCatalogImage, { image, fallback: true }) : h("span", { class: "sc-model-no-image" }, "No image"),
+                image ? h(ModelCatalogImage, { image, fallback: true }) : h(ModelBlankCard, { state: state === "ready" ? "none" : state }),
                 h("span", { class: "sc-model-caption" }, [
                   h(ModelGalleryTitle, {
                     title: item.title,

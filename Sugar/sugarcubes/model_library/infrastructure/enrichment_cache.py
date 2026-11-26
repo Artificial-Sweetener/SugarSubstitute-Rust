@@ -25,6 +25,9 @@ import logging
 from pathlib import Path
 import sqlite3
 
+from .library_sqlite import library_database
+from threading import RLock
+
 from ..domain.enrichment_freshness import ModelEnrichmentRecord
 from ..domain.models import ModelEvidence
 from .metadata_codec import decode_metadata, encode_metadata, normalized_hash
@@ -58,6 +61,8 @@ class SqliteModelEnrichmentCache:
     def __init__(self, path: Path) -> None:
         """Initialize an additive cache without altering existing catalog or retry data."""
         self._path = path
+        self._lock = RLock()
+        self._rows: dict[str, tuple[str, ModelEnrichmentRecord | None]] | None = None
         path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -107,20 +112,37 @@ class SqliteModelEnrichmentCache:
                         )
 
     def read(self, evidence: ModelEvidence) -> ModelEnrichmentRecord | None:
-        """Reject changed evidence and validate cached content at the SQLite boundary."""
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT sha256,policy,metadata,local_preview,provider_scope,thumbnail_origin,providers FROM enrichment_records WHERE id=? AND signature=?",
-                (evidence.location_id, enrichment_evidence_signature(evidence)),
-            ).fetchone()
-        if row is None:
+        """Reject changed evidence and validate cached content at the SQLite boundary.
+
+        Every model is read each time the catalog is built, so the rows are held in memory
+        between writes instead of being queried one model at a time.
+        """
+        with self._lock:
+            rows = self._rows
+            if rows is None:
+                with self._connect() as connection:
+                    rows = {
+                        str(row[0]): (str(row[1]), self._decoded(str(row[0]), row[2:]))
+                        for row in connection.execute(
+                            "SELECT id,signature,sha256,policy,metadata,local_preview,provider_scope,thumbnail_origin,providers FROM enrichment_records"
+                        )
+                    }
+                self._rows = rows
+        stored = rows.get(evidence.location_id)
+        if stored is None or stored[0] != enrichment_evidence_signature(evidence):
             return None
+        return stored[1]
+
+    def _decoded(
+        self, identity: str, row: tuple[object, ...]
+    ) -> ModelEnrichmentRecord | None:
+        """Validate one stored decision; an invalid one is reconsidered as if it were absent."""
         try:
             return _enrichment_record(*row)
         except ValueError as error:
             _LOGGER.warning(
                 "Stored model enrichment evidence is invalid; reconsidering provider freshness",
-                extra={"model_id": evidence.location_id},
+                extra={"model_id": identity},
                 exc_info=error,
             )
             return None
@@ -136,21 +158,30 @@ class SqliteModelEnrichmentCache:
             record.thumbnail_origin, record.metadata, record.local_preview
         )
         providers = decode_enrichment_providers(json.dumps(record.providers))
-        with self._connect() as connection:
-            connection.execute(
-                "INSERT OR REPLACE INTO enrichment_records VALUES (?,?,?,?,?,?,?,?,?)",
-                (
-                    evidence.location_id,
-                    enrichment_evidence_signature(evidence),
-                    normalized_hash(record.sha256),
-                    record.policy,
-                    payload,
-                    int(record.local_preview),
-                    record.provider_scope,
-                    origin,
-                    json.dumps(providers),
-                ),
-            )
+        signature = enrichment_evidence_signature(evidence)
+        stored: tuple[object, ...] = (
+            normalized_hash(record.sha256),
+            record.policy,
+            payload,
+            int(record.local_preview),
+            record.provider_scope,
+            origin,
+            json.dumps(providers),
+        )
+        with self._lock:
+            held = self._rows
+            with self._connect() as connection:
+                connection.execute(
+                    "INSERT OR REPLACE INTO enrichment_records VALUES (?,?,?,?,?,?,?,?,?)",
+                    (evidence.location_id, signature, *stored),
+                )
+            # One decision changed: the held rows take it in place of being read again whole.
+            if held is not None:
+                held[evidence.location_id] = (
+                    signature,
+                    self._decoded(evidence.location_id, stored),
+                )
+                self._rows = held
 
     def clear_thumbnails(self, origin: str) -> None:
         """Keep confirmed decisions fresh while stripping only the selected provider's images."""
@@ -163,7 +194,17 @@ class SqliteModelEnrichmentCache:
                 metadata = decode_metadata(payload)
                 connection.execute(
                     "UPDATE enrichment_records SET metadata=?,thumbnail_origin=NULL WHERE id=?",
-                    (encode_metadata(replace(metadata, thumbnails=())), identity),
+                    (
+                        encode_metadata(
+                            replace(
+                                metadata,
+                                thumbnails=(),
+                                thumbnail_tier=None,
+                                previews=(),
+                            )
+                        ),
+                        identity,
+                    ),
                 )
 
     def clear_provider(self, provider: str) -> None:
@@ -178,15 +219,28 @@ class SqliteModelEnrichmentCache:
                         "DELETE FROM enrichment_records WHERE id=?", (identity,)
                     )
 
+    def former_policies(self) -> dict[str, str]:
+        """Name, per file content, the thumbnail setting its stored decision was made under."""
+        with self._connect() as connection:
+            return {
+                str(row[0]): str(row[1])
+                for row in connection.execute(
+                    "SELECT sha256,policy FROM enrichment_records"
+                )
+            }
+
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        """Commit bounded cache transactions and release every SQLite handle."""
-        connection = sqlite3.connect(self._path, timeout=5)
-        try:
-            with connection:
+        """Commit bounded cache transactions, drop held rows and release every SQLite handle."""
+        with library_database(self._path, timeout=5).transaction() as connection:
+            before = connection.total_changes
+            try:
                 yield connection
-        finally:
-            connection.close()
+            finally:
+                # Any write may have changed a held row; a save puts its own row back.
+                if connection.total_changes != before:
+                    with self._lock:
+                        self._rows = None
 
 
 def _enrichment_record(
