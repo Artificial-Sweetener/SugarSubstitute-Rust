@@ -45,13 +45,10 @@ import {
   type SeenReleaseStore,
 } from '../core/release_notes/WhatsNewPresenter.js';
 import { WhatsNewModal } from '../dialogs/WhatsNewModal.js';
-import { InputModal } from '../dialogs/InputModal.js';
 import { ConfirmDialog } from '../dialogs/ConfirmDialog.js';
-import {
-  registerWildcardSettings,
-  type WildcardSettingsOptions,
-} from '../wildcards/presentation/WildcardSettings.js';
 import { WhatsNewSeenSetting } from '../settings/WhatsNewSeenSetting.js';
+import type { PromptEditorPreferences } from '../prompt_editor/PromptEditorPreferences.js';
+import { registerPromptEditingSettings } from '../prompt_editor/PromptEditingSettings.js';
 
 export interface WorkflowFieldHostOptions
   extends Omit<RelationHostOptions, 'reportError' | 'appearance'> {
@@ -71,8 +68,8 @@ export interface WorkflowFieldHostOptions
   subscribeConnection(listener: (connected: boolean) => void): () => void;
   /** The page's cache registry, joined to a desktop host's memory budget when one exists. */
   memory: MemoryBudgetRegistry;
-  /** The wildcard folder's file actions, offered in SugarCubes' settings. */
-  wildcards: Omit<WildcardSettingsOptions, 'app' | 'document' | 'prompt'>;
+  /** The prompt editor's preferences, loaded and offered in Prompt Editing's settings. */
+  promptPreferences: PromptEditorPreferences;
 }
 
 /** Share seed reuse across actual native field mounts and the override toolbar. */
@@ -130,12 +127,6 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     options.reportPresentationError,
   );
   const canvas = new EmbeddedCanvasConnection();
-  const wildcardNames = new InputModal({
-    adapter: {
-      getDocument: () => options.document,
-      getWindow: () => options.document.defaultView,
-    },
-  });
   const relations: RelationHostLifecycle = new RelationHostLifecycle({
     ...options,
     reportError: options.reportRelationError,
@@ -194,12 +185,8 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     relations.setupOverridePresentation(embedded);
     editorNavigation.setup();
     settingsWorkspace.setup();
-    registerWildcardSettings({
-      ...options.wildcards,
-      app: options.app,
-      document: options.document,
-      prompt: (prompt) => wildcardNames.open(prompt),
-    });
+    options.promptPreferences.setup();
+    registerPromptEditingSettings(options.app, options.promptPreferences);
     const windowRef = options.document.defaultView;
     if (windowRef)
       startEmbeddedPanel({

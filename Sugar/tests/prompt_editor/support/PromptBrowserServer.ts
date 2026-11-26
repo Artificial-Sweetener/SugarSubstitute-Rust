@@ -14,7 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Serve the bundled prompt browser proof to one headless Chromium for integration modules. */
+import { readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
+import path from 'node:path';
 import { build } from 'esbuild';
 import { chromium, type Browser, type Page } from '@playwright/test';
 import type {} from './BrowserProof.js';
@@ -49,10 +51,38 @@ export async function startPromptBrowser(): Promise<PromptBrowserFixture> {
   });
   const script = result.outputFiles[0]?.contents;
   if (!script) throw new Error('Missing prompt browser fixture');
+  // The page's spellchecker runs the real worker, module and dictionary.
+  const worker = (
+    await build({
+      entryPoints: ['frontend/comfyui/ui/prompt_editor/spellcheck/SpellcheckWorker.ts'],
+      bundle: true,
+      format: 'esm',
+      platform: 'browser',
+      target: 'es2022',
+      write: false,
+    })
+  ).outputFiles[0]?.contents;
+  if (!worker) throw new Error('Missing spellchecker worker');
+  const spellcheckFiles: Record<string, { type: string; bytes: Buffer }> = Object.fromEntries(
+    ['sugarcubes-spellcheck.wasm', 'en_US.aff', 'en_US.dic'].map((name) => [
+      `/spellcheck/${name}`,
+      {
+        type: name.endsWith('.wasm') ? 'application/wasm' : 'text/plain',
+        bytes: readFileSync(path.join('frontend/static/spellcheck', name)),
+      },
+    ]),
+  );
   const server: Server = createServer((request, response) => {
+    const spellcheckFile = request.url ? spellcheckFiles[request.url] : undefined;
     if (request.url === '/fixture.js') {
       response.writeHead(200, { 'Content-Type': 'application/javascript' });
       response.end(script);
+    } else if (request.url === '/spellcheck-worker.js') {
+      response.writeHead(200, { 'Content-Type': 'application/javascript' });
+      response.end(worker);
+    } else if (spellcheckFile) {
+      response.writeHead(200, { 'Content-Type': spellcheckFile.type });
+      response.end(spellcheckFile.bytes);
     } else if (request.url?.startsWith('/proof/')) {
       response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
       response.end(

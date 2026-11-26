@@ -343,6 +343,20 @@ async function main(): Promise<void> {
     target: 'es2022',
     legalComments: 'inline',
   });
+  // The page's prompt editor preferences keep their snapshot through SugarPrompt's preference
+  // session, bundled privately. Nothing the editor engine checks by identity crosses this bundle.
+  await build({
+    ...browserDependencyResolution,
+    entryPoints: [
+      path.join(repositoryRoot, 'frontend/comfyui/ui/prompt_editor/PromptEditorPreferences.ts'),
+    ],
+    outfile: path.join(generatedRoot, 'comfyui/ui/prompt_editor/PromptEditorPreferences.js'),
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    legalComments: 'inline',
+  });
   rmSync(path.join(generatedRoot, 'sugarprompt'), { force: true, recursive: true });
   // The canvas editing chrome mounts beside the output overlay, so both share one Vue runtime.
   await bundleVueSurface(

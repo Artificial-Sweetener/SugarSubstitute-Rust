@@ -20,8 +20,8 @@ import {
   type TagCompletionCatalog,
 } from '../../../../sugarprompt/services/src/index.js';
 
-/** Reject damaged packaged rows rather than silently publishing an incomplete autocomplete catalog. */
-export function preparePromptTagCatalog(source: string, revision: string): TagCompletionCatalog {
+/** Read the packaged rows, rejecting damaged ones rather than publishing an incomplete catalog. */
+export function bundledPromptTags(source: string): readonly BundledTag[] {
   const bundled: BundledTag[] = [];
   for (const [index, line] of source.split(/\r?\n/u).entries()) {
     if (!line.trim()) continue;
@@ -33,5 +33,20 @@ export function preparePromptTagCatalog(source: string, revision: string): TagCo
     bundled.push({ tag, popularity });
   }
   if (!bundled.length) throw new TypeError('The bundled prompt tag catalog is empty.');
-  return prepareTagCompletionCatalog({ revision, bundled, customTags: [], censoredTags: [] });
+  return Object.freeze(bundled);
+}
+
+/** Rank the bundled tags with the custom tags first and the censored tags left out. */
+export function preparePromptTagCatalog(
+  bundled: readonly BundledTag[],
+  revision: string,
+  customTags: readonly string[],
+  censoredTags: readonly string[],
+): TagCompletionCatalog {
+  return prepareTagCompletionCatalog({
+    revision,
+    bundled: [...bundled],
+    customTags: [...customTags],
+    censoredTags: [...censoredTags],
+  });
 }

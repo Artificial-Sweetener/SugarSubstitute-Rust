@@ -28,7 +28,6 @@ import {
   LoraResourceSession,
   sameLoraResources,
   resolveFeatureProfile,
-  defaultPreferences,
   prepareSceneQueue,
 } from '../../../../sugarprompt/services/src/index.js';
 import { loraScheduleText, parseScenes } from '../../../../sugarprompt/core/src/index.js';
@@ -38,7 +37,12 @@ import type {
   LoraResourceAdapter,
   LoraResourceSnapshot,
   WildcardCatalog,
+  FeaturePreferences,
+  FeatureProfile,
+  SpellcheckGateway,
 } from '../../../../sugarprompt/services/src/index.js';
+import { spellcheckSessionFor } from './PromptSpellcheckSessions.js';
+import type { PromptEditorPreferenceSource } from '../PromptEditorPreferences.js';
 import { SugarPromptMenu } from './SugarPromptMenu.js';
 import { PromptCompletionCatalog } from './PromptCompletionCatalog.js';
 import { PromptLoraScheduling } from './PromptLoraScheduling.js';
@@ -51,7 +55,16 @@ import type { AppearanceSource } from '../../surface/appearance/AppearanceState.
 import { applyOwnedTheme } from '../../surface/appearance/ThemeService.js';
 import { markComfyPromptInput } from './ComfyPromptInput.js';
 import { PromptMountReadiness } from '../PromptMountReadiness.js';
-import { bundledPromptTagCatalog } from './BundledPromptTags.js';
+import { promptTagCatalog } from './BundledPromptTags.js';
+import type { PromptTagListSource } from '../PromptTagListSource.js';
+import type { BooruPostLookup } from '../../../../sugarprompt/services/src/booru/links.js';
+import {
+  PromptLineGutter,
+  promptDocumentKind,
+  promptDocumentPreferences,
+  type PromptDocument,
+} from './PromptDocumentMode.js';
+import type { SourceLineSnapshot } from '../../../../sugarprompt/editor/src/source-line-contracts.js';
 import { createEditorField } from '../../surface/appearance/ControlFactory.js';
 import type { EditorFieldControl } from '../../surface/appearance/EditorFieldControl.js';
 import type { VisualStyle } from '../../surface/appearance/VisualStyle.js';
@@ -59,7 +72,10 @@ import { relocateControl } from '../../core/ControlPlacement.js';
 
 /** Host callbacks carry committed source and measured geometry, never a second editable buffer. */
 export interface SugarPromptMountOptions {
-  readonly anchor: HTMLTextAreaElement;
+  /** Put the editor's element in the page: beside a field's textarea, or into a document pane. */
+  readonly place: (element: HTMLElement) => void;
+  /** The whole text file this editor shows, numbered and filling its pane; null for a field. */
+  readonly document: PromptDocument | null;
   readonly source: string;
   readonly label: string;
   readonly readOnly: boolean;
@@ -90,6 +106,14 @@ export interface SugarPromptMountOptions {
   readonly loraMenu: (backendValue: string) => readonly ContextMenuEntry[];
   /** The LoRAs loaded ahead of this prompt's encoder, as the current catalog describes them. */
   readonly loraUpstream: () => readonly LoraCatalogItem[];
+  /** The person's prompt editor preferences, which a mounted editor follows as they change. */
+  readonly preferences: PromptEditorPreferenceSource;
+  /** The page's spellchecker, or null when prompts cannot be checked. */
+  readonly spellcheck: SpellcheckGateway | null;
+  /** The enabled autocomplete lists, whose tags suggestions and spellcheck follow. */
+  readonly tagLists: PromptTagListSource;
+  /** Find the post a pasted Danbooru link names, or null when posts cannot be looked up. */
+  readonly booruPostLookup: BooruPostLookup | null;
 }
 
 /** The viewport rectangle a prompt menu was opened at. */
@@ -109,6 +133,9 @@ export class SugarPromptEditor {
   readonly #api: PromptEditorApi;
   readonly #options: SugarPromptMountOptions;
   readonly #stopAppearance: () => void;
+  readonly #stopPreferences: () => void;
+  readonly #stopTagLists: () => void;
+  readonly #gutter: PromptLineGutter | null;
   readonly #content: HTMLDivElement;
   readonly #readiness: PromptMountReadiness;
   #field: EditorFieldControl | null = null;
@@ -152,13 +179,15 @@ export class SugarPromptEditor {
     // Comfy's ancestor capture handler requires this contract before descendants receive wheel input.
     this.element.dataset.captureWheel = 'true';
     this.element.style.width = '100%';
-    this.element.style.minHeight = '128px';
-    this.element.style.height = '128px';
+    this.element.style.minHeight = options.document ? '0' : '128px';
+    this.element.style.height = options.document ? '100%' : '128px';
     this.element.style.position = 'relative';
+    if (options.document) this.element.classList.add('sc-prompt-document');
     this.#content = document.createElement('div');
     this.#readiness = new PromptMountReadiness();
     this.#content.style.cssText = 'width:100%;height:100%;min-width:0;min-height:0';
-    options.anchor.before(this.element);
+    options.place(this.element);
+    this.#gutter = options.document ? new PromptLineGutter(this.element) : null;
     this.#applyAppearance();
     this.#stopAppearance = options.appearance.subscribeAppearance(() => this.#applyAppearance());
     this.#admission = new PromptCatalogAdmission(this.element, {
@@ -178,16 +207,8 @@ export class SugarPromptEditor {
     for (const type of ['keydown', 'keyup', 'pointerdown', 'contextmenu', 'wheel']) {
       this.element.addEventListener(type, (event) => event.stopPropagation());
     }
-    const profile = resolveFeatureProfile(defaultPreferences, {
-      mode: 'workflow',
-      loraScheduling: options.promptControl,
-      unavailableFeatures: [
-        'danbooru_url_import',
-        'spellcheck',
-        ...(options.pickLora ? [] : (['lora_picker'] as const)),
-      ],
-    });
-    const tagCatalog = bundledPromptTagCatalog();
+    const preferences = options.preferences.current();
+    const tagCatalog = promptTagCatalog(options.tagLists.current());
     this.#api = mountEditor(this.#content, {
       source: options.source,
       menuPresentation: (root) =>
@@ -199,7 +220,20 @@ export class SugarPromptEditor {
       placeholder: 'Write a prompt…',
       readOnly: options.readOnly,
       richRendering: true,
-      featureProfile: profile,
+      featureProfile: this.#profile(preferences),
+      wheelMode: preferences.wheelMode,
+      ...(options.document
+        ? {
+            documentKind: promptDocumentKind(options.document),
+            sourceLineChrome: {
+              enabled: true,
+              contentLeftInset: this.#gutter?.inset(options.source.split('\n').length) ?? 0,
+            },
+            onSourceLines: (lines: SourceLineSnapshot) => this.#numberLines(lines),
+          }
+        : {}),
+      spellcheckSession: spellcheckSessionFor(options.spellcheck),
+      booruPostLookup: options.booruPostLookup,
       tagCompletionCatalog: tagCatalog,
       wildcardCatalog: options.wildcardCatalog,
       modelCompletionPopupHost: options.modelCompletions,
@@ -216,6 +250,17 @@ export class SugarPromptEditor {
       regionAccent: options.regionAccent,
     });
     this.#regionAccent = options.regionAccent;
+    this.#stopTagLists = options.tagLists.subscribe(() => {
+      if (this.#disposed) return;
+      const catalog = promptTagCatalog(options.tagLists.current());
+      this.#api.setTagCompletionCatalog(catalog);
+      this.#api.setTagLexicon(catalog.lexicon);
+    });
+    this.#stopPreferences = options.preferences.subscribe((changed) => {
+      if (this.#disposed) return;
+      this.#api.setFeatureProfile(this.#profile(changed));
+      this.#api.setWheelMode(changed.wheelMode);
+    });
     this.#scheduling = new PromptLoraScheduling(
       this.#api,
       options.promptControl,
@@ -224,6 +269,34 @@ export class SugarPromptEditor {
     markComfyPromptInput(this.element);
     this.#search = new PromptSearchPainter(this.element, this.#api, options.report);
     publishPromptSearch(this.#search);
+  }
+
+  /** Number the visible lines, widening the gutter when the line count gains a digit. */
+  #numberLines(lines: SourceLineSnapshot): void {
+    const gutter = this.#gutter;
+    if (this.#disposed || !gutter) return;
+    // The editor reports lines while it mounts, before it is assigned; the first inset is its own.
+    const inset = gutter.inset(this.#committedSource.split('\n').length);
+    if (inset !== lines.chrome.contentLeftInset)
+      this.#api.setSourceLineChrome({ enabled: true, contentLeftInset: inset });
+    gutter.paint(lines, this.#content.querySelector('.cm-scroller'));
+  }
+
+  /** What this editor may offer under `preferences` and the services its host supplied. */
+  #profile(preferences: FeaturePreferences): FeatureProfile {
+    const document = this.#options.document;
+    return resolveFeatureProfile(
+      document ? promptDocumentPreferences(document, preferences) : preferences,
+      {
+        mode: document ? 'library' : 'workflow',
+        loraScheduling: this.#options.promptControl,
+        unavailableFeatures: [
+          ...(this.#options.booruPostLookup ? [] : (['danbooru_url_import'] as const)),
+          ...(this.#options.spellcheck ? [] : (['spellcheck'] as const)),
+          ...(this.#options.pickLora ? [] : (['lora_picker'] as const)),
+        ],
+      },
+    );
   }
 
   /** Preserve the native document and history when the host moves the same field to another presentation. */
@@ -335,6 +408,9 @@ export class SugarPromptEditor {
     this.#readiness.dispose();
     this.#admission.dispose();
     this.#stopAppearance();
+    this.#stopPreferences();
+    this.#stopTagLists();
+    this.#gutter?.dispose();
     this.#resources?.dispose();
     this.#api.destroy();
     this.element.remove();
@@ -503,6 +579,11 @@ export class SugarPromptEditor {
   /** Preserve native CSS-local geometry under both Comfy canvas transforms and ordinary masonry layout. */
   #layout(metrics: EditorLayoutMetrics): void {
     if (this.#disposed) return;
+    // A document fills its pane; only a field sizes itself to its text.
+    if (this.#options.document) {
+      this.#readiness.publish(metrics.viewportWidth);
+      return;
+    }
     const height = Math.max(
       128,
       Math.min(320, Math.ceil(metrics.contentHeight + metrics.outerPadding)),

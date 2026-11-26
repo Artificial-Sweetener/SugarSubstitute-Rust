@@ -16,12 +16,6 @@
 /** Ordinary ingestion composes genuine canonical preparation and one encoded command with continuous native start states. */
 import { requireValue } from '../../core/src/required.js';
 import { Transaction, type EditorState } from '@codemirror/state';
-import { decodedRangeToSource, type SourceRange } from '../../core/src/index.js';
-import {
-  pasteImportAnnotations,
-  pasteImportUserEvent,
-  type PasteImportHistoryIntent,
-} from './paste-import-history.js';
 import type { TagLexicon } from '../../core/src/index.js';
 import { encodeSource, sourceToDocument } from '../../core/src/line-endings.js';
 import { richRendering } from './presentation.js';
@@ -105,8 +99,6 @@ export interface PreparedNativeIngestion {
   readonly startState: EditorState;
   readonly transactions: readonly Transaction[];
   readonly edit: PreparedDocumentValueEdit | null;
-  /** Actual post-insertion exact-source UTF-16 boundaries, retained only by deliberate import preparation. */
-  readonly acceptedRange?: SourceRange;
 }
 /** Prepare current canonical structure off input without reconstructing a native transaction or editable state. */
 export function prepareNativeIngestionState(state: EditorState): readonly Transaction[] {
@@ -129,14 +121,15 @@ export function enteredTextInsertion(
   to: number,
   text: string,
   lexicon?: TagLexicon,
-  history?: PasteImportHistoryIntent,
+  /** Encode the text into the prompt value it lands in even in raw mode, as an imported paste is. */
+  intoValue = false,
 ): PreparedNativeIngestion {
   const logical = state.doc.toString(),
     endings = state.field(lineEndings);
   const start = sourceToDocument(logical, endings, from),
     end = sourceToDocument(logical, endings, to);
   if (from > to) throw new RangeError('Reversed insertion range');
-  const canonical = state.facet(richRendering) || history?.phase === 'replacement';
+  const canonical = state.facet(richRendering) || intoValue;
   const transactions = canonical ? [...prepareNativeIngestionState(state)] : [];
   const current = transactions.at(-1)?.state ?? state;
   const native = current.field(semanticStructures, false)?.native;
@@ -165,11 +158,7 @@ export function enteredTextInsertion(
         target,
         range: { from: changed.from, to: changed.beforeTo },
         text: normal.text.slice(changed.from, changed.afterTo),
-        publication: {
-          purpose: 'paste',
-          normalization: provenance,
-          ...(history ? { pasteHistory: history } : {}),
-        },
+        publication: { purpose: 'paste', normalization: provenance },
         selection: {
           ranges: [{ kind: 'decoded', anchor: caret, head: caret }],
           mainIndex: 0,
@@ -177,22 +166,10 @@ export function enteredTextInsertion(
       });
       if (outcome.status === 'rejected') throw new Error('decoded-ingestion-command-refused');
       transactions.push(...outcome.edit.transactions);
-      const padding = target.scope.container.valueRange.from;
-      const mapping =
-        outcome.edit.preparedValues.containersById[target.scope.container.id]?.mapping;
-      const acceptedRange =
-        history && mapping
-          ? decodedRangeToSource(mapping, {
-              from: padding + requireValue(normal.boundaryPositions[range.from], 'ingestion'),
-              to: padding + mapped,
-            })
-          : null;
-      if (history && !acceptedRange) throw new Error('paste-import-insertion-boundary');
       return Object.freeze({
         startState: state,
         transactions: Object.freeze(transactions),
         edit: outcome.edit,
-        ...(acceptedRange ? { acceptedRange: Object.freeze(acceptedRange) } : {}),
       });
     }
   }
@@ -206,26 +183,10 @@ export function enteredTextInsertion(
   };
   const source = minimalSourceReplacement(current, proposed);
   if (source) delete source.userEvent;
-  const userEvent = history ? pasteImportUserEvent(history) : 'input.paste';
-  transactions.push(
-    current.update({
-      ...source,
-      selection,
-      ...(userEvent ? { userEvent } : {}),
-      ...(history
-        ? {
-            annotations: [
-              ...pasteImportAnnotations(current, history),
-              ...(original === proposed ? [Transaction.addToHistory.of(false)] : []),
-            ],
-          }
-        : {}),
-    }),
-  );
+  transactions.push(current.update({ ...source, selection, userEvent: 'input.paste' }));
   return Object.freeze({
     startState: state,
     transactions: Object.freeze(transactions),
     edit: null,
-    ...(history ? { acceptedRange: Object.freeze({ from, to: insertedEnd }) } : {}),
   });
 }

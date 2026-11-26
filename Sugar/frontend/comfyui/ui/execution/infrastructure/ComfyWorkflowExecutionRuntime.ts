@@ -72,6 +72,8 @@ export interface ComfyWorkflowExecutionRuntimeOptions {
   readonly previewVisibility: CubePreviewVisibilityPort;
   /** Tell the user why a run was not queued, through the product's notification owner. */
   readonly notify?: (severity: 'error', title: string, message: string) => void;
+  /** Whether a queued run has its prompts' wildcards resolved; when false they run as written. */
+  readonly resolveWildcards: () => boolean;
 }
 
 /** Supply one result/session authority to all views and one observer to the existing queue bridge. */
@@ -175,6 +177,7 @@ export class ComfyWorkflowExecutionRuntime {
     this.wildcards = new ComfyWildcardPrompts(
       () => options.app as ComfySceneApp | null | undefined,
       this.wildcardLibrary,
+      options.resolveWildcards,
     );
     this.previews = new ComfyWorkflowPreviewDelivery(this.results, options.logger, (frame) =>
       this.canvases.preview(frame),
@@ -420,7 +423,10 @@ export class ComfyWorkflowExecutionRuntime {
 
 /** Supply browser identity and timer capabilities at the infrastructure composition boundary. */
 export function createComfyWorkflowExecutionRuntime(
-  options: Pick<ComfyWorkflowExecutionRuntimeOptions, 'app' | 'api' | 'logger' | 'notify'>,
+  options: Pick<
+    ComfyWorkflowExecutionRuntimeOptions,
+    'app' | 'api' | 'logger' | 'notify' | 'resolveWildcards'
+  >,
 ): ComfyWorkflowExecutionRuntime {
   return new ComfyWorkflowExecutionRuntime({
     ...options,

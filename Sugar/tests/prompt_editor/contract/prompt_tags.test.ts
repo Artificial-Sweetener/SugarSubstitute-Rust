@@ -16,7 +16,10 @@
 /** Prove the complete committed dataset and its native ranking and normalization contract. */
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { preparePromptTagCatalog } from '../../../frontend/comfyui/ui/prompt_editor/runtime/PromptTagCatalog.js';
+import {
+  bundledPromptTags,
+  preparePromptTagCatalog,
+} from '../../../frontend/comfyui/ui/prompt_editor/runtime/PromptTagCatalog.js';
 
 const source = readFileSync('frontend/comfyui/ui/prompt_editor/assets/danbooru-tags.txt', 'utf8');
 
@@ -25,7 +28,7 @@ test('ships the complete pinned Substitute tag snapshot with ordinary and rare t
     '38a5b8d1ff959d927d47423191575ea1281ee0c5e1a77e5773967ca1dfab5f82',
   );
   expect(source.trimEnd().split('\n')).toHaveLength(157516);
-  const catalog = preparePromptTagCatalog(source, 'bundled-proof');
+  const catalog = preparePromptTagCatalog(bundledPromptTags(source), 'bundled-proof', [], []);
   expect(catalog.search('blue_ey')[0]?.tag).toBe('blue eyes');
   expect(catalog.search('long hai')[0]?.tag).toBe('long hair');
   expect(catalog.lexicon.contains('BLUE_EYES')).toBe(true);
@@ -38,8 +41,12 @@ test('ships the complete pinned Substitute tag snapshot with ordinary and rare t
 
 test('preserves popularity, underscore identity, zero counts and stable duplicate ranking', () => {
   const catalog = preparePromptTagCatalog(
-    'soft_light,7 (danbooru:General)\r\nsoft_lighting,3\nsoft_light,2\nsoft_lights,0\n',
+    bundledPromptTags(
+      'soft_light,7 (danbooru:General)\r\nsoft_lighting,3\nsoft_light,2\nsoft_lights,0\n',
+    ),
     'small',
+    [],
+    [],
   );
   expect(catalog.search('SOFT L')).toEqual([
     { tag: 'soft light', popularity: 7, sourceLabel: null },
@@ -58,5 +65,23 @@ test.each([
   'tag,12junk',
   'tag,1\nbroken',
 ])('rejects damaged bundled data: %j', (text) => {
-  expect(() => preparePromptTagCatalog(text, 'invalid')).toThrow(TypeError);
+  expect(() => bundledPromptTags(text)).toThrow(TypeError);
+});
+
+test('custom list tags come first and are known words; censored tags are neither suggested nor known', () => {
+  const catalog = preparePromptTagCatalog(
+    bundledPromptTags('soft_light,7\nsoft_lighting,3\nsoft_focus,2\n'),
+    'lists',
+    ['Soft_Glow', 'soft light'],
+    ['soft_lighting'],
+  );
+  expect(catalog.search('soft')).toEqual([
+    { tag: 'Soft Glow', popularity: null, sourceLabel: 'custom' },
+    { tag: 'soft light', popularity: null, sourceLabel: 'custom' },
+    { tag: 'soft focus', popularity: 2, sourceLabel: null },
+  ]);
+  expect(catalog.lexicon.contains('soft glow')).toBe(true);
+  expect(catalog.lexicon.containsWord('glow')).toBe(true);
+  expect(catalog.lexicon.contains('soft lighting')).toBe(false);
+  expect(catalog.lexicon.containsWord('lighting')).toBe(false);
 });

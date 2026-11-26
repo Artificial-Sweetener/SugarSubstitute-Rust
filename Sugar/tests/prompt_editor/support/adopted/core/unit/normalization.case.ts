@@ -104,6 +104,7 @@ test('prepared exact membership escapes balanced literal parentheses and leaves 
         seen.push(text);
         return lexicon.contains(text);
       },
+      containsWord: (word) => lexicon.containsWord(word),
     },
   });
   assert.equal(

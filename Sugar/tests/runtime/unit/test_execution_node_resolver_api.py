@@ -110,6 +110,7 @@ boundaries = {
     'frontend_assets': {'install_canvas_module_mime': installed},
     'host_api': {'set_active_backend_services': installed},
     'model_library.integration': {'install_model_library': installed},
+    'danbooru.integration': {'install_danbooru': installed},
     'output_saving.integration': {
         'install_output_saving': lambda _server: SimpleNamespace(policy=None)
     },

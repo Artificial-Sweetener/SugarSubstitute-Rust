@@ -14,7 +14,6 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Clipboard source fidelity, including a private format surviving platform plain-text newline conversion. */
-import type { PasteImportHistoryIntent } from './paste-import-history.js';
 import type { EditorState, TransactionSpec } from '@codemirror/state';
 import { isolateHistory } from '@codemirror/commands';
 import type { TagLexicon } from '../../core/src/index.js';
@@ -72,7 +71,6 @@ export function clipboardPaste(
   state: EditorState,
   transfer: ClipboardTransfer,
   lexicon?: TagLexicon,
-  history?: PasteImportHistoryIntent,
 ): PreparedNativeIngestion | null {
   if (state.readOnly || !transfer.text) return null;
   const logical = state.doc.toString(),
@@ -81,7 +79,7 @@ export function clipboardPaste(
   const from = documentToSource(logical, endings, selection.from),
     to = documentToSource(logical, endings, selection.to);
   if (transfer.kind === 'plain')
-    return enteredTextInsertion(state, from, to, transfer.text, lexicon, history);
+    return enteredTextInsertion(state, from, to, transfer.text, lexicon);
   const transaction = state.update({
     ...exactReplacement(state, from, to, transfer.text),
     annotations: isolateHistory.of('full'),

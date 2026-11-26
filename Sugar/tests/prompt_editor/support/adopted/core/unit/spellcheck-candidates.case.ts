@@ -81,6 +81,17 @@ test('actual CSV header exclusion and quoted decoding preserve independent candi
   );
 });
 
+test('a word that appears in any known tag is never a backend candidate', () => {
+  const scope = scopes('a kemonomimi girl, Mode switch, absurdres, misspeled words')[0]!;
+  const lexicon = prepareTagLexicon(['kemonomimi_mode', 'absurdres', 'hatsune_miku_(cosplay)']);
+  assert.deepEqual(
+    prepareSpellcheckCandidates(scope, lexicon).candidates.map((value) => value.text),
+    ['a', 'girl', 'switch', 'misspeled', 'words'],
+  );
+  assert.equal(lexicon.containsWord('Cosplay'), true);
+  assert.equal(lexicon.containsWord('cosplayer'), false);
+});
+
 test('pinned digit metadata excludes superscripts and decimal numbers while Roman/fraction token text remains prose', () => {
   const output = prepareSpellcheckCandidates(scopes('model², model٣, softⅧ, soft½')[0]!);
   assert.deepEqual(
@@ -94,6 +105,9 @@ test('pinned digit metadata excludes superscripts and decimal numbers while Roma
         contains() {
           throw error;
         },
+        containsWord() {
+          throw error;
+        },
       }),
     (value) => value === error,
   );
@@ -103,6 +117,9 @@ test('prepared syntax never invokes tag knowledge and shared tokens preserve exa
   const error = new Error('unused-lexicon');
   const blocked = prepareSpellcheckCandidates(scopes('(soft:1.2), {library}, <lora:model:1>')[0]!, {
     contains() {
+      throw error;
+    },
+    containsWord() {
       throw error;
     },
   });

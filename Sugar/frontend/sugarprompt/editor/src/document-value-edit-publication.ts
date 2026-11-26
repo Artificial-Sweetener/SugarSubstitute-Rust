@@ -15,17 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bounded command publication adapts native metadata before the decoded edit is issued. */
 import { requireValue } from '../../core/src/required.js';
-import {
-  Transaction,
-  type StateEffect,
-  type Annotation,
-  type EditorState,
-} from '@codemirror/state';
-import {
-  pasteImportAnnotations,
-  pasteImportUserEvent,
-  type PasteImportHistoryIntent,
-} from './paste-import-history.js';
+import { Transaction, type StateEffect, type Annotation } from '@codemirror/state';
 import { normalizationJoin } from './input-descriptor.js';
 import { authoredNesting } from './normalization-events.js';
 import type { DocumentValueNormalizationProvenance } from './document-value-ingestion.js';
@@ -43,7 +33,6 @@ export type DocumentValueEditPublication = {
   readonly authorship?: StateEffect<Authorship>;
   readonly normalization?: DocumentValueNormalizationProvenance;
   readonly reorder?: DocumentValueReorderProvenance;
-  readonly pasteHistory?: PasteImportHistoryIntent;
 } & (
   | {
       readonly purpose:
@@ -75,20 +64,10 @@ interface PreparedDocumentValuePublication {
 /** Only supported command metadata enters the same actual transaction as its encoded source. */
 export function prepareDocumentValuePublication(
   publication?: DocumentValueEditPublication,
-  state?: EditorState,
 ): PreparedDocumentValuePublication {
   const effect = publication?.authorship;
   if (effect && !effect.is(installAuthorship))
     throw new Error('decoded-edit-authorship-effect-mismatch');
-  if (publication?.pasteHistory) {
-    if (publication.purpose !== 'paste' || !state) throw new Error('decoded-edit-paste-history');
-    return {
-      effects: effect ? [effect] : [],
-      userEvent: pasteImportUserEvent(publication.pasteHistory),
-      scrollIntoView: false,
-      annotations: pasteImportAnnotations(state, publication.pasteHistory),
-    };
-  }
   if (publication?.purpose === 'typed') {
     const input = publication.input,
       normalization = publication.normalization?.normalization;

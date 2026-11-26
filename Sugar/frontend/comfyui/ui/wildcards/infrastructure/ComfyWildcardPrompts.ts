@@ -35,13 +35,15 @@ const SEED_INPUTS = ['seed', 'noise_seed'] as const;
  * The texts are the multiline prompt fields of the live graph as the queued prompt carries them,
  * after scene expansion. The seed is the first seed of the queued prompt in workflow stack
  * order, which is also the global seed whenever the workflow overrides it. The workflow the
- * person authored keeps its wildcards; only what is sent to run is resolved.
+ * person authored keeps its wildcards; only what is sent to run is resolved. With resolution
+ * turned off in Prompt Editing's settings, every run is sent as written.
  */
 export class ComfyWildcardPrompts {
   /** Read the live app whose root graph constructed the prompt, and the wildcard library. */
   constructor(
     private readonly app: () => ComfySceneApp | null | undefined,
     private readonly library: WildcardCandidates,
+    private readonly resolving: () => boolean,
     private readonly entropy: () => string = () =>
       String(crypto.getRandomValues(new BigUint64Array(1))[0] ?? 0n),
   ) {}
@@ -77,6 +79,7 @@ export class ComfyWildcardPrompts {
     graph: ComfyGraph,
     output: Readonly<Record<string, unknown>>,
   ): Promise<ReadonlyMap<string, string>> {
+    if (!this.resolving()) return new Map();
     const texts = queuedPromptFields(graph, output).fields.flatMap((field) =>
       field.source === null ? [] : [field.source],
     );

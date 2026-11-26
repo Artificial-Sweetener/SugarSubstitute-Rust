@@ -652,9 +652,24 @@ groups = ["surface/integration", "frontend_core/integration"]
 
 [[area]]
 name = "prompt_editor"
-sources = ["frontend/sugarprompt/**", "frontend/comfyui/ui/prompt_editor/**", "web/sugarprompt/**", "web/comfyui/ui/prompt_editor/**"]
+sources = ["frontend/sugarprompt/**", "frontend/comfyui/ui/prompt_editor/**", "web/sugarprompt/**", "web/comfyui/ui/prompt_editor/**", "spellcheck/**", "scripts/spellcheck/**", "frontend/static/spellcheck/**", "web/spellcheck/**"]
 proofs = ["unit", "contract", "integration"]
 isolated_proofs = ["integration"]
+
+[[area]]
+name = "danbooru"
+sources = ["sugarcubes/danbooru/**", "frontend/comfyui/ui/danbooru/**", "web/comfyui/ui/danbooru/**"]
+proofs = ["unit", "integration"]
+
+[[area]]
+name = "autocomplete_lists"
+sources = ["frontend/comfyui/ui/autocomplete_lists/**", "web/comfyui/ui/autocomplete_lists/**"]
+proofs = ["integration"]
+
+[[area]]
+name = "text_assets"
+sources = ["frontend/comfyui/ui/text_assets/**", "web/comfyui/ui/text_assets/**"]
+proofs = ["integration"]
 
 [[area]]
 name = "wildcards"

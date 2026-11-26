@@ -13,17 +13,35 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Share one prepared built-in tag catalog across editor and renderer lifetimes. */
+/** Share one prepared tag catalog across editor and renderer lifetimes, per autocomplete lists. */
 import tags from '../assets/danbooru-tags.txt';
-import { preparePromptTagCatalog } from './PromptTagCatalog.js';
-import type { TagCompletionCatalog } from '../../../../sugarprompt/services/src/index.js';
+import { bundledPromptTags, preparePromptTagCatalog } from './PromptTagCatalog.js';
+import type {
+  BundledTag,
+  TagCompletionCatalog,
+} from '../../../../sugarprompt/services/src/index.js';
+import type { PromptTagLists } from '../../autocomplete_lists/application/AutocompleteListLibrary.js';
 
-let catalog: TagCompletionCatalog | undefined;
+const BUNDLED_REVISION = 'sha256:38a5b8d1ff959d927d47423191575ea1281ee0c5e1a77e5773967ca1dfab5f82';
 
-/** Prepare the bundled snapshot once, before a native editor accepts input. */
-export function bundledPromptTagCatalog(): TagCompletionCatalog {
-  return (catalog ??= preparePromptTagCatalog(
-    tags,
-    'sha256:38a5b8d1ff959d927d47423191575ea1281ee0c5e1a77e5773967ca1dfab5f82',
-  ));
+let bundled: readonly BundledTag[] | undefined;
+let prepared:
+  | { readonly lists: PromptTagLists | null; readonly catalog: TagCompletionCatalog }
+  | undefined;
+
+/**
+ * The bundled snapshot with the enabled autocomplete lists' tags: custom tags added, censored
+ * tags hidden. Every editor shares the catalog of the newest lists, prepared once per revision.
+ */
+export function promptTagCatalog(lists: PromptTagLists | null): TagCompletionCatalog {
+  if (prepared?.lists === lists) return prepared.catalog;
+  bundled ??= bundledPromptTags(tags);
+  const catalog = preparePromptTagCatalog(
+    bundled,
+    lists ? `${BUNDLED_REVISION}:lists:${lists.revision}` : BUNDLED_REVISION,
+    lists?.custom ?? [],
+    lists?.censored ?? [],
+  );
+  prepared = { lists, catalog };
+  return catalog;
 }

@@ -47,6 +47,7 @@ from .sugarcubes.runtime import (
     queue_observer_registry,
 )
 from .sugarcubes.model_library.integration import install_model_library
+from .sugarcubes.danbooru.integration import install_danbooru
 from .sugarcubes.output_saving.integration import install_output_saving
 from .sugarcubes.input_canvas.infrastructure.http_routes import install_input_previews
 from .sugarcubes.execution.spatial_probe_http import install_spatial_probe_routes
@@ -108,6 +109,11 @@ if PromptServer is not None:
         _model_library_runtime = install_model_library(PromptServer)
     except (ImportError, OSError, RuntimeError, TypeError, ValueError):
         _LOGGER.exception("SugarCubes: model library APIs are unavailable.")
+
+    try:
+        install_danbooru(PromptServer)
+    except (ImportError, OSError, RuntimeError, TypeError, ValueError):
+        _LOGGER.exception("SugarCubes: Danbooru prompt APIs are unavailable.")
 
 
 __all__ = [

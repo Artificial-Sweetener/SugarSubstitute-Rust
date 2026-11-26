@@ -225,8 +225,9 @@ test('host import abort reentry preserves the newer ignored-abort paste until na
     assert.equal(c.owner.fromPasteImport(literal), true);
     await c.enteredLookup;
     const accepted = c.state();
-    assert.equal(readExactSource(accepted) === literal, true);
-    assert.deepEqual([undoDepth(accepted), redoDepth(accepted)], [1, 0]);
+    // A Danbooru link is not pasted while its post is looked up.
+    assert.equal(readExactSource(accepted), '');
+    assert.deepEqual([undoDepth(accepted), redoDepth(accepted)], [0, 0]);
     c.blur();
     assert.equal(c.aborts(), 1);
     await c.enteredRead;
@@ -235,7 +236,7 @@ test('host import abort reentry preserves the newer ignored-abort paste until na
     c.owner.destroy();
     assert.deepEqual(await c.newerOutcome(), { status: 'disposed' });
     assert.equal(c.state(), accepted);
-    assert.deepEqual([undoDepth(c.state()), redoDepth(c.state())], [1, 0]);
+    assert.deepEqual([undoDepth(c.state()), redoDepth(c.state())], [0, 0]);
     await c.dispose();
     assert.equal(c.state(), accepted);
   } catch (cause) {

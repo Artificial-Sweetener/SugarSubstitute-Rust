@@ -49,7 +49,6 @@ import { prepareNativeDocumentValues } from './document-values.js';
 import { readExactSource } from './exact-source.js';
 import { prepareDocumentValuePublication } from './document-value-edit-publication.js';
 import { authorship, installAuthorship, normalizedAuthorship } from './authorship.js';
-import { pasteImportContinuation, type PasteImportHistory } from './paste-import-history.js';
 import { normalizationJoin } from './input-descriptor.js';
 import { authoredImplicitDepth } from './normalization-events.js';
 import { reorderedAuthorship } from './reorder-authorship.js';
@@ -73,7 +72,6 @@ interface DocumentValueEditIssuance {
   readonly historyIsolation: 'before' | 'after' | 'full' | undefined;
   readonly userEvent: string | undefined;
   readonly time: number | undefined;
-  readonly pasteHistory: PasteImportHistory | undefined;
   readonly normalizationJoin: boolean | undefined;
   readonly authoredImplicitDepth: number | undefined;
 }
@@ -127,7 +125,6 @@ export function isIssuedDocumentValueEdit(
         issuance.transaction.annotation(Transaction.addToHistory) === issuance.history &&
         issuance.transaction.annotation(isolateHistory) === issuance.historyIsolation &&
         issuance.transaction.annotation(Transaction.userEvent) === issuance.userEvent &&
-        issuance.transaction.annotation(pasteImportContinuation) === issuance.pasteHistory &&
         Object.is(issuance.transaction.annotation(Transaction.time), issuance.time) &&
         issuance.transaction.annotation(normalizationJoin) === issuance.normalizationJoin &&
         issuance.transaction.annotation(authoredImplicitDepth) ===
@@ -172,7 +169,6 @@ function registerDocumentValueEdit(
     historyIsolation: transaction?.annotation(isolateHistory),
     userEvent: transaction?.annotation(Transaction.userEvent),
     time: transaction?.annotation(Transaction.time),
-    pasteHistory: transaction?.annotation(pasteImportContinuation),
     normalizationJoin: transaction?.annotation(normalizationJoin),
     authoredImplicitDepth: transaction?.annotation(authoredImplicitDepth),
   });
@@ -255,7 +251,6 @@ export function prepareDocumentValueEdit(
     intent.publication
       ? { ...intent.publication, ...(authored ? { authorship: authored } : {}) }
       : undefined,
-    state,
   );
   const authoredPaste = intent.publication?.purpose === 'paste' && publication.effects.length > 0;
   if (exact) delete exact.userEvent;
@@ -281,11 +276,9 @@ export function prepareDocumentValueEdit(
           annotations:
             intent.publication?.purpose === 'typed'
               ? (publication.annotations ?? [])
-              : intent.publication?.pasteHistory
-                ? [...(publication.annotations ?? []), Transaction.addToHistory.of(false)]
-                : authoredPaste
-                  ? isolateHistory.of('full')
-                  : [...(publication.annotations ?? []), Transaction.addToHistory.of(false)],
+              : authoredPaste
+                ? isolateHistory.of('full')
+                : [...(publication.annotations ?? []), Transaction.addToHistory.of(false)],
         });
   const postState = transaction?.state ?? state;
   if (

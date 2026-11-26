@@ -13,12 +13,18 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** One mounted native paste lifetime publishes a literal immediately and replaces only its still-current admitted value. */
-import { requireValue } from '../../core/src/required.js';
-import { Transaction, type EditorState } from '@codemirror/state';
+/**
+ * Paste a Danbooru post link as the post's tags.
+ *
+ * Nothing is inserted while the post is looked up. When the lookup answers, the tags are pasted
+ * where the link was pasted, as one ordinary paste, so a single undo removes them and the link
+ * never appears. A lookup that finds nothing pastes the link as written. Typing meanwhile moves
+ * the paste point with the text; leaving the field drops the paste.
+ */
+import type { EditorState } from '@codemirror/state';
 import type { EditorView, ViewUpdate } from '@codemirror/view';
-import type { TagLexicon, SourceRange } from '../../core/src/index.js';
-import { sourceToDocument } from '../../core/src/line-endings.js';
+import type { TagLexicon } from '../../core/src/index.js';
+import { documentToSource } from '../../core/src/line-endings.js';
 import {
   classifyBooruLink,
   importBooruLink,
@@ -26,53 +32,29 @@ import {
 } from '../../services/src/booru/links.js';
 import { featureEnabled } from '../../services/src/features/profile.js';
 import { featureProfile } from './features.js';
-import { clipboardPaste } from './clipboard.js';
-import {
-  enteredTextInsertion,
-  prepareNativeIngestionState,
-  type PreparedNativeIngestion,
-} from './ingestion.js';
+import { enteredTextInsertion, prepareNativeIngestionState } from './ingestion.js';
 import { dispatchNativeIngestion } from './native-ingestion.js';
-import { lineEndings, readExactSource } from './exact-source.js';
+import { lineEndings } from './exact-source.js';
 import { nativeDocumentValueAt } from './document-values.js';
 import { semanticStructures } from './structure.js';
-import { editorFreshness, type EditorFreshness } from './freshness.js';
-import { isIssuedDocumentValueEdit } from './document-value-edit-issuance.js';
-import {
-  selectionContents,
-  selectionMatches,
-  type NativeSelectionContents,
-} from './native-selection.js';
-import {
-  currentPasteImportHistory,
-  preparePasteImportHistory,
-  acceptPasteImportHistory,
-  capturePasteImportHistory,
-  followPasteImportHistory,
-  retirePasteImportHistory,
-  type PasteImportHistory,
-} from './paste-import-history.js';
-/** Current accepted URL bounds and observations are retained only until this one request settles or retires. */
+
+/** One paste waiting for its lookup: where it goes, in document positions, and what was pasted. */
 interface PendingPaste {
   readonly abort: AbortController;
-  readonly history: PasteImportHistory;
-  readonly initial: PreparedNativeIngestion;
-  readonly transaction: Transaction;
-  accepted: boolean;
-  readonly range: SourceRange;
-  readonly literal: string;
-  readonly freshness: EditorFreshness;
-  readonly selection: NativeSelectionContents;
-  state: EditorState;
+  readonly text: string;
+  from: number;
+  to: number;
 }
-/** The mounted clipboard plugin delegates lookup cancellation and accepted-paste freshness without another editable buffer. */
+
+/** The mounted clipboard plugin's one Danbooru paste at a time. */
 export class BooruPasteImport {
   private pending: PendingPaste | null = null;
   private disposed = false;
   private readonly view: EditorView;
   private readonly lookup: () => BooruPostLookup | undefined;
   private readonly lexicon: () => TagLexicon | undefined;
-  /** Capture actual native view and injected current host lookup/knowledge; no networking is implemented here. */
+
+  /** Capture the native view and the host's current lookup and tag knowledge. */
   constructor(
     view: EditorView,
     lookup: () => BooruPostLookup | undefined,
@@ -82,217 +64,125 @@ export class BooruPasteImport {
     this.lookup = lookup;
     this.lexicon = lexicon;
   }
-  /** Accept supported ordinary plain paste synchronously; unsupported or disabled requests stay with the ordinary clipboard owner. */
+
+  /**
+   * Take a plain paste that is a supported link, or return null to leave it to ordinary paste.
+   * The returned promise settles when the tags, or the link, have been pasted or the paste was
+   * dropped.
+   */
   start(text: string): Promise<void> | null {
-    const state = this.view.state;
     this.cancel();
-    if (this.view.state !== state) return Promise.resolve();
+    const state = this.view.state;
     if (!featureEnabled(state.facet(featureProfile), 'danbooru_url_import')) return null;
     const lookup = this.lookup();
-    if (this.view.state !== state) return Promise.resolve();
     if (
       this.disposed ||
       !lookup ||
       !classifyBooruLink(text) ||
-      this.view.state.readOnly ||
+      state.readOnly ||
       this.view.composing ||
       this.view.compositionStarted
     )
       return null;
-    const lexicon = this.lexicon();
-    if (this.view.state !== state) return Promise.resolve();
-    const preparation = prepareNativeIngestionState(state);
-    const prepared = preparation.at(-1)?.state ?? state;
-    const native = requireValue(prepared.field(semanticStructures).native, 'booru-paste-import');
-    const admitted = nativeDocumentValueAt(
-      prepared,
-      {
-        values: native.nativeValues,
-        semantics: native.documentSemantics,
-        enabled: true,
-        composing: false,
-      },
-      { from: prepared.selection.main.from, to: prepared.selection.main.to },
-    );
-    const history = preparePasteImportHistory(state);
-    let initial: PreparedNativeIngestion | null;
-    try {
-      const command = clipboardPaste(prepared, { kind: 'plain', text }, lexicon, {
-        handle: history,
-        phase: 'initial',
-      });
-      initial = command
-        ? Object.freeze({
-            ...command,
-            startState: state,
-            transactions: Object.freeze([...preparation, ...command.transactions]),
-          })
-        : null;
-    } catch (cause) {
-      retirePasteImportHistory(history);
-      throw cause;
-    }
-    const transaction = initial?.edit?.transactions[0] ?? initial?.transactions.at(-1);
-    const range = initial?.acceptedRange;
-    if (!initial || !transaction || !range || !capturePasteImportHistory(history, transaction)) {
-      retirePasteImportHistory(history);
-      return Promise.resolve();
-    }
-    const postState = transaction.state;
+    const selection = state.selection.main;
+    if (!this.withinOneValue(state)) return null;
     const pending: PendingPaste = {
       abort: new AbortController(),
-      history,
-      initial,
-      transaction,
-      accepted: false,
-      range,
-      literal: readExactSource(postState).slice(range.from, range.to),
-      freshness: postState.field(editorFreshness),
-      selection: selectionContents(postState.selection),
-      state: postState,
+      text,
+      from: selection.from,
+      to: selection.to,
     };
     this.pending = pending;
-    try {
-      if (!dispatchNativeIngestion(this.view, initial)) {
-        if (this.pending === pending) this.cancel();
-        return Promise.resolve();
-      }
-    } catch (cause) {
-      if (this.pending === pending) this.cancel();
-      throw cause;
-    }
-    if (admitted.status !== 'ready' || !pending.accepted || !this.current(pending)) {
-      if (this.pending === pending) this.cancel();
-      return Promise.resolve();
-    }
-    return this.resolve(pending, text, lookup);
+    return this.resolve(pending, lookup);
   }
-  /** Observe actual continuous native transactions; source/context/navigation/composition/focus retirement cannot be reversed by equal bytes. */
+
+  /** Move the paste point with edits made while waiting; leaving the field drops the paste. */
   update(update: Pick<ViewUpdate, 'transactions' | 'focusChanged'>): void {
-    if (!this.pending) return;
-    if (
-      (update.focusChanged && !this.view.hasFocus) ||
-      this.view.composing ||
-      this.view.compositionStarted
-    ) {
+    const pending = this.pending;
+    if (!pending) return;
+    if (update.focusChanged && !this.view.hasFocus) {
       this.cancel();
       return;
     }
     for (const transaction of update.transactions) {
-      const pending = this.pending;
-      if (!pending) return;
-      if (!pending.accepted) {
-        if (transaction === pending.transaction) {
-          if (!acceptPasteImportHistory(pending.history, transaction, transaction.state)) {
-            this.cancel();
-            return;
-          }
-          pending.accepted = true;
-        } else {
-          const index = pending.initial.transactions.indexOf(transaction),
-            command = pending.initial.transactions.indexOf(pending.transaction);
-          if (index < 0 || index >= command) {
-            this.cancel();
-            return;
-          }
-          continue;
-        }
-      } else if (!followPasteImportHistory(pending.history, transaction)) {
-        this.cancel();
-        return;
-      }
-      pending.state = transaction.state;
+      if (!transaction.docChanged) continue;
+      // Text typed at the paste point stays after the pasted tags.
+      pending.from = transaction.changes.mapPos(pending.from, -1);
+      pending.to = Math.max(pending.from, transaction.changes.mapPos(pending.to, -1));
     }
   }
-  /** Retire one request and its history capability; ignored-abort providers are still prevented from publishing. */
+
+  /** Drop the waiting paste, if any. */
   cancel(): void {
     const pending = this.pending;
     this.pending = null;
-    if (pending) {
-      pending.abort.abort();
-      retirePasteImportHistory(pending.history);
-    }
+    pending?.abort.abort();
   }
-  /** Release the mounted view's only request owner. */
+
+  /** Release the mounted view's only paste owner. */
   destroy(): void {
     this.disposed = true;
     this.cancel();
   }
-  /** Compare all live native premises and original issued payload before preparing any replacement. */
-  private current(pending: PendingPaste): boolean {
-    const state = this.view.state;
-    return (
-      !this.disposed &&
-      featureEnabled(state.facet(featureProfile), 'danbooru_url_import') &&
-      this.view.hasFocus &&
-      this.pending === pending &&
-      !pending.abort.signal.aborted &&
-      state === pending.state &&
-      currentPasteImportHistory(pending.history, state) &&
-      state.field(editorFreshness) === pending.freshness &&
-      !state.readOnly &&
-      !this.view.composing &&
-      !this.view.compositionStarted &&
-      selectionMatches(state.selection, pending.selection) &&
-      (!pending.initial.edit ||
-        isIssuedDocumentValueEdit(
-          pending.initial.edit.transactions[0]?.state ?? pending.initial.edit.startState,
-          pending.initial.edit.postValues.scopes.profileKey,
-          pending.initial.edit,
-          requireValue(
-            pending.initial.edit.startState.field(semanticStructures).native,
-            'booru-paste-import',
-          ).documentSemantics,
-        )) &&
-      readExactSource(state).slice(pending.range.from, pending.range.to) === pending.literal
-    );
-  }
-  /** External causes remain observable; every typed unavailability keeps the literal and every terminal path releases native receipts. */
-  private async resolve(
-    pending: PendingPaste,
-    text: string,
-    lookup: BooruPostLookup,
-  ): Promise<void> {
+
+  /** Paste the tags, or the link when the lookup found none, while the paste is still wanted. */
+  private async resolve(pending: PendingPaste, lookup: BooruPostLookup): Promise<void> {
     try {
-      const result = await importBooruLink(text, lookup, pending.abort.signal);
-      if (result.status !== 'ready' || !result.text || !this.current(pending)) return;
-      for (const transaction of prepareNativeIngestionState(this.view.state)) {
-        if (!this.current(pending)) return;
-        this.view.dispatch(transaction);
-      }
-      if (!this.current(pending)) return;
-      const state = this.view.state,
-        native = state.field(semanticStructures).native;
-      if (!native) return;
-      const logical = state.doc.toString(),
-        endings = state.field(lineEndings);
-      const admission = nativeDocumentValueAt(
-        state,
+      const result = await importBooruLink(pending.text, lookup, pending.abort.signal);
+      if (result.status === 'cancelled' || !this.wanted(pending)) return;
+      this.paste(pending, result.status === 'ready' && result.text ? result.text : pending.text);
+    } finally {
+      if (this.pending === pending) this.pending = null;
+    }
+  }
+
+  /**
+   * Whether the selection lies inside one prompt value. A paste into a CSV header or across two
+   * values is no prompt text, so it stays an ordinary paste and nothing is looked up.
+   */
+  private withinOneValue(state: EditorState): boolean {
+    const prepared = prepareNativeIngestionState(state).at(-1)?.state ?? state;
+    const native = prepared.field(semanticStructures).native;
+    if (!native) return false;
+    const selection = prepared.selection.main;
+    return (
+      nativeDocumentValueAt(
+        prepared,
         {
           values: native.nativeValues,
           semantics: native.documentSemantics,
           enabled: true,
           composing: false,
         },
-        {
-          from: sourceToDocument(logical, endings, pending.range.from),
-          to: sourceToDocument(logical, endings, pending.range.to),
-        },
-      );
-      if (admission.status !== 'ready') return;
-      const lexicon = this.lexicon();
-      if (!this.current(pending)) return;
-      const plan = enteredTextInsertion(
-        state,
-        pending.range.from,
-        pending.range.to,
-        result.text,
-        lexicon,
-        { handle: pending.history, phase: 'replacement' },
-      );
-      if (this.current(pending)) dispatchNativeIngestion(this.view, plan);
-    } finally {
-      if (this.pending === pending) this.cancel();
-    }
+        { from: selection.from, to: selection.to },
+      ).status === 'ready'
+    );
+  }
+
+  /** Whether the paste can still land: not dropped, and the field still editable and focused. */
+  private wanted(pending: PendingPaste): boolean {
+    return (
+      !this.disposed &&
+      this.pending === pending &&
+      !pending.abort.signal.aborted &&
+      this.view.hasFocus &&
+      !this.view.state.readOnly &&
+      !this.view.composing &&
+      !this.view.compositionStarted &&
+      featureEnabled(this.view.state.facet(featureProfile), 'danbooru_url_import')
+    );
+  }
+
+  /** Paste `text` over the paste range as one ordinary paste. */
+  private paste(pending: PendingPaste, text: string): void {
+    const state = this.view.state;
+    const logical = state.doc.toString(),
+      endings = state.field(lineEndings);
+    const from = documentToSource(logical, endings, Math.min(pending.from, state.doc.length)),
+      to = documentToSource(logical, endings, Math.min(pending.to, state.doc.length));
+    dispatchNativeIngestion(
+      this.view,
+      enteredTextInsertion(state, from, to, text, this.lexicon(), true),
+    );
   }
 }

@@ -446,14 +446,35 @@ export class SettingsWorkspaceView {
     this.#content.replaceChildren();
   }
 
-  /** Python's wrap modes: controls under the text below the row's wrap width; no icon when narrow. */
+  /**
+   * Python's wrap modes: controls under the text below the row's wrap width; no icon when narrow.
+   *
+   * Wrapping changes a card's height, and a taller page can bring the scroll bar that narrows
+   * every card, so the change is made in the next frame and only when it is one. Made in the
+   * observer's own delivery it would ask for another delivery in the same frame, which the
+   * browser reports as a ResizeObserver loop.
+   */
   #wrap(entries: readonly ResizeObserverEntry[]): void {
-    for (const entry of entries) {
+    const changes = entries.flatMap((entry) => {
       const element = entry.target;
-      if (!(element instanceof HTMLElement)) continue;
+      if (!(element instanceof HTMLElement)) return [];
       const width = entry.contentRect.width;
-      element.toggleAttribute('data-wrapped', width < Number(element.dataset.wrap ?? 476));
-      element.toggleAttribute('data-narrow', width < NARROW);
-    }
+      const wrapped = width < Number(element.dataset.wrap ?? 476);
+      const narrow = width < NARROW;
+      return element.hasAttribute('data-wrapped') !== wrapped ||
+        element.hasAttribute('data-narrow') !== narrow
+        ? [{ element, wrapped, narrow }]
+        : [];
+    });
+    if (!changes.length) return;
+    const apply = (): void => {
+      for (const { element, wrapped, narrow } of changes) {
+        element.toggleAttribute('data-wrapped', wrapped);
+        element.toggleAttribute('data-narrow', narrow);
+      }
+    };
+    const frame = this.document.defaultView?.requestAnimationFrame;
+    if (frame) frame.call(this.document.defaultView, apply);
+    else apply();
   }
 }

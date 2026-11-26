@@ -27,7 +27,6 @@ import { history, invertedEffects, isolateHistory } from '@codemirror/commands';
 import { ViewPlugin, type EditorView } from '@codemirror/view';
 import { unicodeAlphanumeric } from '../../core/src/prompt/alphanumeric.js';
 import { changesExactSource } from './exact-source.js';
-import { joinsPasteImportHistory, pasteImportOriginalSelection } from './paste-import-history.js';
 import { normalizationJoin } from './input-descriptor.js';
 import type { HostConfiguration } from './host-update.js';
 /** One current key edit records only its category, resulting logical-document UTF-16 caret and native timestamp. */
@@ -212,8 +211,7 @@ const currentKeyEdit = StateField.define<KeyEdit | null>({
 /** Adjacent words and direction-specific deletes join within the donor's actual idle windows; normalization stays with its accepted native input. */
 function joinsCurrentEdit(transaction: Transaction): boolean {
   if (transaction.reconfigured && !preservesConfigurationHistory(transaction)) return false;
-  if (transaction.annotation(normalizationJoin) || joinsPasteImportHistory(transaction))
-    return true;
+  if (transaction.annotation(normalizationJoin)) return true;
   const isolation = transaction.annotation(isolateHistory);
   if (isolation === 'full' || isolation === 'before') return false;
   const previous = transaction.startState.field(currentKeyEdit),
@@ -259,11 +257,7 @@ function invertSelection(transaction: Transaction) {
     joinsCurrentEdit(transaction)
   )
     return [];
-  return [
-    restoreHistorySelection.of(
-      pasteImportOriginalSelection(transaction) ?? transaction.startState.selection,
-    ),
-  ];
+  return [restoreHistorySelection.of(transaction.startState.selection)];
 }
 /** Prepare a source-neutral boundary for this current derived group; native history, caret and selection remain authoritative. */
 export function historyBoundary(state: EditorState): Transaction | null {

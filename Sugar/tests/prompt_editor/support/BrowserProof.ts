@@ -16,6 +16,15 @@
 /** Exercise real prompt mounting and renderer-specific surfaces in an isolated browser document. */
 import { EditorSelection } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { WorkerSpellcheckGateway } from '../../../frontend/comfyui/ui/prompt_editor/spellcheck/WorkerSpellcheckGateway.js';
+import {
+  applyPreferencePatch,
+  defaultPreferences,
+} from '../../../frontend/sugarprompt/services/src/features/preferences.js';
+import type {
+  FeaturePreferences,
+  PreferencePatch,
+} from '../../../frontend/sugarprompt/services/src/features/contracts.js';
 import { CubePromptEditorHost } from '../../../frontend/comfyui/ui/prompt_editor/CubePromptEditorHost.js';
 import { CubePromptTextareaScope } from '../../../frontend/comfyui/ui/surface/CubePromptTextareaScope.js';
 import { ComfyLiteGraphCubeDomWidgetHost } from '../../../frontend/comfyui/ui/surface/ComfyLiteGraphCubeDomWidgetHost.js';
@@ -57,6 +66,21 @@ export interface PromptBrowserProof {
   axes(transform: string): { readonly x: number; readonly y: number } | null;
   annotateNativeField(): void;
   theme(style: VisualStyle, dark: boolean): void;
+  /** Change the person's prompt editor preferences, as Prompt Editing's switches do. */
+  preferences(patch: PreferencePatch): void;
+  /** Show a whole file in a full-height pane, as the wildcard and list editor does. */
+  mountDocument(
+    source: string,
+    document: 'wildcard-txt' | 'wildcard-csv' | 'tag-list',
+  ): Promise<void>;
+  /** The mounted document's text as its editor last reported it. */
+  documentText(): string | null;
+  /** Every error the page's editors reported. */
+  errors(): readonly string[];
+  /** Whether a pasted Danbooru link is waiting for its post. */
+  booruAsked(): boolean;
+  /** Answer the waiting Danbooru lookup with `reply`. */
+  answerBooru(reply: unknown): void;
   selection(): { readonly anchor: number; readonly head: number } | null;
   /** Offsets where one visual row ends and the next begins, in the mounted editor's visible rows. */
   wrapBoundaries(): readonly number[];
@@ -116,9 +140,42 @@ const host = new CubePromptEditorHost(
 const pickerStyle = document.createElement('style');
 pickerStyle.textContent = modelPickerCss;
 document.head.append(pickerStyle);
+const preferenceListeners = new Set<(preferences: FeaturePreferences) => void>();
+// Spellcheck marks are turned on by the tests that prove them, so other proofs see none.
+let preferences: FeaturePreferences = applyPreferencePatch(defaultPreferences, {
+  allowed: { spellcheck: false },
+});
+const spellingWords: string[] = [];
+let booruAnswer: ((reply: unknown) => void) | null = null;
 host.setup(null, {
   app: null,
   logger: { error: () => undefined },
+  booruPostLookup: () =>
+    new Promise((resolve) => {
+      booruAnswer = resolve;
+    }),
+  spellcheck: new WorkerSpellcheckGateway(
+    new Worker('/spellcheck-worker.js', { type: 'module' }),
+    {
+      module: '/spellcheck/sugarcubes-spellcheck.wasm',
+      aff: '/spellcheck/en_US.aff',
+      dic: '/spellcheck/en_US.dic',
+    },
+    {
+      read: () => spellingWords,
+      add: async (word) => {
+        spellingWords.push(word);
+      },
+    },
+    (error) => errors.push(error instanceof Error ? error.message : String(error)),
+  ),
+  preferences: {
+    current: () => preferences,
+    subscribe: (listener) => {
+      preferenceListeners.add(listener);
+      return () => preferenceListeners.delete(listener);
+    },
+  },
   models: {
     mountGallery: (events) => {
       const element = document.createElement('div');
@@ -257,7 +314,38 @@ function promptView(): EditorView {
   return view;
 }
 
+let documentText: string | null = null;
+let documentEditor: { dispose(): void } | null = null;
+
 window.promptBrowserProof = {
+  async mountDocument(source, kind): Promise<void> {
+    documentEditor?.dispose();
+    const pane = document.createElement('section');
+    pane.dataset.proofDocument = '';
+    pane.style.cssText = 'height:420px;width:700px;position:relative';
+    document.body.append(pane);
+    documentText = source;
+    documentEditor = await host.mountDocument(pane, {
+      source,
+      label: 'Proof file',
+      document: kind,
+      changed: (text) => {
+        documentText = text;
+      },
+    });
+  },
+  documentText: () => documentText,
+  errors: () => [...errors],
+  booruAsked: () => booruAnswer !== null,
+  answerBooru(reply): void {
+    const answer = booruAnswer;
+    booruAnswer = null;
+    answer?.(reply);
+  },
+  preferences(patch): void {
+    preferences = applyPreferencePatch(preferences, patch);
+    for (const listener of [...preferenceListeners]) listener(preferences);
+  },
   theme(style, dark): void {
     accentStyle.textContent = accentThemeCss('#b63acb', dark);
     publishVisualStyle(document, style);

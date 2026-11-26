@@ -254,6 +254,7 @@ function fixture(targets?: readonly string[]) {
   const visibility = { visible: true, listeners: new Set<() => void>() };
   const clock = new WorkflowTestClock();
   const runtime = new ComfyWorkflowExecutionRuntime({
+    resolveWildcards: () => true,
     app: host,
     api,
     ...(targets ? { canvasTargets: () => targets } : {}),

@@ -13,443 +13,190 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Actual CM accepted paste, source freshness and native history independently characterize import lifetime. */
+/** A pasted Danbooru link becomes its post's tags as one paste, or the link when there are none. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { undo, redo, undoDepth } from '@codemirror/commands';
-import { Compartment, StateEffect, Transaction } from '@codemirror/state';
-import { enteredTextInsertion } from '../../../../../../frontend/sugarprompt/editor/src/ingestion.ts';
-import { dispatchNativeIngestion } from '../../../../../../frontend/sugarprompt/editor/src/native-ingestion.ts';
+import { Compartment, EditorSelection, StateEffect, Transaction } from '@codemirror/state';
 import { readExactSource } from '../../../../../../frontend/sugarprompt/editor/src/exact-source.ts';
-import { invalidateCommandContext } from '../../../../../../frontend/sugarprompt/editor/src/freshness.ts';
 import { booruFixture, booruReply, lookupStarted } from './booru-paste-import-fixture.ts';
 import { featureProfile } from '../../../../../../frontend/sugarprompt/editor/src/features.ts';
 import {
   defaultPreferences,
-  featureEnabled,
   resolveFeatureProfile,
 } from '../../../../../../frontend/sugarprompt/services/src/index.ts';
-const url = 'https://danbooru.donmai.us/posts/123';
-/** Real service decisions exercise preference and field-scope admission independently. */
-const disabledImportProfiles = [
-  resolveFeatureProfile(
-    {
-      ...defaultPreferences,
-      allowed: { ...defaultPreferences.allowed, danbooru_url_import: false },
-    },
-    { mode: 'library' },
-  ),
-  resolveFeatureProfile(defaultPreferences, {
-    mode: 'workflow',
-    field: { prompt_features: ['emphasis'] },
-  }),
-];
 
-test('disabled preference and field scope leave supported URL paste to the ordinary owner', async () => {
-  for (const profile of disabledImportProfiles) {
-    const f = booruFixture('suffix');
-    try {
-      f.view.dispatch({
-        effects: StateEffect.appendConfig.of(featureProfile.of(profile)),
-        annotations: Transaction.addToHistory.of(false),
-      });
-      const before = f.state();
-      assert.equal(featureEnabled(before.facet(featureProfile), 'danbooru_url_import'), false);
-      assert.equal(f.owner.start(url), null);
-      await lookupStarted();
-      assert.equal(f.signal(), null);
-      assert.equal(f.state(), before);
-      assert.equal(readExactSource(f.state()), 'suffix');
-      assert.equal(undoDepth(f.state()), 0);
-      assert.equal(
-        dispatchNativeIngestion(f.view, enteredTextInsertion(f.state(), 0, 0, url)),
-        true,
-      );
-      assert.equal(readExactSource(f.state()), url + 'suffix');
-      assert.equal(undoDepth(f.state()), 1);
-      assert.equal(undo(f.view), true);
-      assert.equal(readExactSource(f.state()), 'suffix');
-    } finally {
-      f.destroy();
-    }
+const url = 'https://danbooru.donmai.us/posts/123';
+const enabled = resolveFeatureProfile(defaultPreferences, { mode: 'library' });
+const disabled = resolveFeatureProfile(
+  { ...defaultPreferences, allowed: { ...defaultPreferences.allowed, danbooru_url_import: false } },
+  { mode: 'library' },
+);
+
+/** A fixture whose feature profile can be swapped while a paste waits. */
+function fixture(source = '') {
+  const f = booruFixture(source);
+  const slot = new Compartment();
+  f.view.dispatch({
+    effects: StateEffect.appendConfig.of(slot.of(featureProfile.of(enabled))),
+    annotations: Transaction.addToHistory.of(false),
+  });
+  return { ...f, slot };
+}
+
+test('nothing is pasted while the post is looked up; its tags then paste as one undo step', async () => {
+  const f = fixture();
+  try {
+    const pending = f.owner.start(url);
+    assert.ok(pending);
+    await lookupStarted();
+    assert.equal(readExactSource(f.state()), '');
+    assert.equal(undoDepth(f.state()), 0);
+    f.resolve(booruReply());
+    await pending;
+    assert.equal(readExactSource(f.state()), 'cat, blue eyes');
+    assert.equal(undoDepth(f.state()), 1);
+    assert.equal(undo(f.view), true);
+    // Undo removes the tags; the link never was in the prompt.
+    assert.equal(readExactSource(f.state()), '');
+    assert.equal(redo(f.view), true);
+    assert.equal(readExactSource(f.state()), 'cat, blue eyes');
+  } finally {
+    f.destroy();
   }
 });
 
-test('disabling a genuine held import retires ignored-abort tags without changing the literal event', async () => {
-  for (const profile of disabledImportProfiles) {
-    const f = booruFixture();
-    const slot = new Compartment();
+test('a lookup that finds no tags pastes the link as written, as one undo step', async () => {
+  const replies: unknown[] = [
+    { status: 'not-found' },
+    { status: 'unavailable' },
+    { status: 'found', post: { id: 'wrong' } },
+    booruReply(''),
+  ];
+  for (const reply of replies) {
+    const f = fixture();
     try {
-      f.view.dispatch({
-        effects: StateEffect.appendConfig.of(
-          slot.of(
-            featureProfile.of(resolveFeatureProfile(defaultPreferences, { mode: 'library' })),
-          ),
-        ),
-        annotations: Transaction.addToHistory.of(false),
-      });
       const pending = f.owner.start(url);
       assert.ok(pending);
       await lookupStarted();
-      f.view.dispatch({
-        effects: slot.reconfigure(featureProfile.of(profile)),
-        annotations: Transaction.addToHistory.of(false),
-      });
-      const retired = f.state();
-      assert.equal(f.signal()?.aborted, true);
-      f.resolve(booruReply());
+      f.resolve(reply);
       await pending;
-      assert.equal(f.state(), retired);
       assert.equal(readExactSource(f.state()), url);
       assert.equal(undoDepth(f.state()), 1);
       assert.equal(undo(f.view), true);
       assert.equal(readExactSource(f.state()), '');
-      assert.equal(redo(f.view), true);
-      assert.equal(readExactSource(f.state()), url);
     } finally {
       f.destroy();
     }
   }
 });
 
-test('an unrelated disabled feature leaves allowed import and its single history event intact', async () => {
-  const f = booruFixture();
+test('typing while waiting moves the paste point; the tags land where the link was pasted', async () => {
+  const f = fixture('suffix');
   try {
-    const profile = resolveFeatureProfile(
-      {
-        ...defaultPreferences,
-        allowed: { ...defaultPreferences.allowed, spellcheck: false },
-      },
-      { mode: 'library' },
-    );
-    f.view.dispatch({
-      effects: StateEffect.appendConfig.of(featureProfile.of(profile)),
+    const pending = f.owner.start(url);
+    assert.ok(pending);
+    await lookupStarted();
+    f.view.dispatch({ changes: { from: 0, insert: 'ab, ' }, userEvent: 'input.type' });
+    f.resolve(booruReply());
+    await pending;
+    assert.equal(readExactSource(f.state()), 'cat, blue eyesab, suffix');
+  } finally {
+    f.destroy();
+  }
+});
+
+test('a paste replaces the text selected when it was pasted', async () => {
+  const f = fixture('old tags, keep');
+  try {
+    f.view.dispatch({ selection: EditorSelection.single(0, 8) });
+    const pending = f.owner.start(url);
+    assert.ok(pending);
+    await lookupStarted();
+    f.resolve(booruReply());
+    await pending;
+    assert.equal(readExactSource(f.state()), 'cat, blue eyes, keep');
+  } finally {
+    f.destroy();
+  }
+});
+
+test('leaving the field, turning the feature off or pasting again drops the waiting paste', async () => {
+  const left = fixture();
+  try {
+    const pending = left.owner.start(url);
+    assert.ok(pending);
+    await lookupStarted();
+    Object.defineProperty(left.view, 'hasFocus', { value: false });
+    left.owner.update({ transactions: [], focusChanged: true });
+    assert.equal(left.signal()?.aborted, true);
+    left.resolve(booruReply());
+    await pending;
+    assert.equal(readExactSource(left.state()), '');
+  } finally {
+    left.destroy();
+  }
+  const off = fixture();
+  try {
+    const pending = off.owner.start(url);
+    assert.ok(pending);
+    await lookupStarted();
+    off.view.dispatch({
+      effects: off.slot.reconfigure(featureProfile.of(disabled)),
       annotations: Transaction.addToHistory.of(false),
     });
-    assert.equal(featureEnabled(f.state().facet(featureProfile), 'danbooru_url_import'), true);
-    const pending = f.owner.start(url);
-    assert.ok(pending);
-    await lookupStarted();
-    f.resolve(booruReply());
+    off.resolve(booruReply());
     await pending;
-    assert.equal(readExactSource(f.state()), 'cat, blue eyes');
-    assert.equal(undoDepth(f.state()), 1);
-    assert.equal(undo(f.view), true);
-    assert.equal(readExactSource(f.state()), '');
-    assert.equal(redo(f.view), true);
-    assert.equal(readExactSource(f.state()), 'cat, blue eyes');
+    assert.equal(readExactSource(off.state()), '');
+  } finally {
+    off.destroy();
+  }
+  const again = fixture();
+  try {
+    const first = again.owner.start(url);
+    assert.ok(first);
+    await lookupStarted();
+    const firstSignal = again.signal();
+    const second = again.owner.start(url);
+    assert.ok(second);
+    assert.equal(firstSignal?.aborted, true);
+    await first;
+    await lookupStarted();
+    again.resolve(booruReply('dog'));
+    await second;
+    assert.equal(readExactSource(again.state()), 'dog');
+  } finally {
+    again.destroy();
+  }
+});
+
+test('a disabled feature and text that is no supported link stay with ordinary paste', () => {
+  const f = fixture('x');
+  try {
+    assert.equal(f.owner.start('https://example.com/posts/123'), null);
+    assert.equal(f.owner.start('https://danbooru.donmai.us/posts/123/'), null);
+    f.view.dispatch({
+      effects: f.slot.reconfigure(featureProfile.of(disabled)),
+      annotations: Transaction.addToHistory.of(false),
+    });
+    assert.equal(f.owner.start(url), null);
+    assert.equal(f.signal(), null);
+    assert.equal(readExactSource(f.state()), 'x');
   } finally {
     f.destroy();
   }
 });
 
-test('literal paste is synchronous and ready current tags form one native undo/redo group', async () => {
-  const f = booruFixture();
-  const pending = f.owner.start(url);
-  assert.ok(pending);
-  assert.equal(readExactSource(f.state()), url);
-  assert.equal(undoDepth(f.state()), 1);
-  await lookupStarted();
-  f.resolve(booruReply());
-  await pending;
-  assert.equal(readExactSource(f.state()), 'cat, blue eyes');
-  assert.equal(undoDepth(f.state()), 1);
-  assert.equal(undo(f.view), true);
-  assert.equal(readExactSource(f.state()), '');
-  assert.equal(redo(f.view), true);
-  assert.equal(readExactSource(f.state()), 'cat, blue eyes');
-  f.destroy();
-});
-test('unavailable literal paste and following ordinary typing remain independent native events', async () => {
-  const f = booruFixture();
-  const pending = f.owner.start(url);
-  assert.ok(pending);
-  await lookupStarted();
-  f.view.dispatch({
-    changes: { from: f.state().doc.length, insert: 'x' },
-    userEvent: 'input.type',
-  });
-  assert.equal(f.signal()?.aborted, true);
-  f.resolve({ status: 'unavailable' });
-  await pending;
-  assert.equal(readExactSource(f.state()), url + 'x');
-  assert.equal(undo(f.view), true);
-  assert.equal(readExactSource(f.state()), url);
-  assert.equal(undo(f.view), true);
-  assert.equal(readExactSource(f.state()), '');
-  f.destroy();
-});
-test('undo and byte-equal source restoration cannot resurrect accepted paste authority', async () => {
-  const f = booruFixture();
-  const pending = f.owner.start(url);
-  assert.ok(pending);
-  await lookupStarted();
-  assert.equal(undo(f.view), true);
-  assert.equal(redo(f.view), true);
-  f.resolve(booruReply());
-  await pending;
-  assert.equal(readExactSource(f.state()), url);
-  f.destroy();
-});
-test('native selection, context, permission, composition and teardown each retire ignored-abort publication', async () => {
-  for (const mode of ['selection', 'context', 'permission', 'composition', 'destroy']) {
-    const f = booruFixture();
-    const pending = f.owner.start(url);
-    assert.ok(pending);
-    await lookupStarted();
-    if (mode === 'selection') f.view.dispatch({ selection: { anchor: 0 } });
-    else if (mode === 'context')
-      f.view.dispatch({
-        effects: invalidateCommandContext.of(null),
-        annotations: Transaction.addToHistory.of(false),
-      });
-    else if (mode === 'permission')
-      f.view.dispatch({
-        effects: f.initial.permission.reconfigure(
-          (await import('@codemirror/state')).EditorState.readOnly.of(true),
-        ),
-      });
-    else if (mode === 'composition') {
-      Object.defineProperty(f.view, 'compositionStarted', { value: true });
-      f.owner.update({ transactions: [], focusChanged: false });
-    } else f.destroy();
-    f.resolve(booruReply());
-    await pending;
-    assert.equal(readExactSource(f.state()), url);
-    assert.equal(f.signal()?.aborted, true);
-    f.destroy();
-  }
-});
-test('unexpected external cause stays observable and releases accepted history capability', async () => {
-  const f = booruFixture();
-  const pending = f.owner.start(url);
-  assert.ok(pending);
-  await lookupStarted();
-  const cause = new Error('host-boundary-failure');
-  f.reject(cause);
-  await assert.rejects(pending, (error) => error === cause);
-  assert.equal(readExactSource(f.state()), url);
-  assert.equal(f.signal()?.aborted, true);
-  f.destroy();
-});
-test('unsupported links do not acquire a request or change native source', () => {
-  const f = booruFixture();
-  assert.equal(f.owner.start('ordinary text'), null);
-  assert.equal(f.signal(), null);
-  assert.equal(readExactSource(f.state()), '');
-  f.destroy();
-});
-
-test('accepted native timestamp joins an arbitrarily delayed current lookup without joining following typing', async () => {
-  const f = booruFixture();
-  const now = Date.now;
-  let clock = 1000;
-  Date.now = () => clock;
-  try {
-    const pending = f.owner.start(url);
-    assert.ok(pending);
-    const initial = f.transactions.find((t) => t.isUserEvent('input.paste'));
-    assert.ok(initial);
-    assert.equal(initial.annotation(Transaction.time), 1000);
-    await lookupStarted();
-    clock = 100000;
-    f.resolve(booruReply());
-    await pending;
-    const replacement = f.transactions.find((t) => t.docChanged && t !== initial);
-    assert.ok(replacement);
-    assert.equal(replacement.annotation(Transaction.time), initial.annotation(Transaction.time));
-    assert.equal(replacement.annotation(Transaction.userEvent), undefined);
-    assert.equal(undoDepth(f.state()), 1);
-    f.view.dispatch({
-      changes: { from: f.state().doc.length, insert: 'x' },
-      userEvent: 'input.type',
-    });
-    assert.equal(undoDepth(f.state()), 2);
-    assert.equal(undo(f.view), true);
-    assert.equal(readExactSource(f.state()), 'cat, blue eyes');
-    assert.equal(undo(f.view), true);
-    assert.equal(readExactSource(f.state()), '');
-  } finally {
-    Date.now = now;
-    f.destroy();
-  }
-});
-
-test('supersession cancels the first external request and only genuine following paste can publish', async () => {
-  const f = booruFixture();
-  const first = f.owner.start(url);
-  assert.ok(first);
-  await lookupStarted();
-  const oldSignal = f.signal();
-  f.view.dispatch({ selection: { anchor: 0, head: f.state().doc.length } });
-  const second = f.owner.start(url);
-  assert.ok(second);
-  await lookupStarted();
-  assert.equal(oldSignal?.aborted, true);
-  f.resolve(booruReply('dog'));
-  await Promise.all([first, second]);
-  assert.equal(readExactSource(f.state()), 'dog');
-  f.destroy();
-});
-
-test('synchronous initial observer navigation prevents lookup acquisition after accepted literal publication', async () => {
-  const f = booruFixture();
-  let navigated = false;
-  f.observe((transaction) => {
-    if (!navigated && transaction.isUserEvent('input.paste')) {
-      navigated = true;
-      f.view.dispatch({ selection: { anchor: 0 } });
-    }
-  });
-  const pending = f.owner.start(url);
-  assert.ok(pending);
-  await pending;
-  assert.equal(readExactSource(f.state()), url);
-  assert.equal(f.state().selection.main.head, 0);
-  assert.equal(f.signal(), null);
-  f.destroy();
-});
-
-test('synchronous neutral preparation observer reentry retires final replacement before publication', async () => {
-  const f = booruFixture();
-  const pending = f.owner.start(url);
-  assert.ok(pending);
-  await lookupStarted();
-  let navigated = false;
-  f.observe((transaction) => {
-    if (!navigated && !transaction.docChanged) {
-      navigated = true;
-      f.view.dispatch({ selection: { anchor: 0 } });
-    }
-  });
-  f.resolve(booruReply());
-  await pending;
-  assert.equal(navigated, true);
-  assert.equal(readExactSource(f.state()), url);
-  assert.equal(f.state().selection.main.head, 0);
-  f.destroy();
-});
-
-test('same-source literal acceptance imports as one fresh event and undo restores original reverse selection', async () => {
-  const f = booruFixture(url);
-  f.view.dispatch({ selection: { anchor: url.length, head: 0 } });
-  const pending = f.owner.start(url);
-  assert.ok(pending);
-  assert.equal(readExactSource(f.state()), url);
-  assert.equal(undoDepth(f.state()), 0);
-  await lookupStarted();
-  f.resolve(booruReply('dog'));
-  await pending;
-  assert.equal(readExactSource(f.state()), 'dog');
-  assert.equal(undoDepth(f.state()), 1);
-  assert.equal(undo(f.view), true);
-  assert.equal(readExactSource(f.state()), url);
-  assert.equal(f.state().selection.main.anchor, url.length);
-  assert.equal(f.state().selection.main.head, 0);
-  f.destroy();
-});
-
-test('actual synchronous neutral publication after the literal remains a genuine current import tip', async () => {
-  const f = booruFixture();
-  let published = false;
-  f.observe((transaction) => {
-    if (!published && transaction.isUserEvent('input.paste')) {
-      published = true;
-      f.view.dispatch({ annotations: Transaction.addToHistory.of(false) });
-    }
-  });
-  const pending = f.owner.start(url);
-  assert.ok(pending);
-  assert.equal(published, true);
-  await lookupStarted();
-  f.resolve(booruReply());
-  await pending;
-  assert.equal(readExactSource(f.state()), 'cat, blue eyes');
-  assert.equal(undoDepth(f.state()), 1);
-  assert.equal(undo(f.view), true);
-  assert.equal(readExactSource(f.state()), '');
-  f.destroy();
-});
-
-test('rich supported post and CDN spellings remain literal before unavailable lookup', async () => {
-  for (const link of [
-    url + '?tag=blue_eyes',
-    'https://danbooru.donmai.us/posts/\u0661\u0662\u0663',
-    'https://cdn.donmai.us/original/0123456789abcdef0123456789abcdef.webp',
-  ]) {
-    const f = booruFixture('', true);
-    const pending = f.owner.start(link);
-    assert.ok(pending);
-    assert.equal(readExactSource(f.state()), link);
-    await lookupStarted();
-    f.resolve({ status: 'unavailable' });
-    await pending;
-    assert.equal(readExactSource(f.state()), link);
-    assert.equal(undoDepth(f.state()), 1);
-    assert.equal(undo(f.view), true);
-    assert.equal(readExactSource(f.state()), '');
-    f.destroy();
-  }
-});
-test('focus loss at the actual lookup completion boundary refuses publication without waiting for a view notification', async () => {
-  const f = booruFixture();
-  const pending = f.owner.start(url);
-  assert.ok(pending);
-  await lookupStarted();
-  assert.equal(Reflect.set(f.view, 'hasFocus', false), true);
-  f.resolve(booruReply());
-  await pending;
-  assert.equal(readExactSource(f.state()), url);
-  assert.equal(f.signal()?.aborted, true);
-  f.destroy();
-});
-
-test('completed unavailable missing invalid and empty replies leave one literal event independent of later typing', async () => {
-  for (const reply of [
-    { status: 'unavailable' },
-    { status: 'not-found' },
-    { status: 'found', post: { id: -1 } },
-    booruReply(''),
-  ]) {
-    const f = booruFixture();
-    const pending = f.owner.start(url);
-    assert.ok(pending);
-    await lookupStarted();
-    f.resolve(reply);
-    await pending;
-    assert.equal(readExactSource(f.state()), url);
-    assert.equal(undoDepth(f.state()), 1);
-    f.view.dispatch({
-      changes: { from: f.state().doc.length, insert: 'x' },
-      userEvent: 'input.type',
-    });
-    assert.equal(undoDepth(f.state()), 2);
-    assert.equal(undo(f.view), true);
-    assert.equal(readExactSource(f.state()), url);
-    assert.equal(undo(f.view), true);
-    assert.equal(readExactSource(f.state()), '');
-    f.destroy();
-  }
-});
-
-test('meta-only post keeps the exact literal paste and its native undo redo event', async () => {
-  const f = booruFixture();
+test('an unexpected lookup failure stays observable and pastes nothing', async () => {
+  const f = fixture();
   try {
     const pending = f.owner.start(url);
     assert.ok(pending);
     await lookupStarted();
-    const reply = booruReply('');
-    reply.post.tag_string_meta = 'commentary translation_request';
-    f.resolve(reply);
-    await pending;
-    assert.equal(readExactSource(f.state()), url);
-    assert.equal(f.state().selection.main.head, url.length);
-    assert.equal(undoDepth(f.state()), 1);
-    assert.equal(undo(f.view), true);
+    const cause = new Error('host failure');
+    f.reject(cause);
+    await assert.rejects(pending, (error) => error === cause);
     assert.equal(readExactSource(f.state()), '');
-    assert.equal(redo(f.view), true);
-    assert.equal(readExactSource(f.state()), url);
-    assert.equal(f.state().selection.main.head, url.length);
   } finally {
     f.destroy();
   }

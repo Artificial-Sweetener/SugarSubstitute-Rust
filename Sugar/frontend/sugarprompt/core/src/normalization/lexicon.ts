@@ -20,6 +20,9 @@ import type { TagLexicon } from './contracts.js';
 /** This fixed expression has no caller-owned state; String.replace resets its global cursor on every call. */
 const identityWhitespace = new RegExp(whitespace.source + '+', 'gu');
 
+/** A word of a tag, cut like spellcheck candidates: Latin letters and apostrophes. */
+const tagWords = /[a-z][a-z']*/gu;
+
 /** Normalize dataset tag identity: underscores/spaces, Unicode whitespace and case folding. */
 export function normalizeTagIdentity(text: string): string {
   return strip(caseFold(text.replaceAll('_', ' '))).replace(identityWhitespace, ' ');
@@ -29,10 +32,17 @@ export function normalizeTagIdentity(text: string): string {
 export function prepareTagLexicon(tags: readonly string[]): TagLexicon {
   const identities = new Set(tags.map(normalizeTagIdentity));
   identities.delete('');
+  // Words are cut the way spellcheck cuts prompt text, so a tag's every word is a known word.
+  const words = new Set<string>();
+  for (const identity of identities)
+    for (const word of identity.matchAll(tagWords)) words.add(word[0]);
   return Object.freeze({
     /** Inspect one normalized exact identity without traversing the catalog. */
     contains(text: string): boolean {
       return identities.has(normalizeTagIdentity(text));
+    },
+    containsWord(word: string): boolean {
+      return words.has(caseFold(word));
     },
   });
 }

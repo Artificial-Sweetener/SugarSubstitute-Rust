@@ -145,6 +145,7 @@ test('a queued prompt and a directly run workflow both carry the resolved texts'
   const wildcards = new ComfyWildcardPrompts(
     () => ({ graph: live }),
     library,
+    () => true,
     () => '1',
   );
   const payload = { output: output(), workflow: { nodes: [] }, client_id: 'c' };
@@ -197,4 +198,26 @@ test('a queued prompt and a directly run workflow both carry the resolved texts'
   expect(await wildcards.prompt(plain)).toBe(plain);
   expect(await wildcards.workflow(plain, serialized)).toBe(serialized);
   expect(api.fetchApi).toHaveBeenCalledTimes(before);
+});
+
+test('with resolution turned off a run is sent as written and reads no wildcard', async () => {
+  const api = userdata({ 'colors.txt': 'red\ngreen\nblue\n' });
+  const library = new WildcardLibrary(new ComfyWildcardFiles(api.fetchApi), jest.fn());
+  const live = graph();
+  let resolving = false;
+  const wildcards = new ComfyWildcardPrompts(
+    () => ({ graph: live }),
+    library,
+    () => resolving,
+    () => '1',
+  );
+  const payload = { output: output(), workflow: { nodes: [] }, client_id: 'c' };
+  const serialized = { nodes: [{ id: 9, widgets_values: ['a {colors} sky'] }] };
+  expect(await wildcards.prompt(payload)).toBe(payload);
+  expect(await wildcards.workflow(payload, serialized)).toBe(serialized);
+  expect(api.fetchApi).not.toHaveBeenCalled();
+  // The switch is read for each run, so turning it back on resolves the next one.
+  resolving = true;
+  const queued = (await wildcards.prompt(payload)) as typeof payload;
+  expect(queued.output['9'].inputs.value).toBe('a blue sky');
 });

@@ -97,7 +97,10 @@ function tokenAt(source: string, from: number, to: number): SourceRange {
     to++;
   return { from, to };
 }
-/** Prepare outside typing/measurement; syntax ranges and complete known-tag segments never reach a spelling backend. */
+/**
+ * Prepare outside typing/measurement; syntax ranges, complete known-tag segments and any word that
+ * appears in a known tag never reach a spelling backend.
+ */
 export function prepareSpellcheckCandidates(
   scope: PreparedDocumentPromptScope,
   lexicon?: TagLexicon,
@@ -139,7 +142,7 @@ export function prepareSpellcheckCandidates(
       tokenRange = tokenAt(source, from, to);
       tokenSkipped = skippedToken(source.slice(tokenRange.from, tokenRange.to));
     }
-    if (tokenSkipped || known(match[0])) continue;
+    if (tokenSkipped || known(match[0]) || lexicon?.containsWord(match[0])) continue;
     while (
       document.segments[segmentIndex] &&
       requireValue(document.segments[segmentIndex], 'spellcheck-candidates').contentRange.to < from

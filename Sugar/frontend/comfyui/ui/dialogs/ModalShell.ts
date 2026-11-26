@@ -60,6 +60,11 @@ export interface ModalOpenOptions {
   showCancel?: boolean;
   onConfirm?: (() => void) | null;
   initialFocus?: (() => FocusableElement | null | undefined) | null;
+  /**
+   * Asked before the person's close, Cancel, Escape or backdrop click dismisses the dialog; the
+   * dialog stays open unless it resolves true. A dialog closed by its own code is never asked.
+   */
+  beforeCancel?: (() => Promise<boolean>) | null;
 }
 
 interface ActiveModalOptions {
@@ -67,6 +72,7 @@ interface ActiveModalOptions {
   allowEscapeClose?: boolean;
   allowOverlayClose?: boolean;
   onConfirm?: (() => void) | null;
+  beforeCancel?: (() => Promise<boolean>) | null;
 }
 
 interface ModalShellOptions {
@@ -74,6 +80,8 @@ interface ModalShellOptions {
   adapter?: ModalAdapter | null;
   variantClassName?: string;
   dialogClassName?: string;
+  /** `full-window` fills the window but for a margin, for editors that need the room. */
+  size?: 'standard' | 'full-window';
 }
 
 type FocusableElement = HTMLElement & { select?: () => void };
@@ -87,6 +95,8 @@ export class ModalShell {
   private readonly windowRef: Window | null;
   private readonly variantClassName: string;
   private readonly dialogClassName: string;
+  private readonly size: 'standard' | 'full-window';
+  private cancelAsked = false;
   elements: ModalShellElements;
   private resolver: ((result: unknown) => void) | null;
   private keydownHandler: ((event: KeyboardEvent) => void) | null;
@@ -105,12 +115,14 @@ export class ModalShell {
     appearanceSource,
     variantClassName = '',
     dialogClassName = '',
+    size = 'standard',
   }: ModalShellOptions = {}) {
     this.appearance = new ModalAppearance(appearanceSource);
     this.documentRef = adapter?.getDocument?.() || null;
     this.windowRef = adapter?.getWindow?.() || null;
     this.variantClassName = variantClassName || '';
     this.dialogClassName = dialogClassName || '';
+    this.size = size;
     this.elements = {};
     this.resolver = null;
     this.keydownHandler = null;
@@ -121,7 +133,7 @@ export class ModalShell {
       this.documentRef,
       () => this.elements.dialog,
       () => this.options,
-      () => this.close(this.options.cancelResult),
+      () => this.cancel(),
     );
   }
 
@@ -135,10 +147,12 @@ export class ModalShell {
     if (this.variantClassName) {
       overlay.classList.add(this.variantClassName);
     }
+    if (this.size === 'full-window') overlay.classList.add('sugarcubes-modal-overlay--full-window');
     const dialogClassNames = ['sugarcubes-modal', 'p-dialog', 'p-component'];
     if (this.dialogClassName) {
       dialogClassNames.push(this.dialogClassName);
     }
+    if (this.size === 'full-window') dialogClassNames.push('sugarcubes-modal--full-window');
     const dialog = $el('div', { className: dialogClassNames.join(' ') });
     dialog.setAttribute('role', 'dialog');
     dialog.setAttribute('aria-modal', 'true');
@@ -210,6 +224,7 @@ export class ModalShell {
     showCancel = true,
     onConfirm = null,
     initialFocus = null,
+    beforeCancel = null,
   }: ModalOpenOptions = {}): Promise<unknown> {
     this.ensureElements();
     const { overlay, dialog, content, titleEl, confirmButton, cancelButton } = this.elements;
@@ -225,6 +240,7 @@ export class ModalShell {
       allowEscapeClose,
       allowOverlayClose,
       onConfirm,
+      beforeCancel,
     };
     this.focusTarget = typeof initialFocus === 'function' ? initialFocus : null;
     const activeElement = this.documentRef?.activeElement;
@@ -278,6 +294,26 @@ export class ModalShell {
     return new Promise<unknown>((resolve) => {
       this.resolver = resolve;
     });
+  }
+
+  /** Dismiss at the person's request, once the dialog's own question, if any, agrees. */
+  private cancel(): void {
+    const ask = this.options.beforeCancel;
+    if (!ask) {
+      this.close(this.options.cancelResult);
+      return;
+    }
+    if (this.cancelAsked) return;
+    this.cancelAsked = true;
+    const options = this.options;
+    void ask()
+      .then((agreed) => {
+        // A dialog already closed or reopened meanwhile is not closed by the old answer.
+        if (agreed && this.options === options) this.close(options.cancelResult);
+      })
+      .finally(() => {
+        this.cancelAsked = false;
+      });
   }
 
   /** Release visible dialog resources and restore focus before resolving the caller. */

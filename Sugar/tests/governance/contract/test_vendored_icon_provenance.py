@@ -249,6 +249,7 @@ def test_every_vendored_icon_has_exact_provenance_and_deployment_bytes() -> None
         if source in {
             "https://github.com/Artificial-Sweetener/SugarSubstitute",
             "https://github.com/civitai/civitai",
+            "https://github.com/LibreOffice/dictionaries",
             "https://github.com/OpenModelDB/open-model-database",
             "https://github.com/microsoft/fluentui",
             "https://github.com/microsoft/polyfills",

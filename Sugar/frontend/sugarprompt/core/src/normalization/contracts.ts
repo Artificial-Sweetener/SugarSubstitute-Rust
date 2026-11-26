@@ -51,4 +51,6 @@ export interface GeneratedEmphasis extends SourceRange {
 export interface TagLexicon {
   /** Answer exact prepared membership with the dataset's normalized tag identity rules. */
   contains(text: string): boolean;
+  /** Whether a word of Latin letters appears in any tag, such as "kemonomimi" of kemonomimi_mode. */
+  containsWord(word: string): boolean;
 }

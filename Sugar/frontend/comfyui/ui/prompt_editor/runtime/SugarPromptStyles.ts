@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Style prompt decorations while shared provider controls own field presentation. */
+import { promptLineGutterCss } from './PromptDocumentMode.js';
 const installed = new WeakSet<Document>();
 /** Install editor-only decoration rules without recreating input chrome. */
 export function installSugarPromptStyles(document: Document): void {
@@ -47,6 +48,7 @@ export function installSugarPromptStyles(document: Document): void {
 }
 .sugarprompt-editor .sp-reorder-empty { border:none; outline:none; background:transparent; }
 `;
+  style.textContent += promptLineGutterCss;
   document.head.append(style);
   installed.add(document);
 }

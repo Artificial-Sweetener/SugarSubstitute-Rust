@@ -36,7 +36,7 @@ function definition(
   });
 }
 
-/** Twelve retained capabilities; wiki lookup has no registry entry or settings control. */
+/** Every prompt editor capability in donor priority order; each one has a Settings switch. */
 export const featureDefinitions: readonly FeatureDefinition[] = Object.freeze([
   definition('emphasis', 'Emphasis weights', ['emphasis'], 'emphasis'),
   definition('danbooru_url_import', 'Danbooru URL import', ['danbooru_url_import'], null, [], true),

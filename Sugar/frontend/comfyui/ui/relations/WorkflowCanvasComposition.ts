@@ -14,7 +14,13 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose workflow execution, native fields and optional canvas inputs at their shared host boundary. */
-import { wildcardFile } from '../wildcards/domain/WildcardSource.js';
+import { PromptEditorPreferences } from '../prompt_editor/PromptEditorPreferences.js';
+import { AutocompleteListLibrary } from '../autocomplete_lists/application/AutocompleteListLibrary.js';
+import { AUTOCOMPLETE_LIST_FOLDER } from '../autocomplete_lists/domain/AutocompleteList.js';
+import { ComfyUserFolder, type UserFileFetch } from '../core/user_files/ComfyUserFolder.js';
+import { isRecord } from '../types/common.js';
+import { DanbooruRoutes, type DanbooruFetch } from '../danbooru/infrastructure/DanbooruRoutes.js';
+import type { BooruPostLookup } from '../../../sugarprompt/services/src/booru/links.js';
 import { createComfyWorkflowExecutionRuntime } from '../execution/infrastructure/ComfyWorkflowExecutionRuntime.js';
 import {
   createWorkflowFieldHost,
@@ -46,7 +52,7 @@ export function createWorkflowCanvasComposition(
     | 'connected'
     | 'subscribeConnection'
     | 'sessions'
-    | 'wildcards'
+    | 'promptPreferences'
   > & {
     api: unknown;
     logger: Pick<Console, 'error' | 'warn'>;
@@ -55,10 +61,19 @@ export function createWorkflowCanvasComposition(
   },
 ): {
   workflowExecution: ReturnType<typeof createComfyWorkflowExecutionRuntime>;
-  /** What prompt editors take from execution: "Queue this scene" and the wildcard folder. */
+  /**
+   * What prompt editors take: "Queue this scene", the wildcard folder, and the person's prompt
+   * editor preferences.
+   */
   prompts: {
     scenes: ReturnType<typeof createComfyWorkflowExecutionRuntime>['scenes'];
     wildcards: ReturnType<typeof createComfyWorkflowExecutionRuntime>['wildcardLibrary'];
+    preferences: PromptEditorPreferences;
+    tagLists: AutocompleteListLibrary;
+    /** The wildcard folder's files, for the full-window wildcard editor. */
+    wildcardFiles: ReturnType<typeof createComfyWorkflowExecutionRuntime>['wildcardFiles'];
+    /** Find the post a pasted Danbooru link names, through SugarCubes' Danbooru route. */
+    booruPostLookup: BooruPostLookup;
   };
   workflowFields: ReturnType<typeof createWorkflowFieldHost>;
   canvasInputs: ReturnType<typeof createCanvasInputs>;
@@ -79,12 +94,36 @@ export function createWorkflowCanvasComposition(
     contributions(targets: readonly DimensionFieldTarget[]): ContextMenuEntry[];
   };
 } {
+  const promptPreferences = new PromptEditorPreferences(
+    options.app,
+    options.reportPresentationError,
+  );
   const workflowExecution = createComfyWorkflowExecutionRuntime({
     app: options.app,
     api: options.api,
     logger: options.logger,
     notify: options.notify,
+    resolveWildcards: () => promptPreferences.current().resolveOnGeneration,
   });
+  const danbooru = new DanbooruRoutes((path, init) => {
+    const api = options.api;
+    if (!isRecord(api) || typeof api.fetchApi !== 'function')
+      throw new Error('The Comfy API is unavailable for Danbooru lookups.');
+    return (api.fetchApi as DanbooruFetch).call(api, path, init);
+  });
+  const autocompleteLists = new AutocompleteListLibrary(
+    new ComfyUserFolder(
+      (path, init) => {
+        const api = options.api;
+        if (!isRecord(api) || typeof api.fetchApi !== 'function')
+          throw new Error('The Comfy API is unavailable for autocomplete lists.');
+        return (api.fetchApi as UserFileFetch).call(api, path, init);
+      },
+      AUTOCOMPLETE_LIST_FOLDER,
+      'autocomplete list',
+    ),
+    (error) => options.logger.error('SugarCubes could not read the autocomplete lists.', { error }),
+  );
   const workflowFields = createWorkflowFieldHost({
     ...options,
     sessions: workflowExecution.sessions,
@@ -93,20 +132,7 @@ export function createWorkflowCanvasComposition(
     progress: workflowExecution.progress,
     connected: () => workflowExecution.connected,
     subscribeConnection: (listener) => workflowExecution.subscribeConnection(listener),
-    wildcards: {
-      files: () => workflowExecution.wildcardLibrary.files,
-      refresh: () => workflowExecution.wildcardLibrary.refresh(),
-      admit: (path) => wildcardFile(path, ''),
-      create: (path, text) => workflowExecution.wildcardFiles.create(path, text),
-      rename: (from, to) => workflowExecution.wildcardFiles.rename(from, to),
-      openFolder: () => workflowExecution.wildcardFiles.openFolder(),
-      report: (error) =>
-        options.notify(
-          'error',
-          'Wildcards',
-          error instanceof Error ? error.message : 'The wildcard folder is unavailable.',
-        ),
-    },
+    promptPreferences,
   });
   const selfUpdate = comfySelfUpdateTransport(options.api);
   // SugarCubes updates itself only on a page whose host does not; the page lives as long as this.
@@ -155,7 +181,14 @@ export function createWorkflowCanvasComposition(
   });
   return {
     workflowExecution,
-    prompts: { scenes: workflowExecution.scenes, wildcards: workflowExecution.wildcardLibrary },
+    prompts: {
+      scenes: workflowExecution.scenes,
+      wildcards: workflowExecution.wildcardLibrary,
+      preferences: promptPreferences,
+      tagLists: autocompleteLists,
+      wildcardFiles: workflowExecution.wildcardFiles,
+      booruPostLookup: (key, signal) => danbooru.pastedPost(key, signal),
+    },
     workflowFields,
     canvasInputs,
     workspace: (canvas, masonry) =>
