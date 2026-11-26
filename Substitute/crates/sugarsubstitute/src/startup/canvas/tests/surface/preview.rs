@@ -4,6 +4,7 @@
 use super::viewport::fixture::Fixture;
 use super::*;
 use sugarsubstitute_canvas::FrameStamp;
+mod attachments;
 mod closing;
 mod held_geometry;
 mod restoration;
