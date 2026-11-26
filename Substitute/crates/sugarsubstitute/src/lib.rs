@@ -23,7 +23,7 @@ mod canvas_motion_diagnostic;
 mod canvas_preparation_diagnostic;
 #[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]
 mod canvas_preview_diagnostic;
-#[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]
+#[cfg(windows)]
 mod canvas_selection_diagnostic;
 #[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]
 mod canvas_surface_diagnostic;
