@@ -18,7 +18,11 @@ import { freezeWorkflowSubmissionContext } from '../domain/WorkflowSubmission.js
 /** Retain outstanding job ownership and captured return plans independently of visible graph objects. */
 export class WorkflowRunRegistry {
     #runs = new Map();
+    /** The order each run was submitted with, which its run order leaves when it starts out of turn. */
+    #submitted = new Map();
     #orders = new Map();
+    /** The highest order of any run of the session that has started executing. */
+    #started = new Map();
     #closed = new Set();
     /** Reserve queue-entry order before transport can reorder response arrival. */
     reserve(context) {
@@ -41,7 +45,7 @@ export class WorkflowRunRegistry {
         const existing = this.#runs.get(promptId);
         if (existing) {
             if (existing.session.sessionId !== context.session.sessionId ||
-                existing.order !== context.order)
+                this.#submitted.get(promptId) !== context.order)
                 throw new Error('An accepted job cannot belong to multiple workflow sessions.');
             return existing;
         }
@@ -52,20 +56,35 @@ export class WorkflowRunRegistry {
             status: 'queued',
         });
         this.#runs.set(promptId, run);
+        this.#submitted.set(promptId, context.order);
         return run;
     }
     /** Resolve only a known accepted job rather than inferring from currently visible node IDs. */
     read(promptId) {
         return this.#runs.get(promptId) ?? null;
     }
-    /** Publish immutable execution status while retaining exact source association for recovery. */
+    /**
+     * Publish immutable execution status while retaining exact source association for recovery.
+     *
+     * A run is ordered by submission until it starts. ComfyUI can start waiting jobs in another
+     * order (a reordered queue, a job queued at the front, or a later submission accepted first),
+     * and every result owner treats a lower order as an older run. A run that starts after a run
+     * with a higher order has started therefore takes the next order, so results follow the order
+     * in which ComfyUI actually ran the jobs.
+     */
     setStatus(promptId, status) {
         const current = this.#runs.get(promptId);
         if (!current)
             return null;
         if (['complete', 'cancelled', 'error'].includes(current.status))
             return current;
-        const run = Object.freeze({ ...current, status });
+        const run = Object.freeze({
+            ...current,
+            status,
+            order: status === 'running' && current.status === 'queued'
+                ? this.#startOrder(current)
+                : current.order,
+        });
         this.#runs.set(promptId, run);
         return run;
     }
@@ -76,6 +95,7 @@ export class WorkflowRunRegistry {
     /** Retire a completed association once exact-history recovery has settled. */
     retire(promptId) {
         this.#runs.delete(promptId);
+        this.#submitted.delete(promptId);
         this.#closed.delete(promptId);
     }
     /** Identify a known closed owner's late events without retaining source metadata or pixels. */
@@ -85,6 +105,7 @@ export class WorkflowRunRegistry {
     /** Keep only an outstanding job identity when acceptance arrives after its owner has closed. */
     discard(promptId) {
         this.#runs.delete(promptId);
+        this.#submitted.delete(promptId);
         this.#closed.add(promptId);
     }
     /** Release closed bindings completely; unknown late events remain unassigned and cannot revive them. */
@@ -93,11 +114,26 @@ export class WorkflowRunRegistry {
             if (run.session.sessionId === sessionId)
                 this.discard(id);
         this.#orders.delete(sessionId);
+        this.#started.delete(sessionId);
     }
     /** Release every known association with the owning integration lifetime. */
     dispose() {
         this.#runs.clear();
+        this.#submitted.clear();
         this.#orders.clear();
+        this.#started.clear();
         this.#closed.clear();
+    }
+    /** Keep a starting run's order unless a run with a higher order already started before it. */
+    #startOrder(run) {
+        const session = run.session.sessionId;
+        const started = this.#started.get(session) ?? 0;
+        // The next order sits above every reservation so far; a waiting job passed over this way is
+        // renumbered again when it starts.
+        const order = run.order > started ? run.order : Math.max(this.#orders.get(session) ?? 0, run.order) + 1;
+        if (order !== run.order)
+            this.#orders.set(session, order);
+        this.#started.set(session, order);
+        return order;
     }
 }

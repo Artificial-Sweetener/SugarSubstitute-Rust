@@ -120,6 +120,66 @@ test('reserves result order at submission even when accepted responses arrive in
   );
 });
 
+test('a job the queue runs after a later submission still publishes its outputs', () => {
+  const f = workflowResultsFixture();
+  const first = f.ingestor.submitting(f.a);
+  const second = f.ingestor.submitting(f.a);
+  const later = promptId('later');
+  f.ingestor.accepted(first, f.id);
+  f.ingestor.accepted(second, later);
+
+  // The waiting jobs were reordered, so ComfyUI runs the later submission first.
+  f.ingestor.started(later);
+  expect(f.ingestor.final(workflowFinal(later, 'later.png'))).toBe(true);
+  f.ingestor.terminal(later, 'complete');
+  f.ingestor.recovered(later, 'complete');
+
+  f.ingestor.started(f.id);
+  expect(f.results.read(f.a.session.sessionId)?.runStatus).toBe('running');
+  expect(f.ingestor.final(workflowFinal(f.id, 'earlier.png'))).toBe(true);
+  f.ingestor.terminal(f.id, 'complete');
+  const state = f.results.read(f.a.session.sessionId);
+  expect(state?.outputs[0]?.items[0]?.file.filename).toBe('earlier.png');
+  expect(state?.runStatus).toBe('complete');
+  expect(state?.runOrder).toBeGreaterThan(second.order);
+  // A repeated acceptance of the same submission still names the same run.
+  expect(f.runs.accept(first, f.id).order).toBe(state?.runOrder);
+  expect(() => f.runs.accept(second, f.id)).toThrow();
+});
+
+test('a submission accepted only after a later one started still publishes when it runs', () => {
+  const f = workflowResultsFixture();
+  const first = f.ingestor.submitting(f.a);
+  const second = f.ingestor.submitting(f.a);
+  const later = promptId('later');
+
+  // The later submission's queue response returns and it starts before the first is accepted.
+  f.ingestor.accepted(second, later);
+  f.ingestor.started(later);
+  expect(f.ingestor.final(workflowFinal(later, 'later.png'))).toBe(true);
+  f.ingestor.accepted(first, f.id);
+  f.ingestor.started(f.id);
+  expect(f.ingestor.final(workflowFinal(f.id, 'earlier.png'))).toBe(true);
+  expect(f.results.read(f.a.session.sessionId)?.outputs[0]?.items[0]?.file.filename).toBe(
+    'earlier.png',
+  );
+});
+
+test('jobs that start in submission order keep the order they were submitted with', () => {
+  const f = workflowResultsFixture();
+  const first = f.ingestor.submitting(f.a);
+  const second = f.ingestor.submitting(f.a);
+  const later = promptId('later');
+  f.ingestor.accepted(first, f.id);
+  f.ingestor.accepted(second, later);
+  f.ingestor.started(f.id);
+  f.ingestor.terminal(f.id, 'complete');
+  f.ingestor.started(later);
+  expect(f.runs.read(f.id)?.order).toBe(first.order);
+  expect(f.runs.read(later)?.order).toBe(second.order);
+  expect(f.runs.latestOrder(f.a.session.sessionId)).toBe(second.order);
+});
+
 test('closing a workflow and loading a new generation both reject accepted-job late media', () => {
   const f = workflowResultsFixture();
   f.ingestor.accepted(f.ingestor.submitting(f.a), f.id);
