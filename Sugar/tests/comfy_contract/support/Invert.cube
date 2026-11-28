@@ -1,0 +1,15 @@
+{
+  "cube_id": "Artificial-Sweetener/Base-Cubes/Invert.cube",
+  "version": "1.0.0",
+  "metadata": {"default_alias": "Invert"},
+  "implementation": {
+    "nodes": {"invert": {"class_type": "ImageInvert", "inputs": {"image": null}}},
+    "inputs": {"input.image":{"kind":"input","targets":[["invert","image"]]}},
+    "outputs": {"output.image":["invert",0]},
+    "layout": {},
+    "definitions": {"ImageInvert":{"input":{"required":{"image":["IMAGE"]}},"output":["IMAGE"],"output_name":["IMAGE"]}},
+    "subgraphs": []
+  },
+  "surface": {"default_flavor_id":"default","controls":[]},
+  "flavors": {"authored":[{"id":"default","name":"Default","values":{}}]}
+}

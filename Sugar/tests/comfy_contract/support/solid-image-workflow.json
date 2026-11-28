@@ -1,0 +1,145 @@
+{
+  "version": 0.4,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "definition-solid-1",
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "input.width",
+          "type": "*"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output.image",
+          "type": "*"
+        }
+      ],
+      "properties": {
+        "sugarcubes_kind": "cube",
+        "sugarcubes_cube": {
+          "cube_id": "Artificial-Sweetener/Test/Solid.cube",
+          "cube_version": "1.0.0",
+          "default_alias": "Solid",
+          "instance_id": "solid-1",
+          "instance_alias": "Solid"
+        }
+      }
+    }
+  ],
+  "links": [],
+  "definitions": {
+    "subgraphs": [
+      {
+        "id": "definition-solid-1",
+        "name": "Solid",
+        "nodes": [],
+        "links": [],
+        "inputs": [
+          {
+            "name": "input.width",
+            "type": "*"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output.image",
+            "type": "*"
+          }
+        ],
+        "extra": {
+          "sugarcubes_kind": "cube",
+          "sugarcubes_cube": {
+            "cube_id": "Artificial-Sweetener/Test/Solid.cube",
+            "cube_version": "1.0.0",
+            "default_alias": "Solid"
+          },
+          "sugarcubes_document": {
+            "cube_id": "Artificial-Sweetener/Test/Solid.cube",
+            "version": "1.0.0",
+            "description": "Execution fixture Solid.",
+            "metadata": {
+              "default_alias": "Solid"
+            },
+            "implementation": {
+              "nodes": {
+                "color": {
+                  "class_type": "EmptyImage",
+                  "inputs": {
+                    "width": 32,
+                    "height": 16,
+                    "batch_size": 1,
+                    "color": 16711680
+                  }
+                }
+              },
+              "inputs": {
+                "input.width": {
+                  "kind": "input",
+                  "targets": [
+                    [
+                      "color",
+                      "width"
+                    ]
+                  ]
+                }
+              },
+              "outputs": {
+                "output.image": [
+                  "color",
+                  0
+                ]
+              },
+              "layout": {},
+              "definitions": {
+                "EmptyImage": {
+                  "input": {
+                    "required": {
+                      "width": [
+                        "INT"
+                      ],
+                      "height": [
+                        "INT"
+                      ],
+                      "batch_size": [
+                        "INT"
+                      ],
+                      "color": [
+                        "INT"
+                      ]
+                    }
+                  },
+                  "output": [
+                    "IMAGE"
+                  ],
+                  "output_name": [
+                    "IMAGE"
+                  ]
+                }
+              },
+              "subgraphs": []
+            },
+            "surface": {
+              "default_flavor_id": "default",
+              "controls": []
+            },
+            "flavors": {
+              "authored": [
+                {
+                  "id": "default",
+                  "name": "Default",
+                  "values": {}
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "extra": {
+    "fixture": true
+  }
+}

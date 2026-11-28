@@ -1,0 +1,4691 @@
+{
+  "__init__.py": [
+    "dynamic attribute getattr(PromptServer, 'instance', PromptServer)",
+    "dynamic attribute getattr(_prompt_server_module, 'PromptServer', None)",
+    "dynamic host import execution",
+    "dynamic host import server"
+  ],
+  "frontend/comfyui/page_load_report.ts": [
+    "dynamic member extensions",
+    "dynamic member name",
+    "extension hook setup",
+    "host member app.registerExtension",
+    "host transport fetchApi /sugarcubes/self-update/page-load",
+    "module, endpoint or setting /scripts/api.js",
+    "module, endpoint or setting /scripts/app.js",
+    "typed host member ComfyApp.registerExtension"
+  ],
+  "frontend/comfyui/ui.ts": [
+    "extension hook addCustomNodeDefs",
+    "extension hook afterConfigureGraph",
+    "extension hook beforeConfigureGraph",
+    "extension hook beforeRegisterVueAppNodeDefs",
+    "extension hook getCanvasMenuItems",
+    "extension hook getNodeMenuItems",
+    "extension hook loadedGraphNode",
+    "extension hook refreshComboInNodes",
+    "extension hook registerCustomNodes",
+    "extension hook setup",
+    "host member app.registerExtension",
+    "host member appRef.canvas",
+    "host member appRef.canvas?.graph",
+    "host member appRef.graph",
+    "host member appRef?.canvas",
+    "host member appRef?.canvas?.graph",
+    "host member appRef?.canvas?.setDirty",
+    "host member appRef?.clean",
+    "host member appRef?.graph",
+    "host member workflowWorkspace.canvas.afterConfigureGraph",
+    "host member workflowWorkspace.canvas.beforeConfigureGraph",
+    "host member workflowWorkspace.canvas.diagnostics",
+    "host member workflowWorkspace.canvas.reveal",
+    "module, endpoint or setting /scripts/api.js",
+    "module, endpoint or setting /scripts/app.js",
+    "typed host member ComfyApp.registerExtension",
+    "typed host member ComfyCanvas.graph",
+    "typed host member ComfyCanvas.setDirty"
+  ],
+  "frontend/comfyui/ui/SugarCubesCommands.ts": [
+    "host member owners.workspace.canvas.toggle"
+  ],
+  "frontend/comfyui/ui/SugarCubesUI.ts": [
+    "host member node.properties",
+    "host member this.adapter.getLiteGraph()?.createNode",
+    "host member this.adapter?.getApp?.()?.graph",
+    "typed host member ComfyApplication.graph",
+    "typed host member ComfyNode.properties",
+    "typed host member LiteGraphHost.createNode"
+  ],
+  "frontend/comfyui/ui/affordance/ComfyCubeCardVisibilityToolboxPresenter.ts": [
+    "DOM lookup 'button'"
+  ],
+  "frontend/comfyui/ui/affordance/ComfyCubeCommandAdapter.ts": [
+    "DOM lookup '#vue-app'",
+    "DOM lookup '[data-v-app]'",
+    "dynamic member __vue_app__",
+    "host adapter member canvas.graph",
+    "host adapter member canvas.selectedItems",
+    "host adapter member canvas.subgraph",
+    "module, endpoint or setting Comfy.ClearWorkflow",
+    "module, endpoint or setting Comfy.Graph.ConvertToSubgraph",
+    "module, endpoint or setting Comfy.Graph.EditSubgraphWidgets",
+    "module, endpoint or setting Comfy.Graph.ExitSubgraph",
+    "module, endpoint or setting Comfy.Graph.UnpackSubgraph",
+    "module, endpoint or setting Comfy.PublishSubgraph",
+    "module, endpoint or setting Comfy.SaveWorkflow",
+    "module, endpoint or setting Comfy.Subgraph.SetDescription",
+    "module, endpoint or setting Comfy.Subgraph.SetSearchAliases"
+  ],
+  "frontend/comfyui/ui/affordance/ComfyCubeEditorChromeAdapter.ts": [
+    "DOM lookup '.p-breadcrumb-item-label'",
+    "DOM lookup '.p-menu-item-label'",
+    "DOM lookup '.p-menu-submenu-label'",
+    "DOM lookup '.p-tooltip-text'",
+    "DOM lookup '.pi-pencil'",
+    "DOM lookup '.pi-search'",
+    "DOM lookup '.pi-trash'",
+    "DOM lookup '[data-testid=\"subgraph-breadcrumb-back\"]'",
+    "DOM lookup '[data-testid=\"subgraph-editor-toggle\"]'",
+    "DOM lookup 'li'",
+    "DOM lookup `[data-testid=\"subgraph-breadcrumb-item-subgraph-${cssEscape(graphId)}\"]`",
+    "DOM lookup `[data-testid=\"subgraph-breadcrumb-item-subgraph-${cssEscape(readGraphId(context.node.subgraph))}\"]`",
+    "DOM lookup `[data-testid=\"subgraph-breadcrumb-menu-subgraph-${cssEscape(graphId)}\"]`",
+    "DOM lookup `[data-testid=\"subgraph-breadcrumb-menu-subgraph-${cssEscape(readGraphId(context.node.subgraph))}\"]`",
+    "DOM lookup iconSelector",
+    "DOM lookup tooltipId",
+    "dynamic member id",
+    "host adapter member canvas.graph",
+    "host adapter member canvas.selectedItems",
+    "host adapter member canvas.subgraph",
+    "host selector or token .p-breadcrumb-item-label",
+    "host selector or token .p-menu-item-label",
+    "host selector or token .p-menu-submenu-label",
+    "host selector or token .p-tooltip",
+    "host selector or token .p-tooltip-text",
+    "host selector or token [data-testid=\"subgraph-breadcrumb-back\"]",
+    "host selector or token [data-testid=\"subgraph-editor-toggle\"]",
+    "host selector or token [data-testid^=\"subgraph-breadcrumb\"]"
+  ],
+  "frontend/comfyui/ui/affordance/ComfyCubeNativeMenuAdapter.ts": [
+    "host adapter member canvas.getCanvasMenuOptions",
+    "host adapter member canvas.getNodeMenuOptions",
+    "host adapter member canvas.selectedItems",
+    "host member canvas.getCanvasMenuOptions",
+    "host member canvas.getNodeMenuOptions",
+    "host member canvas.selectedItems"
+  ],
+  "frontend/comfyui/ui/affordance/ComfyCubeSaveButtonPresenter.ts": [
+    "DOM lookup STYLE_ID",
+    "host selector or token --comfy-menu-bg"
+  ],
+  "frontend/comfyui/ui/affordance/ComfyCubeSelectionMenuVisibilityAdapter.ts": [
+    "DOM lookup '.p-contextmenu'",
+    "DOM lookup 'li'",
+    "DOM lookup selector",
+    "host selector or token .p-contextmenu"
+  ],
+  "frontend/comfyui/ui/affordance/ComfyCubeSelectionSurfaceAdapter.ts": [
+    "host adapter member canvas.selectedItems",
+    "host selector or token .p-contextmenu",
+    "host selector or token [data-testid=\"selection-toolbox\"]"
+  ],
+  "frontend/comfyui/ui/affordance/ComfyCubeSelectionToolboxAdapter.ts": [
+    "DOM lookup '[data-testid=\"selection-toolbox\"]'",
+    "DOM lookup 'button'",
+    "DOM lookup selector",
+    "dynamic member cube_id",
+    "dynamic member cube_version",
+    "host selector or token [data-testid=\"convert-to-subgraph-button\"]",
+    "host selector or token [data-testid=\"info-button\"]",
+    "host selector or token [data-testid=\"selection-toolbox\"]"
+  ],
+  "frontend/comfyui/ui/affordance/ComfyCubeVersionToolboxPresenter.ts": [
+    "DOM lookup '[data-testid=\"color-picker-button\"] > div > i:last-child'",
+    "host selector or token [data-testid=\"color-picker-button\"]"
+  ],
+  "frontend/comfyui/ui/affordance/ComfyCubeWorkflowActionsMenuAdapter.ts": [
+    "DOM lookup '[role=\"menu\"][data-reka-menu-content][data-state=\"open\"]'",
+    "DOM lookup '[role=\"menuitem\"]'",
+    "DOM lookup 'span.flex-1'",
+    "DOM lookup iconSelector",
+    "host adapter member canvas.graph",
+    "host adapter member canvas.selectedItems",
+    "host adapter member canvas.subgraph"
+  ],
+  "frontend/comfyui/ui/affordance/ComfyToolboxTooltipPresenter.ts": [
+    "DOM lookup '.p-tooltip-arrow'",
+    "host selector or token .p-tooltip-arrow"
+  ],
+  "frontend/comfyui/ui/affordance/CubeBlueprintMigrationDetector.ts": [
+    "host member graph._nodes"
+  ],
+  "frontend/comfyui/ui/affordance/CubeHostAffordanceController.ts": [
+    "host member graph._nodes",
+    "host member graph.remove"
+  ],
+  "frontend/comfyui/ui/affordance/CubeInstanceRenameGuard.ts": [
+    "DOM lookup '[data-testid^=\"node-header-\"]'",
+    "host selector or token [data-testid^=\"node-header-\"]"
+  ],
+  "frontend/comfyui/ui/affordance/CubeNodeProductIdentityPresenter.ts": [
+    "dynamic member displayType"
+  ],
+  "frontend/comfyui/ui/affordance/CubeNodeTooltipAdapter.ts": [
+    "DOM lookup '.p-tooltip-text'",
+    "DOM lookup '[data-testid=\"node-title\"]'",
+    "DOM lookup `[data-testid=\"node-header-${cssEscape(String(node.id))}\"]`",
+    "DOM lookup tooltipId",
+    "host selector or token .p-tooltip",
+    "host selector or token .p-tooltip-text",
+    "host selector or token [data-testid=\"node-title\"]",
+    "host selector or token [data-testid^=\"node-header-\"]"
+  ],
+  "frontend/comfyui/ui/affordance/CubeStructuralOperationGuard.ts": [
+    "host member graph._nodes",
+    "host member graph.convertToSubgraph",
+    "host member graph.unpackSubgraph"
+  ],
+  "frontend/comfyui/ui/affordance/PrimeVueTooltipPresentationAdapter.ts": [
+    "DOM lookup '[data-pc-section=\"text\"], .p-tooltip-text'",
+    "DOM lookup tooltipId",
+    "host selector or token .p-tooltip-text"
+  ],
+  "frontend/comfyui/ui/canvas_editing/presentation/CanvasBrushOptions.ts": [
+    "host selector or token --p-primary-color"
+  ],
+  "frontend/comfyui/ui/canvas_editing/presentation/CanvasEditKeyboard.ts": [
+    "DOM lookup TEXT_ENTRY"
+  ],
+  "frontend/comfyui/ui/canvas_editing/presentation/CanvasEditOverlay.ts": [
+    "DOM lookup 'select'"
+  ],
+  "frontend/comfyui/ui/canvas_editing/presentation/CanvasEditOverlayRuntime.ts": [
+    "host member app.config",
+    "host member app.config.errorHandler",
+    "host member app.mount",
+    "host member app.provide",
+    "host member app.unmount"
+  ],
+  "frontend/comfyui/ui/canvas_editing/presentation/CanvasEditStyles.ts": [
+    "DOM lookup 'sugarcubes-canvas-edit-styles'",
+    "host selector or token --comfy-font-family",
+    "host selector or token --comfy-input-bg",
+    "host selector or token --comfy-menu-bg",
+    "host selector or token --p-primary-color"
+  ],
+  "frontend/comfyui/ui/console/ComfyLogFeed.ts": [
+    "host adapter member api.addEventListener",
+    "host adapter member api.getRawLogs",
+    "host adapter member api.removeEventListener",
+    "host adapter member api.subscribeLogs",
+    "host transport addEventListener logs",
+    "host transport removeEventListener logs"
+  ],
+  "frontend/comfyui/ui/console/ConsoleCaptionButton.ts": [
+    "DOM lookup FRAME",
+    "DOM lookup STYLE_ID"
+  ],
+  "frontend/comfyui/ui/console/ConsoleStyles.ts": [
+    "DOM lookup STYLE_ID",
+    "host selector or token --comfy-menu-bg"
+  ],
+  "frontend/comfyui/ui/console/WorkspaceConsole.ts": [
+    "host member app.extensionManager",
+    "host member this.#options.app.api"
+  ],
+  "frontend/comfyui/ui/controls/ComfySettingsSelect.ts": [
+    "DOM lookup 'vue-app'"
+  ],
+  "frontend/comfyui/ui/controls/ModelAutocompleteControl.ts": [
+    "DOM lookup STYLE_ID",
+    "host selector or token --comfy-menu-bg",
+    "host selector or token --p-border-radius-md",
+    "host selector or token --p-border-radius-sm",
+    "host selector or token --p-content-background",
+    "host selector or token --p-content-hover-background",
+    "host selector or token --p-text-color"
+  ],
+  "frontend/comfyui/ui/core/ComfyAdapter.ts": [
+    "host member appRef?.canvas",
+    "host member appRef?.graph",
+    "host member appRef?.graph?.canvas",
+    "host member this.getApp()?.extensionManager",
+    "host member this.getApp()?.graph",
+    "host member this.windowRef?.comfyAPI?.vueApp",
+    "typed host member ComfyApplication.canvas",
+    "typed host member ComfyApplication.extensionManager",
+    "typed host member ComfyApplication.graph",
+    "typed host member ComfyGraph.canvas"
+  ],
+  "frontend/comfyui/ui/core/ComfyAppMode.ts": [
+    "host member app.extensionManager"
+  ],
+  "frontend/comfyui/ui/core/ComfyGraphChromeLayer.ts": [
+    "DOM lookup GRAPH_CANVAS_PANEL",
+    "host selector or token .graph-canvas"
+  ],
+  "frontend/comfyui/ui/core/ComfyRendererMode.ts": [
+    "DOM lookup '.lg-node[data-node-id]'",
+    "host member appRecord.ui",
+    "host selector or token .lg-node",
+    "host selector or token [data-node-id]",
+    "module, endpoint or setting Comfy.VueNodes.Enabled"
+  ],
+  "frontend/comfyui/ui/core/ControlPlacement.ts": [
+    "DOM lookup ':focus-within'",
+    "dynamic member moveBefore"
+  ],
+  "frontend/comfyui/ui/core/CubeFallbackIconRenderer.ts": [
+    "host member canvas.getContext",
+    "host member canvas.height",
+    "host member canvas.style",
+    "host member canvas.width"
+  ],
+  "frontend/comfyui/ui/core/CubeIconAssetContrast.ts": [
+    "DOM lookup 'img'",
+    "host member canvas.getContext",
+    "host member canvas.height",
+    "host member canvas.width",
+    "host member variant.canvas.className",
+    "host member variant.canvas.setAttribute"
+  ],
+  "frontend/comfyui/ui/core/CubeIconResolver.ts": [
+    "host member canvas.className",
+    "host member canvas.setAttribute"
+  ],
+  "frontend/comfyui/ui/core/CubeLibraryApi.ts": [
+    "host member api.fetchApi",
+    "host member api?.fetchApi",
+    "typed host member ComfyHostApi.fetchApi"
+  ],
+  "frontend/comfyui/ui/core/HostSurfaceObserver.ts": [
+    "DOM lookup options.exclude",
+    "DOM lookup selector"
+  ],
+  "frontend/comfyui/ui/core/SegmentedSlider.ts": [
+    "DOM lookup 'button'",
+    "DOM lookup `button[data-tab=\"${target.id}\"]`",
+    "host selector or token --p-primary-color"
+  ],
+  "frontend/comfyui/ui/core/embedded/EmbeddedPanelHost.ts": [
+    "host member this.options.canvas?.connect",
+    "host member this.options.canvas?.disconnected",
+    "host member this.options.canvas?.dispose",
+    "host member this.options.canvas?.refresh"
+  ],
+  "frontend/comfyui/ui/core/embedded/NativePanelTransport.ts": [
+    "dynamic member sugarcubesPanelHost"
+  ],
+  "frontend/comfyui/ui/core/embedded/UxpPanelTransport.ts": [
+    "dynamic member uxpHost"
+  ],
+  "frontend/comfyui/ui/core/updates/PageLoadReport.ts": [
+    "dynamic member loaded"
+  ],
+  "frontend/comfyui/ui/core/user_files/ComfyUserFolder.ts": [
+    "module, endpoint or setting /userdata/",
+    "module, endpoint or setting /userdata?"
+  ],
+  "frontend/comfyui/ui/cube/ComfyCubeAuthoringAdapter.ts": [
+    "host adapter member canvas.selectedItems",
+    "host adapter member canvas.updateSelectedItems",
+    "host adapter member graph.add",
+    "host member options.canvas.graph",
+    "host member this.#graph.add",
+    "host member this.#graph?.add",
+    "typed host member ComfyGraph.add"
+  ],
+  "frontend/comfyui/ui/cube/ComfyCubeGraphBuilder.ts": [
+    "host member slot?.type",
+    "typed host member ComfyOutput.type"
+  ],
+  "frontend/comfyui/ui/cube/ComfyCubeRuntime.ts": [
+    "host member activeGraph.convertToSubgraph",
+    "host member app.canvas",
+    "host member app.dragOverNode",
+    "host member app.getPreviewFormatParam",
+    "host member app.getRandParam",
+    "host member app.graph",
+    "host member canvas.graph",
+    "host member canvas.openSubgraph",
+    "host member canvas.processSelect",
+    "host member canvas.selectedItems",
+    "host member canvas.updateSelectedItems",
+    "host member graph.afterChange",
+    "host member graph.createSubgraph",
+    "host member liteGraph.NODE_TITLE_HEIGHT",
+    "host member liteGraph.createNode",
+    "module, endpoint or setting /view?",
+    "module, endpoint or setting LiteGraph.createNode",
+    "typed host member ComfyGraph.convertToSubgraph"
+  ],
+  "frontend/comfyui/ui/cube/ComfyCubeRuntimeGraphBoundary.ts": [
+    "host member canvas.canvas",
+    "host member canvas.drawNode",
+    "host member canvas.graph_mouse",
+    "host member canvas.processWidgetClick",
+    "host member graph.subgraphs"
+  ],
+  "frontend/comfyui/ui/cube/CubeAuthoringHostCommands.ts": [
+    "dynamic member isSubgraphNode",
+    "dynamic member selectedItems"
+  ],
+  "frontend/comfyui/ui/cube/CubeBoundaryTypeResolver.ts": [
+    "host member slot.type",
+    "typed host member ComfyInput.type"
+  ],
+  "frontend/comfyui/ui/cube/CubeExtensionSetupLifecycle.ts": [
+    "dynamic member storeUserData",
+    "host member options.app?.canvas",
+    "host member options.app?.canvas?.graph",
+    "host member options.app?.graph",
+    "host member options.promptQueue.install",
+    "typed host member ComfyApplication.canvas",
+    "typed host member ComfyApplication.graph",
+    "typed host member ComfyCanvas.graph"
+  ],
+  "frontend/comfyui/ui/cube/CubeGraphConfigurationLifecycle.ts": [
+    "host member comfyApp.graph",
+    "host member options.app?.canvas",
+    "host member options.app?.canvas?.graph",
+    "host member options.app?.graph",
+    "module, endpoint or setting /scripts/app.js",
+    "typed host member ComfyApp.graph",
+    "typed host member ComfyApplication.canvas",
+    "typed host member ComfyApplication.graph",
+    "typed host member ComfyCanvas.graph"
+  ],
+  "frontend/comfyui/ui/cube/CubeNestedWidgetRestoration.ts": [
+    "host member candidate.id",
+    "host member createNode(node.type)?.widgets",
+    "host member graph?._subgraphs",
+    "host member graph?.subgraphs",
+    "host member node?.widgets",
+    "host member widget.name",
+    "host member widget.value",
+    "typed host member ComfyGraph._subgraphs",
+    "typed host member ComfyGraph.subgraphs",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/cube/CubeOutputSurfaceSynchronizer.ts": [
+    "host member node.outputs[index]?.name",
+    "host member node.outputs[index]?.type",
+    "host member nodeOutput.name",
+    "typed host member ComfyOutput.name",
+    "typed host member ComfyOutput.type"
+  ],
+  "frontend/comfyui/ui/cube/CubeSerializedDocumentReconciler.ts": [
+    "dynamic member sugarcubes_document"
+  ],
+  "frontend/comfyui/ui/cube/CubeSerializedWidgetRehydrator.ts": [
+    "host member node.class_type",
+    "host member node.type",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.type"
+  ],
+  "frontend/comfyui/ui/cube/chain/ComfyCubeChainCommitHost.ts": [
+    "host member graph.add",
+    "host member graph.getNodeById",
+    "host member graph.remove",
+    "host member target.inputs[link.targetSlot]?.link",
+    "typed host member ComfyInput.link"
+  ],
+  "frontend/comfyui/ui/cube/chain/CubeChainOrder.ts": [
+    "host member graph._nodes",
+    "host member graph.nodes",
+    "host member match.inputNode?.id",
+    "host member match.outputNode?.id",
+    "host member node.id",
+    "typed host member ComfyGraph._nodes",
+    "typed host member ComfyGraph.nodes",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/cube/chain/CubeChainService.ts": [
+    "host member input.link",
+    "host member input.name",
+    "host member input.type",
+    "host member link.origin",
+    "host member link.origin_id",
+    "host member link.origin_slot",
+    "host member output.name",
+    "host member output.type",
+    "typed host member ComfyInput.link",
+    "typed host member ComfyInput.name",
+    "typed host member ComfyInput.type",
+    "typed host member ComfyLink.origin",
+    "typed host member ComfyLink.origin_id",
+    "typed host member ComfyLink.origin_slot",
+    "typed host member ComfyOutput.name",
+    "typed host member ComfyOutput.type"
+  ],
+  "frontend/comfyui/ui/cube/connection/CubeConnectionTypePolicy.ts": [
+    "dynamic member isValidConnection",
+    "host member liteGraph.isValidConnection",
+    "host member liteGraph?.isValidConnection"
+  ],
+  "frontend/comfyui/ui/cube/connection/CubePortPresentationController.ts": [
+    "host member node.pos",
+    "typed host member ComfyNode.pos"
+  ],
+  "frontend/comfyui/ui/cube/connection/NativeCubeProximityEndpointSource.ts": [
+    "host member input.type",
+    "host member node.id",
+    "host member output.type",
+    "typed host member ComfyInput.type",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyOutput.type"
+  ],
+  "frontend/comfyui/ui/cube/execution/CubeDirectExecutionService.ts": [
+    "host member graph.serialize",
+    "host member hostApi?.apiKey",
+    "host member hostApi?.authToken",
+    "host member this.options.hostApi?.clientId",
+    "typed host member ComfyGraph.serialize",
+    "typed host member ComfyHostApi.apiKey",
+    "typed host member ComfyHostApi.authToken",
+    "typed host member ComfyHostApi.clientId"
+  ],
+  "frontend/comfyui/ui/cube/execution/CubeExecutionApiClient.ts": [
+    "host member this.api.fetchApi",
+    "host transport fetchApi /sugarcubes/v2/executions/queue",
+    "typed host member ComfyHostApi.fetchApi"
+  ],
+  "frontend/comfyui/ui/cube/geometry/NativeCubeGeometryCoordinator.ts": [
+    "host member context.graph.setDirtyCanvas"
+  ],
+  "frontend/comfyui/ui/cube/graph/CubeExternalInterface.ts": [
+    "dynamic member slots",
+    "host member graph.extra",
+    "host member graph.inputNode",
+    "host member graph.outputNode"
+  ],
+  "frontend/comfyui/ui/cube/graph/NativeCubeConnections.ts": [
+    "host member connection.target.inputs?.[connection.targetSlot]?.link",
+    "host member current.origin",
+    "host member current.origin_id",
+    "host member current.origin_slot",
+    "host member graph.getLink",
+    "host member graph.getNodeById",
+    "host member input.link",
+    "host member link.origin",
+    "host member link.origin_id",
+    "host member link.origin_slot",
+    "host member link.target",
+    "host member link.target_id",
+    "host member link.target_slot",
+    "host member output.links",
+    "host member restored.origin",
+    "host member restored.origin_id",
+    "host member restored.origin_slot",
+    "host member restored.target",
+    "host member restored.target_id",
+    "host member restored.target_slot",
+    "typed host member ComfyInput.link",
+    "typed host member ComfyLink.origin",
+    "typed host member ComfyLink.origin_id",
+    "typed host member ComfyLink.origin_slot",
+    "typed host member ComfyLink.target",
+    "typed host member ComfyLink.target_id",
+    "typed host member ComfyLink.target_slot",
+    "typed host member ComfyOutput.links"
+  ],
+  "frontend/comfyui/ui/cube/graph/NativeCubeDefinitionOwnership.ts": [
+    "dynamic member _internalConfigureAfterSlots",
+    "dynamic member createSubgraph",
+    "dynamic member subgraphs",
+    "dynamic member sugarcubes_surface",
+    "dynamic member type",
+    "host member assignment.node.properties",
+    "host member assignment.node.type",
+    "host member node.properties",
+    "host member node.rebuildInputWidgetBindings",
+    "host member node.subgraph",
+    "host member node.type",
+    "typed host member ComfyNode.properties",
+    "typed host member ComfyNode.rebuildInputWidgetBindings",
+    "typed host member ComfyNode.subgraph",
+    "typed host member ComfyNode.type"
+  ],
+  "frontend/comfyui/ui/cube/graph/NativeCubeDefinitionRegistry.ts": [
+    "host member graph.subgraphs",
+    "host member liteGraph.unregisterNodeType",
+    "host member liteGraph.unregisterNodeType.call"
+  ],
+  "frontend/comfyui/ui/cube/graph/NativeCubePositions.ts": [
+    "host member node.pos",
+    "host member node.setPos",
+    "typed host member ComfyNode.pos",
+    "typed host member ComfyNode.setPos"
+  ],
+  "frontend/comfyui/ui/cube/graph/NativeSubgraphBoundaryResolver.ts": [
+    "host member entry.id",
+    "host member graph._links",
+    "host member graph.getLink",
+    "host member graph.getNodeById",
+    "host member graph.links",
+    "host member input.name",
+    "host member input.widget",
+    "host member inputNode.id",
+    "host member inputNode?.inputs",
+    "host member leaf.inputs",
+    "host member leaf.inputs?.[inputSlot]?.widget",
+    "host member leaf.type",
+    "host member link.origin",
+    "host member link.origin_id",
+    "host member link.origin_slot",
+    "host member link.target",
+    "host member link.target_id",
+    "host member link.target_slot",
+    "host member node.id",
+    "host member node.inputs",
+    "host member node.isSubgraphNode",
+    "host member node.subgraph",
+    "host member node.type",
+    "host member outputNode.id",
+    "host member outputNode?.outputs",
+    "host member resolved.link?.target_slot",
+    "host member resolved?.link?.origin_slot",
+    "host member slot.label",
+    "host member slot.name",
+    "typed host member ComfyInput.label",
+    "typed host member ComfyInput.name",
+    "typed host member ComfyInput.widget",
+    "typed host member ComfyLink.id",
+    "typed host member ComfyLink.origin",
+    "typed host member ComfyLink.origin_id",
+    "typed host member ComfyLink.origin_slot",
+    "typed host member ComfyLink.target",
+    "typed host member ComfyLink.target_id",
+    "typed host member ComfyLink.target_slot",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.isSubgraphNode",
+    "typed host member ComfyNode.outputs",
+    "typed host member ComfyNode.subgraph",
+    "typed host member ComfyNode.type"
+  ],
+  "frontend/comfyui/ui/cube/migration/LegacyCubeContainerMigrationAdapter.ts": [
+    "host member options.graph.onConfigure",
+    "host member options.graph.onSerialize"
+  ],
+  "frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.ts": [
+    "dynamic member comfyClass",
+    "dynamic member constructor"
+  ],
+  "frontend/comfyui/ui/cube/node/ComfyCubeNodeLifecycleAdapter.ts": [
+    "host adapter member graph.onConfigure",
+    "host member options.graph.onConfigure"
+  ],
+  "frontend/comfyui/ui/cube/node/CubeInstanceStateTransfer.ts": [
+    "host member output.name",
+    "typed host member ComfyOutput.name"
+  ],
+  "frontend/comfyui/ui/cube/node/CubeNodeCatalog.ts": [
+    "host member node.graph?._nodes",
+    "typed host member ComfyGraph._nodes"
+  ],
+  "frontend/comfyui/ui/cube/node/PromotedWidgetIdentityInitializer.ts": [
+    "dynamic member configure",
+    "host member node.id",
+    "host member node.isSubgraphNode",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.isSubgraphNode"
+  ],
+  "frontend/comfyui/ui/cube/placement/ComfyCubeHostMutationGuard.ts": [
+    "host adapter member canvas._deserializeItems"
+  ],
+  "frontend/comfyui/ui/cube/placement/ComfyCubePlacementRuntime.ts": [
+    "host member options.canvas.graph"
+  ],
+  "frontend/comfyui/ui/cube/stack/CubeInstanceActions.ts": [
+    "host member this.#options.graph.add",
+    "host member this.#options.graph.getNodeById",
+    "host member this.#options.graph.remove"
+  ],
+  "frontend/comfyui/ui/cube/version/ComfyCubeVersionReplacementAdapter.ts": [
+    "host adapter member graph.add",
+    "host adapter member graph.remove",
+    "host member input.link",
+    "host member input.name",
+    "host member output.links",
+    "host member output.name",
+    "typed host member ComfyInput.link",
+    "typed host member ComfyInput.name",
+    "typed host member ComfyOutput.links",
+    "typed host member ComfyOutput.name"
+  ],
+  "frontend/comfyui/ui/debug/InputDiagnostics.ts": [
+    "DOM lookup selector"
+  ],
+  "frontend/comfyui/ui/debug/SugarCubesDebugApi.ts": [
+    "host member app?.graph",
+    "typed host member ComfyApplication.graph"
+  ],
+  "frontend/comfyui/ui/dialogs/ConfirmDialog.ts": [
+    "module, endpoint or setting /scripts/ui.js"
+  ],
+  "frontend/comfyui/ui/dialogs/CreateModalGraphNavigator.ts": [
+    "host member app?.canvas",
+    "host member app?.graph",
+    "host member app?.graph?.canvas",
+    "host member canvas?.ds",
+    "host member canvas?.setDirty",
+    "host member canvas?.zoom_speed",
+    "typed host member ComfyApplication.canvas",
+    "typed host member ComfyApplication.graph",
+    "typed host member ComfyGraph.canvas"
+  ],
+  "frontend/comfyui/ui/dialogs/CubeAuthoringModal.ts": [
+    "host selector or token .p-component",
+    "host selector or token .p-inputtext",
+    "host selector or token .p-inputtextarea",
+    "module, endpoint or setting /scripts/ui.js"
+  ],
+  "frontend/comfyui/ui/dialogs/CubeDefaultChangesModal.ts": [
+    "host selector or token .p-button",
+    "host selector or token .p-button-text",
+    "host selector or token .p-component",
+    "module, endpoint or setting /scripts/ui.js"
+  ],
+  "frontend/comfyui/ui/dialogs/DialogStyles.ts": [
+    "DOM lookup STYLE_ID",
+    "host selector or token .p-autocomplete-overlay",
+    "host selector or token .p-dialog-content",
+    "host selector or token .p-dialog-footer",
+    "host selector or token .p-dialog-header",
+    "host selector or token .p-select-overlay"
+  ],
+  "frontend/comfyui/ui/dialogs/FormModal.ts": [
+    "host selector or token .p-component",
+    "host selector or token .p-inputtext",
+    "module, endpoint or setting /scripts/ui.js"
+  ],
+  "frontend/comfyui/ui/dialogs/HistoricalVersionSaveModal.ts": [
+    "host selector or token .p-button",
+    "host selector or token .p-button-secondary",
+    "host selector or token .p-button-text",
+    "host selector or token .p-component",
+    "module, endpoint or setting /scripts/ui.js"
+  ],
+  "frontend/comfyui/ui/dialogs/InputModal.ts": [
+    "host selector or token .p-component",
+    "host selector or token .p-inputtext",
+    "module, endpoint or setting /scripts/ui.js"
+  ],
+  "frontend/comfyui/ui/dialogs/ModalAppearance.ts": [
+    "DOM lookup 'vue-app'"
+  ],
+  "frontend/comfyui/ui/dialogs/ModalAppearanceStyles.ts": [
+    "DOM lookup STYLE_ID",
+    "host selector or token --comfy-menu-bg",
+    "host selector or token --p-primary-color",
+    "host selector or token --p-primary-contrast-color",
+    "host selector or token .p-button",
+    "host selector or token .p-button-primary",
+    "host selector or token .p-button-secondary",
+    "host selector or token .p-dialog-content",
+    "host selector or token .p-dialog-footer",
+    "host selector or token .p-dialog-header",
+    "host selector or token .p-dialog-title"
+  ],
+  "frontend/comfyui/ui/dialogs/ModalDismissal.ts": [
+    "DOM lookup '.p-select-overlay, .p-autocomplete-overlay, [data-sc-floating-surface], [role=\"menu\"][data-state=\"open\"], [role=\"listbox\"][data-state=\"open\"], [data-pointer-dragging]'",
+    "DOM lookup '[hidden], [aria-hidden=\"true\"]'",
+    "DOM lookup '[role=\"combobox\"][aria-expanded=\"true\"], [aria-haspopup][aria-expanded=\"true\"]'",
+    "host selector or token .p-autocomplete-overlay",
+    "host selector or token .p-select-overlay"
+  ],
+  "frontend/comfyui/ui/dialogs/ModalLayer.ts": [
+    "DOM lookup '[role=\"dialog\"],dialog[open]'"
+  ],
+  "frontend/comfyui/ui/dialogs/ModalShell.ts": [
+    "host selector or token .p-button",
+    "host selector or token .p-button-secondary",
+    "host selector or token .p-button-text",
+    "host selector or token .p-component",
+    "host selector or token .p-dialog-content",
+    "host selector or token .p-dialog-footer",
+    "host selector or token .p-dialog-header",
+    "host selector or token .p-dialog-title",
+    "module, endpoint or setting /scripts/ui.js"
+  ],
+  "frontend/comfyui/ui/dialogs/SelectionModal.ts": [
+    "DOM lookup 'input[type=\"radio\"]'",
+    "module, endpoint or setting /scripts/ui.js"
+  ],
+  "frontend/comfyui/ui/dialogs/VersionDialog.ts": [
+    "module, endpoint or setting /scripts/ui.js"
+  ],
+  "frontend/comfyui/ui/editor_actions/EditorActionsComposition.ts": [
+    "host member api.fetchApi",
+    "host member api?.fetchApi",
+    "typed host member ComfyHostApi.fetchApi"
+  ],
+  "frontend/comfyui/ui/editor_actions/EditorActionsRuntime.ts": [
+    "host member options.app.graph"
+  ],
+  "frontend/comfyui/ui/editor_actions/infrastructure/ComfyDimensionDiscovery.ts": [
+    "host member this.app.graphToPrompt"
+  ],
+  "frontend/comfyui/ui/editor_actions/infrastructure/ComfyPresetRepository.ts": [
+    "module, endpoint or setting /userdata/sugar%2Fpresets.json"
+  ],
+  "frontend/comfyui/ui/editor_actions/infrastructure/NativeDimensionFieldMetadata.ts": [
+    "host member found.node.id",
+    "host member found.node.isSubgraphNode",
+    "host member node.id",
+    "host member node.subgraph",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.isSubgraphNode",
+    "typed host member ComfyNode.subgraph"
+  ],
+  "frontend/comfyui/ui/editor_actions/infrastructure/NativeEditorCardAdapter.ts": [
+    "DOM lookup '.lg-node'",
+    "DOM lookup 'input,textarea'",
+    "DOM lookup selector",
+    "host selector or token .lg-node",
+    "host selector or token .lg-node-header",
+    "host selector or token [data-testid=\"advanced-inputs-button\"]"
+  ],
+  "frontend/comfyui/ui/editor_actions/presentation/EditorContextMenuHost.ts": [
+    "DOM lookup '.lg-node'",
+    "host selector or token .lg-node"
+  ],
+  "frontend/comfyui/ui/execution/infrastructure/BrowserCanvasImage.ts": [
+    "host member canvas.convertToBlob",
+    "host member canvas.getContext",
+    "host member canvas.height",
+    "host member canvas.width"
+  ],
+  "frontend/comfyui/ui/execution/infrastructure/ComfyDirectPromptTransport.ts": [
+    "host adapter member api.fetchApi",
+    "module, endpoint or setting /prompt"
+  ],
+  "frontend/comfyui/ui/execution/infrastructure/ComfyDocumentCanvasHost.ts": [
+    "host member this.canvas.readCanvas",
+    "host member this.canvas.surfaceDiscovered"
+  ],
+  "frontend/comfyui/ui/execution/infrastructure/ComfyPromptQueueBridge.ts": [
+    "host adapter member api.queuePrompt"
+  ],
+  "frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowEventAdapter.ts": [
+    "host adapter member api.addEventListener",
+    "host adapter member api.removeEventListener"
+  ],
+  "frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowHistoryAdapter.ts": [
+    "host adapter member api.fetchApi",
+    "module, endpoint or setting /history/"
+  ],
+  "frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowQueueReconciler.ts": [
+    "module, endpoint or setting /history/",
+    "module, endpoint or setting /queue"
+  ],
+  "frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowScenePrompts.ts": [
+    "host member app.queuePrompt",
+    "host member app?.queuePrompt",
+    "host member candidate.name",
+    "host member candidate.options",
+    "host member candidate.type",
+    "host member graph._nodes",
+    "host member graph.nodes",
+    "host member node.id",
+    "host member node.widgets",
+    "host member widget.name",
+    "typed host member ComfyGraph._nodes",
+    "typed host member ComfyGraph.nodes",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.options",
+    "typed host member ComfyWidget.type"
+  ],
+  "frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowSessionAdapter.ts": [
+    "host adapter member workflow.$subscribe",
+    "host adapter member workflow.activeWorkflow",
+    "host adapter member workflow.openWorkflows",
+    "host member app.extensionManager"
+  ],
+  "frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowSourceDecoder.ts": [
+    "host member graph.nodes"
+  ],
+  "frontend/comfyui/ui/execution/infrastructure/DocumentCanvasAdapter.ts": [
+    "host member context.canvas.capabilities",
+    "host member context.canvas.id",
+    "host member context.canvas.label"
+  ],
+  "frontend/comfyui/ui/execution/infrastructure/RunImages.ts": [
+    "host transport fetchApi /sugarcubes/output-saving/run-images"
+  ],
+  "frontend/comfyui/ui/flavors/FlavorCommands.ts": [
+    "host member this.options.graph.applyValues",
+    "host member this.options.graph.collectValues",
+    "host member this.options.graph.findGroup",
+    "host member this.options.graph.getGraph"
+  ],
+  "frontend/comfyui/ui/flavors/FlavorDefinitionLifecycle.ts": [
+    "host member this.options.graph.applyValues",
+    "host member this.options.graph.selectionNeedsApplication"
+  ],
+  "frontend/comfyui/ui/flavors/FlavorGraphProjection.ts": [
+    "host member graph.setDirtyCanvas",
+    "host member this.adapter?.getApp?.()?.canvas",
+    "host member this.adapter?.getApp?.()?.canvas?.setDirty",
+    "host member this.adapter?.getApp?.()?.graph",
+    "typed host member ComfyApplication.canvas",
+    "typed host member ComfyApplication.graph",
+    "typed host member ComfyCanvas.setDirty",
+    "typed host member ComfyGraph.setDirtyCanvas"
+  ],
+  "frontend/comfyui/ui/flavors/FlavorService.ts": [
+    "host member this.graph.applyValues",
+    "host member this.graph.buildNodesBySymbol",
+    "host member this.graph.collectValues",
+    "host member this.graph.findGroup",
+    "host member this.graph.getGraph",
+    "host member this.graph.selectionNeedsApplication"
+  ],
+  "frontend/comfyui/ui/flavors/FlavorSupport.ts": [
+    "host member node.onPropertyChanged",
+    "host member node.properties",
+    "host member node.setProperty",
+    "typed host member ComfyNode.onPropertyChanged",
+    "typed host member ComfyNode.properties",
+    "typed host member ComfyNode.setProperty"
+  ],
+  "frontend/comfyui/ui/geometry/ComfyInstanceGeometry.ts": [
+    "host member instance.group.pos",
+    "host member instance.group.size",
+    "typed host member ComfyGroup.pos",
+    "typed host member ComfyGroup.size"
+  ],
+  "frontend/comfyui/ui/geometry/ComfyNodeGeometry.ts": [
+    "DOM lookup '[data-node-id]'",
+    "host member node.flags",
+    "host member node.id",
+    "host member node.onResize",
+    "host member node.pos",
+    "host member node.renderingSize",
+    "host member node.setSize",
+    "host member node.size",
+    "host selector or token [data-node-id]",
+    "typed host member ComfyNode.flags",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.onResize",
+    "typed host member ComfyNode.pos",
+    "typed host member ComfyNode.renderingSize",
+    "typed host member ComfyNode.setSize",
+    "typed host member ComfyNode.size"
+  ],
+  "frontend/comfyui/ui/geometry/LiveCubeGeometryIndex.ts": [
+    "host member graph._groups",
+    "host member graph._nodes",
+    "host member graph.groups",
+    "host member graph.nodes",
+    "host member group.properties",
+    "host member node.id",
+    "host member node.properties",
+    "typed host member ComfyGraph._groups",
+    "typed host member ComfyGraph._nodes",
+    "typed host member ComfyGraph.groups",
+    "typed host member ComfyGraph.nodes",
+    "typed host member ComfyGroup.properties",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.properties"
+  ],
+  "frontend/comfyui/ui/geometry/RendererGeometryCoordinator.ts": [
+    "host member graph.setDirtyCanvas",
+    "host member this.adapter.getCanvas?.()?.setDirty",
+    "typed host member ComfyCanvas.setDirty",
+    "typed host member ComfyGraph.setDirtyCanvas"
+  ],
+  "frontend/comfyui/ui/geometry/RendererGeometryPolicy.ts": [
+    "host member liteGraph?.vueNodesMode"
+  ],
+  "frontend/comfyui/ui/graph/AliasAllocator.ts": [
+    "host member group?.__sugarcubes_imported",
+    "typed host member ComfyGroup.__sugarcubes_imported"
+  ],
+  "frontend/comfyui/ui/graph/CubeBounds.ts": [
+    "host member group._bounding",
+    "host member group.pos",
+    "host member group.properties",
+    "host member group.size",
+    "host member group?.properties",
+    "host member host?.[name]",
+    "host member node.flags",
+    "host member node?._collapsed_width",
+    "host member node?.flags",
+    "host member node?.pos",
+    "host member node?.size",
+    "typed host member ComfyGroup._bounding",
+    "typed host member ComfyGroup.pos",
+    "typed host member ComfyGroup.properties",
+    "typed host member ComfyGroup.size",
+    "typed host member ComfyNode._collapsed_width",
+    "typed host member ComfyNode.flags",
+    "typed host member ComfyNode.pos",
+    "typed host member ComfyNode.size"
+  ],
+  "frontend/comfyui/ui/graph/CubeMarkers.ts": [
+    "host member node.id",
+    "host member node.properties",
+    "host member node.type",
+    "host member node?.id",
+    "host member node?.properties",
+    "host member node?.type",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.properties",
+    "typed host member ComfyNode.type"
+  ],
+  "frontend/comfyui/ui/graph/DirtySnapshotter.ts": [
+    "host member group.bgcolor",
+    "host member group.color",
+    "host member group.flags",
+    "host member group.font_size",
+    "host member group.pos",
+    "host member group.size",
+    "host member group.title",
+    "host member input.name",
+    "host member input?.name",
+    "host member link.origin",
+    "host member link.origin_id",
+    "host member link.origin_slot",
+    "host member link.target",
+    "host member link.target_id",
+    "host member link.target_slot",
+    "host member node.flags",
+    "host member node.id",
+    "host member node.inputs",
+    "host member node.mode",
+    "host member node.pos",
+    "host member node.properties",
+    "host member node.title",
+    "host member node.type",
+    "host member node.widgets",
+    "host member node?.id",
+    "host member node?.inputs",
+    "host member node?.properties",
+    "host member widget.name",
+    "host member widget.value",
+    "typed host member ComfyGroup.bgcolor",
+    "typed host member ComfyGroup.color",
+    "typed host member ComfyGroup.flags",
+    "typed host member ComfyGroup.font_size",
+    "typed host member ComfyGroup.pos",
+    "typed host member ComfyGroup.size",
+    "typed host member ComfyGroup.title",
+    "typed host member ComfyInput.name",
+    "typed host member ComfyLink.origin",
+    "typed host member ComfyLink.origin_id",
+    "typed host member ComfyLink.origin_slot",
+    "typed host member ComfyLink.target",
+    "typed host member ComfyLink.target_id",
+    "typed host member ComfyLink.target_slot",
+    "typed host member ComfyNode.flags",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.mode",
+    "typed host member ComfyNode.pos",
+    "typed host member ComfyNode.properties",
+    "typed host member ComfyNode.title",
+    "typed host member ComfyNode.type",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/graph/DirtyTracker.ts": [
+    "host member node.id",
+    "host member node?.id",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/graph/GraphQuery.ts": [
+    "host member existing.origin_id",
+    "host member existing.origin_slot",
+    "host member existing.target_id",
+    "host member existing.target_slot",
+    "host member existing.type",
+    "host member graph._groups",
+    "host member graph._links",
+    "host member graph._nodes",
+    "host member graph.groups",
+    "host member graph.links",
+    "host member graph.nodes",
+    "host member input?.link",
+    "host member input?.type",
+    "host member link.id",
+    "host member link.origin",
+    "host member link.origin_id",
+    "host member link.origin_slot",
+    "host member link.target",
+    "host member link.target_id",
+    "host member link.target_slot",
+    "host member node.id",
+    "host member node.inputs",
+    "host member node.outputs",
+    "host member node?.id",
+    "host member output.link",
+    "host member output.links",
+    "host member output.type",
+    "host member output?.link",
+    "host member output?.links",
+    "host member output?.type",
+    "typed host member ComfyInput.link",
+    "typed host member ComfyInput.type",
+    "typed host member ComfyLink.id",
+    "typed host member ComfyLink.origin",
+    "typed host member ComfyLink.origin_id",
+    "typed host member ComfyLink.origin_slot",
+    "typed host member ComfyLink.target",
+    "typed host member ComfyLink.target_id",
+    "typed host member ComfyLink.target_slot",
+    "typed host member ComfyLink.type",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.outputs",
+    "typed host member ComfyOutput.link",
+    "typed host member ComfyOutput.links",
+    "typed host member ComfyOutput.type"
+  ],
+  "frontend/comfyui/ui/graph/GroupMetadata.ts": [
+    "host member group.properties",
+    "host member group.title",
+    "host member group?.title",
+    "host member liteGraph?.LGraphGroup",
+    "host member safeGroup.title",
+    "typed host member ComfyGroup.properties",
+    "typed host member ComfyGroup.title"
+  ],
+  "frontend/comfyui/ui/graph/InstanceBuilder.ts": [
+    "host member edge.origin",
+    "host member edge.origin_id",
+    "host member edge.target",
+    "host member edge.target_id",
+    "host member icon.node.id",
+    "host member icon?.node?.id",
+    "host member link.origin",
+    "host member link.origin_id",
+    "host member link.target",
+    "host member link.target_id",
+    "host member marker.node.id",
+    "host member marker.node?.id",
+    "host member node.id",
+    "host member node.type",
+    "host member node?.id",
+    "typed host member ComfyLink.origin",
+    "typed host member ComfyLink.origin_id",
+    "typed host member ComfyLink.target",
+    "typed host member ComfyLink.target_id",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.type"
+  ],
+  "frontend/comfyui/ui/graph/InstanceGroupPresenter.ts": [
+    "host member graph.add",
+    "typed host member ComfyGraph.add"
+  ],
+  "frontend/comfyui/ui/graph/InstanceGroupReconciler.ts": [
+    "host member group.title",
+    "typed host member ComfyGroup.title"
+  ],
+  "frontend/comfyui/ui/graph/InstanceManager.ts": [
+    "host member graph.remove",
+    "typed host member ComfyGraph.remove"
+  ],
+  "frontend/comfyui/ui/graph/Markers.ts": [
+    "host member entry.name",
+    "host member node.widgets",
+    "host member widget.callback",
+    "host member widget.last_value",
+    "host member widget.options",
+    "host member widget.value",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.callback",
+    "typed host member ComfyWidget.last_value",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.options",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/graph/SubgraphBoundaryWidgetIdentities.ts": [
+    "host member input.link",
+    "host member input.name",
+    "host member input.widget",
+    "host member link.id",
+    "host member link.origin",
+    "host member link.origin_id",
+    "host member link.target",
+    "host member link.target_id",
+    "host member node.id",
+    "host member node.inputs",
+    "typed host member ComfyInput.link",
+    "typed host member ComfyInput.name",
+    "typed host member ComfyInput.widget",
+    "typed host member ComfyLink.id",
+    "typed host member ComfyLink.origin",
+    "typed host member ComfyLink.origin_id",
+    "typed host member ComfyLink.target",
+    "typed host member ComfyLink.target_id",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.inputs"
+  ],
+  "frontend/comfyui/ui/graph/SubgraphWidgetValueRebinder.ts": [
+    "host member companion.name",
+    "host member input.widget",
+    "host member input?.link",
+    "host member input?.widget",
+    "host member linkedInput?.link",
+    "host member liveNode.widgets",
+    "host member node.class_type",
+    "host member node.id",
+    "host member node.inputs",
+    "host member node.type",
+    "host member node.widgets_values",
+    "host member node?.id",
+    "host member node?.inputs",
+    "host member node?.widgets_values",
+    "host member widget.name",
+    "host member widget.options",
+    "host member widget.value",
+    "host member widget?.name",
+    "typed host member ComfyInput.link",
+    "typed host member ComfyInput.widget",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.type",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyNode.widgets_values",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.options",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/graph/SurfaceNodeResolver.ts": [
+    "host member input?.name",
+    "host member input?.widget",
+    "host member node.class_type",
+    "host member node.id",
+    "host member node.inputs",
+    "host member node.properties",
+    "host member node.type",
+    "host member node.widgets",
+    "host member node?.class_type",
+    "host member node?.id",
+    "host member node?.properties",
+    "host member node?.type",
+    "host member widget?.name",
+    "typed host member ComfyInput.name",
+    "typed host member ComfyInput.widget",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.properties",
+    "typed host member ComfyNode.type",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/graph/SurfaceSnapshotter.ts": [
+    "host member node.properties",
+    "typed host member ComfyNode.properties"
+  ],
+  "frontend/comfyui/ui/graph/WidgetValueSerialization.ts": [
+    "host member widget.name",
+    "host member widget.options",
+    "host member widget.serialize",
+    "host member widget.type",
+    "host member widget?.last_value",
+    "host member widget?.options",
+    "host member widget?.value",
+    "typed host member ComfyWidget.last_value",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.options",
+    "typed host member ComfyWidget.serialize",
+    "typed host member ComfyWidget.type",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/graph/WorkflowPayloadBuilder.ts": [
+    "host member graph._subgraphs",
+    "host member graph?._subgraphs",
+    "host member rawEntry.graph.asSerialisable",
+    "host member rawEntry.graph.serialize",
+    "typed host member ComfyGraph._subgraphs"
+  ],
+  "frontend/comfyui/ui/graph/WorkflowWidgetSnapshotCapture.ts": [
+    "host member graph._subgraphs",
+    "host member graph?._subgraphs",
+    "host member node.id",
+    "host member node.widgets",
+    "host member node?.id",
+    "host member node?.widgets",
+    "host member widget.last_value",
+    "host member widget.name",
+    "host member widget.options",
+    "host member widget.value",
+    "host member workflowNode.id",
+    "host member workflowNode[WORKFLOW_WIDGET_VALUES_KEY]",
+    "typed host member ComfyGraph._subgraphs",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.last_value",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.options",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/import/ComfyCanvasDropOriginAdapter.ts": [
+    "host member canvas.canvas",
+    "host member canvas.canvas?.getBoundingClientRect",
+    "host member canvas.convertCanvasToOffset",
+    "host member canvas.ds",
+    "host member canvas.last_mouse_position"
+  ],
+  "frontend/comfyui/ui/import/CubeImportHostCoordinator.ts": [
+    "host member app.extensionManager",
+    "host member this.#app?.graph",
+    "module, endpoint or setting Comfy.NewBlankWorkflow",
+    "typed host member ComfyApplication.graph"
+  ],
+  "frontend/comfyui/ui/import/ImportNodeWriter.ts": [
+    "host member entry.name",
+    "host member input.name",
+    "host member output.name",
+    "typed host member ComfyInput.name",
+    "typed host member ComfyOutput.name",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/input_canvas/application/InputAssetAssociations.ts": [
+    "host member graph.endpoints"
+  ],
+  "frontend/comfyui/ui/input_canvas/application/InputBindingController.ts": [
+    "host member canvas.canvasId",
+    "host member canvas.changes",
+    "host member canvas.execute"
+  ],
+  "frontend/comfyui/ui/input_canvas/application/InputPreviewContent.ts": [
+    "host member image.canvas.document",
+    "host member image.canvas.id",
+    "host member image.canvas.revision",
+    "host member image.canvas?.document",
+    "host member source.canvas.document",
+    "host member source.canvas.id",
+    "host member source.canvas.revision",
+    "host member source.canvas?.document"
+  ],
+  "frontend/comfyui/ui/input_canvas/application/WorkflowRegionalHover.ts": [
+    "host member this.canvas.hover"
+  ],
+  "frontend/comfyui/ui/input_canvas/application/WorkflowRegionalPrompts.ts": [
+    "host member graph.subscribe",
+    "host member this.graph.facts"
+  ],
+  "frontend/comfyui/ui/input_canvas/application/WorkflowSurfaceProvisioning.ts": [
+    "host member graph.subscribe",
+    "host member this.graph.binding",
+    "host member this.graph.facts",
+    "host member this.graph.workflow"
+  ],
+  "frontend/comfyui/ui/input_canvas/domain/InputAssetAssociation.ts": [
+    "host member graph.endpoints",
+    "host member graph.inputs"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/BrowserCanvasSourceAssets.ts": [
+    "module, endpoint or setting /upload/image",
+    "module, endpoint or setting /view?"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/BrowserInputRasters.ts": [
+    "host member canvas.getContext",
+    "host member canvas.height",
+    "host member canvas.width"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/BrowserMaskImport.ts": [
+    "host member canvas.getContext",
+    "host member canvas.height",
+    "host member canvas.width"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/BrowserWorkflowFileDimensions.ts": [
+    "module, endpoint or setting /view?"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/ComfyDimensionAuthorityWriter.ts": [
+    "host member graph?.afterChange",
+    "host member graph?.beforeChange",
+    "host member node.onWidgetChanged",
+    "host member node?.widgets",
+    "host member widget.callback",
+    "host member widget.name",
+    "host member widget.value",
+    "typed host member ComfyGraph.afterChange",
+    "typed host member ComfyGraph.beforeChange",
+    "typed host member ComfyNode.onWidgetChanged",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.callback",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputAssociationGraph.ts": [
+    "host member consumer.inputs",
+    "host member input.link",
+    "host member input.name",
+    "host member input.widget",
+    "host member link.id",
+    "host member link.origin",
+    "host member link.origin_id",
+    "host member link.origin_slot",
+    "host member link.target",
+    "host member link.target_id",
+    "host member link.target_slot",
+    "host member nativeInput.link",
+    "host member node.class_type",
+    "host member node.id",
+    "host member node.inputs",
+    "host member node.inputs?.[target.inputSlot]?.name",
+    "host member node.inputs?.[target.inputSlot]?.type",
+    "host member node.outputs",
+    "host member node.subgraph",
+    "host member node.type",
+    "host member node.widgets",
+    "host member output.links",
+    "host member output.type",
+    "host member source.class_type",
+    "host member source.outputs",
+    "host member source.outputs?.[origin.slot]?.type",
+    "host member source.type",
+    "host member widget.name",
+    "typed host member ComfyInput.link",
+    "typed host member ComfyInput.name",
+    "typed host member ComfyInput.type",
+    "typed host member ComfyInput.widget",
+    "typed host member ComfyLink.id",
+    "typed host member ComfyLink.origin",
+    "typed host member ComfyLink.origin_id",
+    "typed host member ComfyLink.origin_slot",
+    "typed host member ComfyLink.target",
+    "typed host member ComfyLink.target_id",
+    "typed host member ComfyLink.target_slot",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.outputs",
+    "typed host member ComfyNode.subgraph",
+    "typed host member ComfyNode.type",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyOutput.links",
+    "typed host member ComfyOutput.type",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputAssociationObserver.ts": [
+    "host member graph.add",
+    "host member graph.configure",
+    "host member graph.remove",
+    "host member node.onConnectionsChange",
+    "typed host member ComfyGraph.add",
+    "typed host member ComfyGraph.configure",
+    "typed host member ComfyGraph.remove",
+    "typed host member ComfyNode.onConnectionsChange"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputAssociations.ts": [
+    "host adapter member graph.field",
+    "host adapter member graph.key",
+    "host adapter member graph.read",
+    "host adapter member graph.reconcile",
+    "host adapter member graph.scope",
+    "host adapter member graph.spatial",
+    "host adapter member graph.workflowKey",
+    "host member field.node.properties",
+    "typed host member ComfyNode.properties"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputBinding.ts": [
+    "host member graph?.afterChange",
+    "host member graph?.beforeChange",
+    "host member input.link",
+    "host member input.name",
+    "host member input.widget",
+    "host member node.graph",
+    "host member node.inputs",
+    "host member node.properties",
+    "host member node.widgets",
+    "host member node.widgets?.find((widget) => widget.name === field)?.value",
+    "host member widget.name",
+    "host member widget.value",
+    "host member widget?.options",
+    "host member widget?.value",
+    "typed host member ComfyGraph.afterChange",
+    "typed host member ComfyGraph.beforeChange",
+    "typed host member ComfyInput.link",
+    "typed host member ComfyInput.name",
+    "typed host member ComfyInput.widget",
+    "typed host member ComfyNode.graph",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.properties",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.options",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputBindings.ts": [
+    "host member node.class_type",
+    "host member node.onRemoved",
+    "host member node.subgraph",
+    "host member node.type",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.onRemoved",
+    "typed host member ComfyNode.subgraph",
+    "typed host member ComfyNode.type"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputSourceDefaults.ts": [
+    "host member canvas.canvasId",
+    "host member canvas.execute"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/ComfyInputWidgetObserver.ts": [
+    "host member node.class_type",
+    "host member node.onWidgetChanged",
+    "host member node.type",
+    "host member node.widgets",
+    "host member widget.callback",
+    "host member widget.name",
+    "host member widget?.callback",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.onWidgetChanged",
+    "typed host member ComfyNode.type",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.callback",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/ComfyRegionalPromptNames.ts": [
+    "host member graph?.afterChange",
+    "host member graph?.beforeChange",
+    "host member graph?.setDirtyCanvas",
+    "host member node.onWidgetChanged",
+    "host member widget.callback",
+    "host member widget.name",
+    "host member widget.value",
+    "typed host member ComfyGraph.afterChange",
+    "typed host member ComfyGraph.beforeChange",
+    "typed host member ComfyGraph.setDirtyCanvas",
+    "typed host member ComfyNode.onWidgetChanged",
+    "typed host member ComfyWidget.callback",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/ComfyRegionalPrompts.ts": [
+    "host member candidate.name",
+    "host member live?.class_type",
+    "host member live?.type",
+    "host member node.widgets",
+    "host member widget.value",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.type",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/ComfyWorkflowInputState.ts": [
+    "host member root.extra",
+    "typed host member ComfyGraph.extra"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/ComfyWorkflowSurfaceGraph.ts": [
+    "host member field.node.class_type",
+    "host member field.node.properties",
+    "host member field.node.type",
+    "host member node.class_type",
+    "host member node.onWidgetChanged",
+    "host member node.properties",
+    "host member node.title",
+    "host member node.type",
+    "host member node?.widgets",
+    "host member node?.widgets?.find((widget) => widget.name === name)?.value",
+    "host member widget.name",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.onWidgetChanged",
+    "typed host member ComfyNode.properties",
+    "typed host member ComfyNode.title",
+    "typed host member ComfyNode.type",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/GeneratedMaskSources.ts": [
+    "host member node[WORKFLOW_WIDGET_VALUES_KEY]"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/InputLoaderPresentation.ts": [
+    "host member this.node.class_type",
+    "host member this.node.type",
+    "host member this.node.widgets",
+    "host member widget.name",
+    "host member widget.type",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.type",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.type"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/InputWorkflowProjection.ts": [
+    "host member graph.nodes"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/MasonryInputHost.ts": [
+    "host member node.class_type",
+    "host member node.flags",
+    "host member node.type",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.flags",
+    "typed host member ComfyNode.type"
+  ],
+  "frontend/comfyui/ui/input_canvas/infrastructure/WorkflowSurfaceComposition.ts": [
+    "host member graph.dispose"
+  ],
+  "frontend/comfyui/ui/input_canvas/presentation/InputEditorStyles.ts": [
+    "DOM lookup 'sc-input-editor-styles'",
+    "host selector or token --p-primary-color"
+  ],
+  "frontend/comfyui/ui/input_canvas/presentation/InputPreviewRows.ts": [
+    "DOM lookup '[data-input-entry]'",
+    "host member canvas.height",
+    "host member canvas.width"
+  ],
+  "frontend/comfyui/ui/input_canvas/presentation/InputPreviewSurface.ts": [
+    "host member canvas.getContext",
+    "host member canvas.height",
+    "host member canvas.style",
+    "host member canvas.width",
+    "host member this.canvas.className",
+    "host member this.canvas.hidden",
+    "host member this.canvas.setAttribute"
+  ],
+  "frontend/comfyui/ui/layout/CubeBoundsReconciler.ts": [
+    "host member group?.pos",
+    "host member group?.size",
+    "typed host member ComfyGroup.pos",
+    "typed host member ComfyGroup.size"
+  ],
+  "frontend/comfyui/ui/layout/CubeContainmentService.ts": [
+    "host member liteGraph?.[name]",
+    "host member node.flags",
+    "host member node?._collapsed_width",
+    "host member node?.flags",
+    "host member node?.pos",
+    "host member node?.size",
+    "typed host member ComfyNode._collapsed_width",
+    "typed host member ComfyNode.flags",
+    "typed host member ComfyNode.pos",
+    "typed host member ComfyNode.size"
+  ],
+  "frontend/comfyui/ui/layout/CubeInstanceIndex.ts": [
+    "host member node.id",
+    "host member node?.id",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/layout/CubeLayoutEngine.ts": [
+    "host member link.origin",
+    "host member link.origin_id",
+    "host member link.target",
+    "host member link.target_id",
+    "host member marker?.id",
+    "host member node.type",
+    "host member node?.type",
+    "typed host member ComfyLink.origin",
+    "typed host member ComfyLink.origin_id",
+    "typed host member ComfyLink.target",
+    "typed host member ComfyLink.target_id",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.type"
+  ],
+  "frontend/comfyui/ui/layout/CubeLayoutService.ts": [
+    "host member adapter?.getApp?.()?.graph",
+    "host member graph?.afterChange",
+    "host member graph?.setDirtyCanvas",
+    "typed host member ComfyApplication.graph",
+    "typed host member ComfyGraph.afterChange",
+    "typed host member ComfyGraph.setDirtyCanvas"
+  ],
+  "frontend/comfyui/ui/layout/CubeMover.ts": [
+    "host member group.pos",
+    "host member node.pos",
+    "typed host member ComfyGroup.pos",
+    "typed host member ComfyNode.pos"
+  ],
+  "frontend/comfyui/ui/menus/ContextMenuStyles.ts": [
+    "DOM lookup STYLE_ID"
+  ],
+  "frontend/comfyui/ui/menus/TextFieldEditMenu.ts": [
+    "DOM lookup 'textarea, input'",
+    "DOM lookup SUGARCUBES_SURFACES",
+    "DOM lookup `[${FIELD_MENU_OWNER}]`"
+  ],
+  "frontend/comfyui/ui/model_library/CivitaiKeyDialog.ts": [
+    "DOM lookup 'a[href],input:not(:disabled),button:not(:disabled)'"
+  ],
+  "frontend/comfyui/ui/model_library/ComfyModelChoices.ts": [
+    "host member app.refreshComboInNodes",
+    "host member app.refreshComboInNodes.call"
+  ],
+  "frontend/comfyui/ui/model_library/ComfyModelCompatibilityContext.ts": [
+    "host member scope.graph._links",
+    "host member scope.graph.extra",
+    "host member scope.graph.links"
+  ],
+  "frontend/comfyui/ui/model_library/ComfyModelDiscoveryContext.ts": [
+    "DOM lookup '[data-cube-node-locator]'"
+  ],
+  "frontend/comfyui/ui/model_library/ComfyModelFieldAdapter.ts": [
+    "DOM lookup '.lg-node'",
+    "DOM lookup '[data-capture-wheel]'",
+    "DOM lookup '[data-testid=\"widget-select-default-trigger\"]'",
+    "host member nodeData.type",
+    "host member nodeData.widgets",
+    "host selector or token .lg-node",
+    "host selector or token [data-testid=\"widget-select-default-trigger\"]"
+  ],
+  "frontend/comfyui/ui/model_library/ComfyModelFieldOwner.ts": [
+    "host member scope.graph.afterChange"
+  ],
+  "frontend/comfyui/ui/model_library/ComfyModelGraph.ts": [
+    "DOM lookup '[data-cube-node-locator]'",
+    "DOM lookup '[data-node-id]'",
+    "host member app.graph",
+    "host member scope.graph.id",
+    "host selector or token [data-node-id]"
+  ],
+  "frontend/comfyui/ui/model_library/ComfyOutputImageDownload.ts": [
+    "module, endpoint or setting /view"
+  ],
+  "frontend/comfyui/ui/model_library/ComfyOutputThumbnailSource.ts": [
+    "host member app.canvas",
+    "host member app.graph",
+    "host member app.rootGraph",
+    "host member canvas.selected_nodes",
+    "host member next.graph._nodes",
+    "host member next.graph.nodes",
+    "module, endpoint or setting /view"
+  ],
+  "frontend/comfyui/ui/model_library/CubeModelRequirements.ts": [
+    "host member owner.graph?.afterChange",
+    "host member owner.graph?.beforeChange",
+    "host member owner.graph?.setDirtyCanvas",
+    "typed host member ComfyGraph.afterChange",
+    "typed host member ComfyGraph.beforeChange",
+    "typed host member ComfyGraph.setDirtyCanvas"
+  ],
+  "frontend/comfyui/ui/model_library/ModelDiscoveryDialog.ts": [
+    "DOM lookup '.p-dialog-header'",
+    "DOM lookup 'a'",
+    "DOM lookup 'button'",
+    "host selector or token .p-dialog-header"
+  ],
+  "frontend/comfyui/ui/model_library/ModelDiscoveryStyles.ts": [
+    "host selector or token .p-dialog-content",
+    "host selector or token .p-dialog-footer"
+  ],
+  "frontend/comfyui/ui/model_library/ModelPickerAppearance.ts": [
+    "host member app.ui"
+  ],
+  "frontend/comfyui/ui/model_library/ModelPickerHost.ts": [
+    "DOM lookup '.lg-node'",
+    "host member app.ui",
+    "host selector or token .lg-node"
+  ],
+  "frontend/comfyui/ui/model_library/ModelPickerStyles.ts": [
+    "host selector or token --comfy-menu-bg",
+    "host selector or token --p-popover-background",
+    "host selector or token --p-popover-border-color",
+    "host selector or token --p-popover-border-radius",
+    "host selector or token --p-popover-color",
+    "host selector or token --p-popover-shadow",
+    "host selector or token .p-dialog-content",
+    "host selector or token .p-dialog-footer",
+    "host selector or token .p-dialog-header"
+  ],
+  "frontend/comfyui/ui/model_library/ModelVersionDialog.ts": [
+    "DOM lookup 'a'"
+  ],
+  "frontend/comfyui/ui/model_library/vue/CivitaiCredentialLayer.ts": [
+    "DOM lookup 'a[href],button:not(:disabled),input:not(:disabled)'"
+  ],
+  "frontend/comfyui/ui/model_library/vue/ModelChooserVueRuntime.ts": [
+    "host member app.config",
+    "host member app.config.idPrefix",
+    "host member app.mount",
+    "host member app.provide",
+    "host member app.unmount"
+  ],
+  "frontend/comfyui/ui/model_library/vue/ModelDetectorVueRuntime.ts": [
+    "DOM lookup '[tabindex=\"0\"]'",
+    "host member app.mount",
+    "host member app.unmount"
+  ],
+  "frontend/comfyui/ui/model_library/vue/ModelDiscoveryVueRuntime.ts": [
+    "host member app.mount",
+    "host member app.unmount"
+  ],
+  "frontend/comfyui/ui/model_library/vue/ModelGalleryVueRuntime.ts": [
+    "host member app.config",
+    "host member app.config.idPrefix",
+    "host member app.mount",
+    "host member app.provide",
+    "host member app.unmount"
+  ],
+  "frontend/comfyui/ui/model_library/vue/ModelPickerVueRuntime.ts": [
+    "host member app.config",
+    "host member app.config.idPrefix",
+    "host member app.mount",
+    "host member app.provide",
+    "host member app.unmount"
+  ],
+  "frontend/comfyui/ui/model_library/vue/ModelVersionFamily.ts": [
+    "DOM lookup '[data-in-use=true]'"
+  ],
+  "frontend/comfyui/ui/model_library/vue/ModelVersionVueRuntime.ts": [
+    "host member app.mount",
+    "host member app.unmount"
+  ],
+  "frontend/comfyui/ui/output_canvas/application/CanvasWorkspaceLayout.ts": [
+    "host member allocation.canvas.width"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasMediaDetail.ts": [
+    "DOM lookup 'img'"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasPosterRenderer.ts": [
+    "host member canvas.getContext",
+    "host member canvas.height",
+    "host member canvas.toBlob",
+    "host member canvas.width"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasStyles.ts": [
+    "DOM lookup 'sugarcubes-output-browser-styles'",
+    "host selector or token --comfy-menu-bg"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasWorkspace.ts": [
+    "host member allocation.canvas.width",
+    "host member model.read().canvas.width",
+    "host member this.canvas.className"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/CanvasGraphSourceTopology.ts": [
+    "host member graph._nodes",
+    "host member graph.nodes",
+    "host member graph.outputs",
+    "host member this.graph.outputs"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/CanvasViewportStyles.ts": [
+    "DOM lookup 'sugarcubes-output-viewport-styles'",
+    "host selector or token --comfy-menu-bg"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/CanvasWorkspaceStyles.ts": [
+    "DOM lookup 'sugarcubes-output-workspace-styles'",
+    "host selector or token #graph-canvas-container",
+    "host selector or token --comfy-menu-bg",
+    "host selector or token --p-primary-color",
+    "host selector or token [data-testid=\"selection-toolbox\"]"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasFrameAllocation.ts": [
+    "DOM lookup '.comfyui-body'",
+    "DOM lookup '.graph-canvas-panel'",
+    "DOM lookup ':scope > #graph-canvas'",
+    "host selector or token #graph-canvas",
+    "host selector or token .comfyui-body",
+    "host selector or token .graph-canvas"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasHost.ts": [
+    "host member app.canvas",
+    "host member app.graph"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasMedia.ts": [
+    "module, endpoint or setting /view"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasModelRuntime.ts": [
+    "DOM lookup ':hover'"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasSourceInventory.ts": [
+    "host member graph._nodes",
+    "host member graph.add",
+    "host member graph.nodes",
+    "host member graph.remove"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasToolbar.ts": [
+    "DOM lookup '.actionbar-container'",
+    "DOM lookup '[data-testid=\"queue-overlay-toggle\"]'",
+    "host selector or token .actionbar-container",
+    "host selector or token [data-testid=\"queue-overlay-toggle\"]"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasToolbarLayout.ts": [
+    "DOM lookup '.actionbar-container'",
+    "host selector or token .actionbar-container"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasWorkspaceFrame.ts": [
+    "host selector or token .actionbar-container"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasWorkspaceHost.ts": [
+    "DOM lookup '.graph-canvas-panel'",
+    "DOM lookup 'graph-canvas-container'",
+    "host selector or token #graph-canvas-container",
+    "host selector or token .graph-canvas"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/ComfyImageRevealDom.ts": [
+    "DOM lookup '.actions'",
+    "DOM lookup 'button'",
+    "DOM lookup 'img'",
+    "DOM lookup 'sc-image-reveal-styles'",
+    "host selector or token --p-primary-color"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/ComfyImageRevealHost.ts": [
+    "DOM lookup '.image-preview'",
+    "DOM lookup '[data-node-id]'",
+    "DOM lookup '[data-testid=\"image-grid\"]'",
+    "DOM lookup 'img'",
+    "host member app.canvas",
+    "host selector or token [data-node-id]",
+    "host selector or token [data-testid=\"image-grid\"]"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/ComfyImageRevealTarget.ts": [
+    "module, endpoint or setting /api/view",
+    "module, endpoint or setting /view"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/ComfyLegacyImageReveal.ts": [
+    "DOM lookup ':hover,:focus-within'",
+    "dynamic member 0",
+    "dynamic member 1",
+    "host member canvas.ds",
+    "host member canvas?.canvas",
+    "host member canvas?.ds",
+    "host member canvas?.graph_mouse"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasBackdrops.ts": [
+    "DOM lookup this.#surfaces",
+    "host selector or token --p-toast-blur"
+  ],
+  "frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasOcclusions.ts": [
+    "DOM lookup ':modal'",
+    "DOM lookup ':popover-open'",
+    "DOM lookup 'dialog[open], [aria-modal=\"true\"]'",
+    "DOM lookup ATTACHMENT_CHROME",
+    "DOM lookup OWNED_OVERLAYS"
+  ],
+  "frontend/comfyui/ui/output_canvas/presentation/CanvasOverviewStyles.ts": [
+    "DOM lookup 'sugarcubes-output-overview-styles'",
+    "host selector or token --p-primary-color"
+  ],
+  "frontend/comfyui/ui/output_canvas/presentation/vue/CanvasAnchoredPicker.ts": [
+    "DOM lookup '[role=\"option\"]'"
+  ],
+  "frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.ts": [
+    "DOM lookup 'input,select,textarea'",
+    "host member app.mount",
+    "host member app.unmount"
+  ],
+  "frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayStyles.ts": [
+    "DOM lookup 'sugarcubes-output-overlay-styles'",
+    "host selector or token --comfy-font-family",
+    "host selector or token --comfy-input-bg",
+    "host selector or token --comfy-menu-bg",
+    "host selector or token --p-primary-color"
+  ],
+  "frontend/comfyui/ui/output_canvas/presentation/vue/CanvasSourceSlider.ts": [
+    "DOM lookup '[role=\"tab\"]'",
+    "DOM lookup '[role=\"tab\"][aria-selected=\"true\"]'"
+  ],
+  "frontend/comfyui/ui/output_saving/BrowserImageClipboard.ts": [
+    "host member canvas.getContext",
+    "host member canvas.height",
+    "host member canvas.toBlob",
+    "host member canvas.width"
+  ],
+  "frontend/comfyui/ui/output_saving/BrowserImageRendition.ts": [
+    "host member canvas.getContext",
+    "host member canvas.height",
+    "host member canvas.toBlob",
+    "host member canvas.width"
+  ],
+  "frontend/comfyui/ui/output_saving/NativeSavePrefixFields.ts": [
+    "DOM lookup '[data-node-id]'",
+    "DOM lookup PREFIX_SELECTOR",
+    "host selector or token [data-node-id]"
+  ],
+  "frontend/comfyui/ui/output_saving/OutputTransferClient.ts": [
+    "module, endpoint or setting /view"
+  ],
+  "frontend/comfyui/ui/overlays/CubeChromeGroupTitleHook.ts": [
+    "host member group.title",
+    "host member liteGraph?.LGraphGroup",
+    "typed host member ComfyGroup.title",
+    "typed host member LiteGraphHost.LGraphGroup"
+  ],
+  "frontend/comfyui/ui/overlays/CubeChromeInteraction.ts": [
+    "host member canvasInstance.canvas?.ownerDocument"
+  ],
+  "frontend/comfyui/ui/overlays/CubeChromeLayout.ts": [
+    "host member group.bgcolor",
+    "host member group.color",
+    "host member group?.bgcolor",
+    "host member group?.color",
+    "host member liteGraph.GROUP_FONT",
+    "host member liteGraph.GROUP_FONT.trim",
+    "host member liteGraph?.GROUP_FONT",
+    "host member liteGraph?.LGraphGroup",
+    "host member liteGraph?.LGraphGroup?.padding",
+    "typed host member ComfyGroup.bgcolor",
+    "typed host member ComfyGroup.color",
+    "typed host member LiteGraphHost.GROUP_FONT",
+    "typed host member LiteGraphHost.LGraphGroup"
+  ],
+  "frontend/comfyui/ui/overlays/CubeChromeOverlay.ts": [
+    "host member this.adapter?.getApp?.()?.canvas",
+    "host member this.adapter?.getApp?.()?.canvas?.setDirty",
+    "typed host member ComfyApplication.canvas",
+    "typed host member ComfyCanvas.setDirty"
+  ],
+  "frontend/comfyui/ui/overlays/CubeChromePainter.ts": [
+    "host member group?.font_size",
+    "typed host member ComfyGroup.font_size"
+  ],
+  "frontend/comfyui/ui/overlays/CubeChromeRenderer.ts": [
+    "host member group?.font_size",
+    "typed host member ComfyGroup.font_size"
+  ],
+  "frontend/comfyui/ui/overlays/OverlayDrawHookLifecycle.ts": [
+    "host member appRef?.canvas",
+    "host member appRef?.graph",
+    "host member appRef?.graph?.canvas",
+    "host member canvas.onDrawBackground",
+    "host member canvas.onDrawForeground",
+    "host member liteGraph?.LGraphCanvas",
+    "host member liteGraph?.LGraphCanvas?.prototype",
+    "typed host member ComfyGraph.canvas",
+    "typed host member LiteGraphHost.LGraphCanvas"
+  ],
+  "frontend/comfyui/ui/overlays/OverlayGraphHookLifecycle.ts": [
+    "host member appRef.clean",
+    "host member appRef?.canvas",
+    "host member appRef?.clean",
+    "host member canvas.canvas",
+    "host member canvas.graph",
+    "host member canvas.onAfterChange",
+    "host member canvas.onNodeMoved",
+    "host member canvas.processMouseDown",
+    "host member canvas.processMouseUp",
+    "host member graph.__sugarcubes_dirty_wrapped",
+    "host member graph[key]",
+    "host member liteGraph?.LGraphNode",
+    "host member liteGraph?.LGraphNode?.prototype",
+    "typed host member ComfyGraph.__sugarcubes_dirty_wrapped",
+    "typed host member LiteGraphHost.LGraphNode"
+  ],
+  "frontend/comfyui/ui/overlays/OverlayGroupBoundsController.ts": [
+    "host member canvas.selected_group_resizing",
+    "host member canvas?.resizingGroup",
+    "host member canvas?.selected_group",
+    "host member canvas?.selected_group_resizing",
+    "host member canvasRef?.setDirty",
+    "host member graph._groups",
+    "host member graph?._groups",
+    "host member graph?.groups",
+    "host member graph?.setDirtyCanvas",
+    "host member group.properties",
+    "host member group?.properties",
+    "typed host member ComfyCanvas.setDirty",
+    "typed host member ComfyGraph._groups",
+    "typed host member ComfyGraph.groups",
+    "typed host member ComfyGraph.setDirtyCanvas",
+    "typed host member ComfyGroup.properties"
+  ],
+  "frontend/comfyui/ui/overlays/OverlayNodeMovementCoordinator.ts": [
+    "host member canvas?.selectedItems",
+    "host member canvas?.selected_nodes",
+    "host member graph?.setDirtyCanvas",
+    "host member node.flags",
+    "host member node.id",
+    "host member node?.graph",
+    "host member node?.id",
+    "typed host member ComfyGraph.setDirtyCanvas",
+    "typed host member ComfyNode.flags",
+    "typed host member ComfyNode.graph",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/overlays/OverlaySwapCoordinator.ts": [
+    "host member match?.inputNode?.graph",
+    "host member match?.outputNode?.graph",
+    "typed host member ComfyNode.graph"
+  ],
+  "frontend/comfyui/ui/overlays/ProximityOverlay.ts": [
+    "host member app?.canvas",
+    "host member app?.canvas?.graph",
+    "host member app?.canvas?.graph?.setDirtyCanvas",
+    "host member app?.canvas?.setDirty",
+    "host member app?.graph",
+    "host member this.adapter?.getApp?.()?.canvas",
+    "host member this.adapter?.getApp?.()?.canvas?.graph",
+    "host member this.adapter?.getApp?.()?.graph",
+    "typed host member ComfyApplication.canvas",
+    "typed host member ComfyApplication.graph",
+    "typed host member ComfyCanvas.graph",
+    "typed host member ComfyCanvas.setDirty",
+    "typed host member ComfyGraph.setDirtyCanvas"
+  ],
+  "frontend/comfyui/ui/overlays/proximity/ComfyGraphGeometry.ts": [
+    "host member graph.getLink",
+    "host member graph.links",
+    "host member link.id",
+    "host member node.getConnectionPos",
+    "host member node.getSlotPosition",
+    "host member node.id",
+    "host member node.pos",
+    "host member node.size",
+    "typed host member ComfyGraph.getLink",
+    "typed host member ComfyGraph.links",
+    "typed host member ComfyLink.id",
+    "typed host member ComfyNode.getConnectionPos",
+    "typed host member ComfyNode.getSlotPosition",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.pos",
+    "typed host member ComfyNode.size"
+  ],
+  "frontend/comfyui/ui/overlays/proximity/ProximityGraphMutationTracker.ts": [
+    "host member graph.__sugarcubes_proximity_mutation_wrapped",
+    "host member graph.removeLink",
+    "host member graph[key]"
+  ],
+  "frontend/comfyui/ui/overlays/proximity/ProximityLinkRenderer.ts": [
+    "host member canvas.default_link_color",
+    "host member canvas.getLinkColor",
+    "host member canvas.graph",
+    "host member inputNode.graph",
+    "host member inputNode?.inputs",
+    "host member inputSlot?.type",
+    "host member liteGraph.EVENT",
+    "host member liteGraph.EVENT_LINK_COLOR",
+    "host member liteGraph?.EVENT",
+    "host member liteGraph?.LinkDirection",
+    "host member liteGraph?.LinkDirection?.LEFT",
+    "host member liteGraph?.LinkDirection?.RIGHT",
+    "host member liteGraph?.LinkMarkerShape",
+    "host member liteGraph?.LinkMarkerShape?.None",
+    "host member options.canvas.connections_width",
+    "host member options.canvas.ds",
+    "host member options.canvas.linkMarkerShape",
+    "host member options.canvas.renderLink",
+    "host member outputNode.graph",
+    "host member outputNode?.outputs",
+    "host member outputSlot?.type",
+    "typed host member ComfyInput.type",
+    "typed host member ComfyNode.graph",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.outputs",
+    "typed host member ComfyOutput.type"
+  ],
+  "frontend/comfyui/ui/overlays/proximity/ProximityMatcher.ts": [
+    "host member graph._nodes",
+    "host member node?.pos",
+    "host member node?.size",
+    "typed host member ComfyGraph._nodes",
+    "typed host member ComfyNode.pos",
+    "typed host member ComfyNode.size"
+  ],
+  "frontend/comfyui/ui/overlays/proximity/ProximityPointerMoveTracker.ts": [
+    "DOM lookup '.graph-canvas-container'",
+    "DOM lookup '.lg-node[data-node-id]'",
+    "host member graph.getNodeById",
+    "host member node.id",
+    "host member node.pos",
+    "host member node.size",
+    "host selector or token .graph-canvas-container",
+    "host selector or token .lg-node",
+    "host selector or token [data-node-id]",
+    "typed host member ComfyGraph.getNodeById",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.pos",
+    "typed host member ComfyNode.size"
+  ],
+  "frontend/comfyui/ui/picker/ComfyCubeAddMenuPresenter.ts": [
+    "DOM lookup STYLE_ID"
+  ],
+  "frontend/comfyui/ui/picker/ComfyCubePickerComposition.ts": [
+    "dynamic member unregisterNodeType"
+  ],
+  "frontend/comfyui/ui/picker/ComfyCubePickerCreationAdapter.ts": [
+    "dynamic member create",
+    "host member liteGraph.createNode"
+  ],
+  "frontend/comfyui/ui/picker/ComfyCubePickerDefinitionAdapter.ts": [
+    "host adapter member app.publishNodeDefs",
+    "host adapter member app.registerNodeDef"
+  ],
+  "frontend/comfyui/ui/picker/ComfyCubePickerModelTitlePresenter.ts": [
+    "DOM lookup 'span, div'",
+    "DOM lookup `[${PRESENTED_MODEL_TYPE_ATTRIBUTE}]`"
+  ],
+  "frontend/comfyui/ui/picker/ComfyCubePickerPackPresenter.ts": [
+    "DOM lookup 'span'",
+    "DOM lookup `[${PRESENTED_PACK_TYPE_ATTRIBUTE}]`"
+  ],
+  "frontend/comfyui/ui/picker/ComfyCubePickerResultPresenter.ts": [
+    "DOM lookup RESULTS_LIST_SELECTOR",
+    "DOM lookup RESULT_SELECTOR",
+    "DOM lookup `[${PRESENTED_PACK_TYPE_ATTRIBUTE}]`",
+    "host selector or token [data-testid=\"result-item\"]"
+  ],
+  "frontend/comfyui/ui/picker/CubeAddCandidateCatalog.ts": [
+    "host member output.links",
+    "host member output.type",
+    "typed host member ComfyOutput.links",
+    "typed host member ComfyOutput.type"
+  ],
+  "frontend/comfyui/ui/picker/CubePickerPlacementAdapter.ts": [
+    "host member liteGraph.createNode"
+  ],
+  "frontend/comfyui/ui/picker/CubeStackCartStyles.ts": [
+    "DOM lookup 'sc-cube-stack-cart-styles'",
+    "host selector or token .p-dialog-content",
+    "host selector or token .p-dialog-footer",
+    "host selector or token .p-dialog-header",
+    "host selector or token .p-dialog-title"
+  ],
+  "frontend/comfyui/ui/picker/vue/CubeStackCart.ts": [
+    "dynamic member value"
+  ],
+  "frontend/comfyui/ui/picker/vue/CubeStackCartRuntime.ts": [
+    "host member app.mount",
+    "host member app.unmount"
+  ],
+  "frontend/comfyui/ui/projects/ProjectComposition.ts": [
+    "host member app.extensionManager",
+    "module, endpoint or setting Comfy.ExportWorkflow"
+  ],
+  "frontend/comfyui/ui/projects/infrastructure/ComfyProjects.ts": [
+    "host member app.extensionManager",
+    "host member app.graphToPrompt",
+    "module, endpoint or setting /upload/image",
+    "module, endpoint or setting /userdata/",
+    "module, endpoint or setting /userdata?",
+    "module, endpoint or setting /view?",
+    "module, endpoint or setting Comfy.NewBlankWorkflow"
+  ],
+  "frontend/comfyui/ui/prompt_editor/ComfyCanvasEditorKeyBoundary.ts": [
+    "DOM lookup EDITOR_SELECTOR",
+    "host member canvas._key_callback",
+    "host member canvas.read_only",
+    "host member canvas?._key_callback",
+    "host member this.app.canvas"
+  ],
+  "frontend/comfyui/ui/prompt_editor/CubePromptEditorHost.ts": [
+    "DOM lookup `[inert],[hidden],[${SURFACE_INPUT_HELD_ATTRIBUTE}]`",
+    "host member canvas.app",
+    "host member canvas.logger",
+    "host member canvas.tagLists",
+    "host member canvas?.booruPostLookup",
+    "host member canvas?.models",
+    "host member canvas?.preferences",
+    "host member canvas?.prompts",
+    "host member canvas?.spellcheck",
+    "host member canvas?.tagLists",
+    "host member graph._nodes",
+    "host member graph.nodes",
+    "host member node.graph",
+    "host member surface.node.title",
+    "host member surface.widget.computedDisabled",
+    "host member surface.widget.value",
+    "typed host member ComfyGraph._nodes",
+    "typed host member ComfyGraph.nodes",
+    "typed host member ComfyNode.graph",
+    "typed host member ComfyNode.title",
+    "typed host member ComfyWidget.computedDisabled",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/prompt_editor/PromptControlSupport.ts": [
+    "host member encoder.id",
+    "host member graph?._nodes",
+    "host member graph?.nodes",
+    "host member link.origin",
+    "host member link.origin_id",
+    "host member link.target",
+    "host member link.target_id",
+    "host member member.id",
+    "host member node.class_type",
+    "host member node.graph",
+    "host member node.id",
+    "host member node.type",
+    "host member origin.widgets",
+    "host member widget.value",
+    "typed host member ComfyGraph._nodes",
+    "typed host member ComfyGraph.nodes",
+    "typed host member ComfyLink.origin",
+    "typed host member ComfyLink.origin_id",
+    "typed host member ComfyLink.target",
+    "typed host member ComfyLink.target_id",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.graph",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.type",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/prompt_editor/PromptWidgetBinding.ts": [
+    "dynamic member value",
+    "host member node.graph",
+    "host member node.graph?.canvas",
+    "host member node.graph?.setDirtyCanvas",
+    "host member node.onWidgetChanged",
+    "host member node.rootGraph",
+    "host member node.size",
+    "host member this.#widget.value",
+    "host member widget.callback",
+    "host member widget.name",
+    "host member widget.value",
+    "typed host member ComfyGraph.canvas",
+    "typed host member ComfyGraph.setDirtyCanvas",
+    "typed host member ComfyNode.graph",
+    "typed host member ComfyNode.onWidgetChanged",
+    "typed host member ComfyNode.rootGraph",
+    "typed host member ComfyNode.size",
+    "typed host member ComfyWidget.callback",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/prompt_editor/runtime/ComfyPromptInput.ts": [
+    "DOM lookup '.cm-content'",
+    "dynamic member type"
+  ],
+  "frontend/comfyui/ui/prompt_editor/runtime/SugarPromptMenu.ts": [
+    "DOM lookup '.cm-content'"
+  ],
+  "frontend/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.ts": [
+    "DOM lookup '.cm-scroller'"
+  ],
+  "frontend/comfyui/ui/prompt_editor/runtime/SugarPromptStyles.ts": [
+    "host selector or token .lg-node-widget"
+  ],
+  "frontend/comfyui/ui/relations/RelationHostLifecycle.ts": [
+    "DOM lookup '.lg-node,.dom-widget,[data-cube-node-id],[data-masonry-card]'",
+    "DOM lookup '[role=\"listbox\"],.sc-field-relation,.sc-model-popup'",
+    "host member graph._nodes",
+    "host member graph.add",
+    "host member graph.nodes",
+    "host member graph.remove",
+    "host member node.subgraph",
+    "host member options.app?.graph",
+    "host member options.app?.graph?.serialize",
+    "host member this.options.app?.graph",
+    "host selector or token .actionbar-container",
+    "host selector or token .lg-node",
+    "host selector or token [data-node-id]",
+    "typed host member ComfyApplication.graph",
+    "typed host member ComfyGraph._nodes",
+    "typed host member ComfyGraph.add",
+    "typed host member ComfyGraph.nodes",
+    "typed host member ComfyGraph.remove",
+    "typed host member ComfyGraph.serialize",
+    "typed host member ComfyNode.subgraph"
+  ],
+  "frontend/comfyui/ui/relations/WorkflowCanvasComposition.ts": [
+    "host member options.app?.graph",
+    "typed host member ComfyApplication.graph"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/ComfyValueControl.ts": [
+    "host member host.comfyAPI.valueControl"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeExactSeeds.ts": [
+    "host member owner.widget.name",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeFieldContract.ts": [
+    "dynamic member constructor",
+    "dynamic member nodeData",
+    "host member widget.name",
+    "host member widget.options",
+    "host member widget.serialize",
+    "host member widget.spec",
+    "host member widget.type",
+    "host member widget.value",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.options",
+    "typed host member ComfyWidget.serialize",
+    "typed host member ComfyWidget.spec",
+    "typed host member ComfyWidget.type",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeLinkChoiceLabels.ts": [
+    "DOM lookup '[data-testid=\"widget-select-default-trigger\"] > span'",
+    "host selector or token [data-testid=\"widget-select-default-trigger\"]"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeOverrideGraphSurface.ts": [
+    "host member app?.canvas",
+    "host member app?.canvas?.ds",
+    "host member app?.graph",
+    "host member graph._nodes",
+    "host member graph.add",
+    "host member graph.extra",
+    "host member graph.onSerialize",
+    "host member graph.remove",
+    "host member graph?._nodes",
+    "host member graph?.add",
+    "host member this.#graph?.setDirtyCanvas",
+    "host member this.application()?.graph",
+    "typed host member ComfyApplication.canvas",
+    "typed host member ComfyApplication.graph",
+    "typed host member ComfyCanvas.ds",
+    "typed host member ComfyGraph._nodes",
+    "typed host member ComfyGraph.add",
+    "typed host member ComfyGraph.extra",
+    "typed host member ComfyGraph.onSerialize",
+    "typed host member ComfyGraph.remove",
+    "typed host member ComfyGraph.setDirtyCanvas"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeOverridePinPlacement.ts": [
+    "DOM lookup '.lg-node'",
+    "DOM lookup '.lg-node-header'",
+    "host member app?.canvas",
+    "host member app?.canvas?.canvas",
+    "host member app?.canvas?.ds",
+    "host member canvas.getBoundingClientRect",
+    "host member node.pos",
+    "host member node.size",
+    "host selector or token .lg-node",
+    "host selector or token .lg-node-header",
+    "typed host member ComfyApplication.canvas",
+    "typed host member ComfyCanvas.canvas",
+    "typed host member ComfyCanvas.ds",
+    "typed host member ComfyNode.pos",
+    "typed host member ComfyNode.size"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeOverrideToolbarHost.ts": [
+    "DOM lookup '.actionbar .drag-handle'",
+    "DOM lookup '.actionbar-container'",
+    "DOM lookup '.graph-canvas-panel'",
+    "DOM lookup '.p-splitterpanel'",
+    "DOM lookup 'button'",
+    "DOM lookup 'button[aria-label=\"Workflow actions\"]'",
+    "DOM lookup 'graph-canvas-container'",
+    "host member canvas?.querySelector",
+    "host selector or token .actionbar-container",
+    "host selector or token .graph-canvas",
+    "host selector or token .p-splitterpanel"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeOverrideToolbarLayout.ts": [
+    "DOM lookup '.actionbar'"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeRelationCardAdapter.ts": [
+    "DOM lookup '.lg-node'",
+    "DOM lookup '.lg-node-header'",
+    "DOM lookup '.lg-node[data-node-id]'",
+    "DOM lookup 'canvas[data-cube-face-native=\"nodes-1\"]'",
+    "host member canvas.getBoundingClientRect",
+    "host member canvas?.style",
+    "host member node.id",
+    "host member widget.last_y",
+    "host member widget.name",
+    "host member widget.y",
+    "host selector or token .lg-node",
+    "host selector or token .lg-node-header",
+    "host selector or token [data-node-id]",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyWidget.last_y",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.y"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeRelationExecution.ts": [
+    "host member input.name",
+    "host member input.widget",
+    "host member owner.face.inputs",
+    "host member owner.face.isSubgraphNode",
+    "typed host member ComfyInput.name",
+    "typed host member ComfyInput.widget",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.isSubgraphNode"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeRelationIdentity.ts": [
+    "host member candidate.id",
+    "host member graph._nodes",
+    "host member graph.getLink",
+    "host member graph.nodes",
+    "host member input.link",
+    "host member input.name",
+    "host member link.id",
+    "host member link.origin_slot",
+    "host member link?.origin",
+    "host member link?.origin_id",
+    "host member link?.origin_slot",
+    "host member node.graph",
+    "host member node.inputs",
+    "host member source.id",
+    "host member source.properties",
+    "typed host member ComfyGraph._nodes",
+    "typed host member ComfyGraph.getLink",
+    "typed host member ComfyGraph.nodes",
+    "typed host member ComfyInput.link",
+    "typed host member ComfyInput.name",
+    "typed host member ComfyLink.id",
+    "typed host member ComfyLink.origin",
+    "typed host member ComfyLink.origin_id",
+    "typed host member ComfyLink.origin_slot",
+    "typed host member ComfyNode.graph",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.properties"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeRelationInventory.ts": [
+    "host member candidate.name",
+    "host member face.class_type",
+    "host member face.id",
+    "host member face.isSubgraphNode",
+    "host member face.mode",
+    "host member face.properties",
+    "host member face.type",
+    "host member input.type",
+    "host member node.graph",
+    "host member node.graph?.canvas",
+    "host member node.graph?.setDirtyCanvas",
+    "host member node.inputs",
+    "host member node.onWidgetChanged",
+    "host member node.outputs",
+    "host member output.type",
+    "host member owner.node.isSubgraphNode",
+    "host member owner.widget.name",
+    "host member root.id",
+    "host member root.title",
+    "host member root.type",
+    "host member source.node.widgets",
+    "host member target.node.inputs",
+    "host member target.node.inputs?.[target.inputSlot]?.widget",
+    "host member target.node.widgets",
+    "host member widget.callback",
+    "host member widget.name",
+    "host member widget.value",
+    "typed host member ComfyGraph.canvas",
+    "typed host member ComfyGraph.setDirtyCanvas",
+    "typed host member ComfyInput.type",
+    "typed host member ComfyInput.widget",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.graph",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.isSubgraphNode",
+    "typed host member ComfyNode.mode",
+    "typed host member ComfyNode.onWidgetChanged",
+    "typed host member ComfyNode.outputs",
+    "typed host member ComfyNode.properties",
+    "typed host member ComfyNode.title",
+    "typed host member ComfyNode.type",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyOutput.type",
+    "typed host member ComfyWidget.callback",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeRelationViews.ts": [
+    "host member node.id",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeRelationVisibility.ts": [
+    "host member owner.face.widgets",
+    "host member owner.widget.linkedWidgets",
+    "host member widget.name",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.linkedWidgets",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeRelationWidgetRenderer.ts": [
+    "DOM lookup '[data-testid=\"value-control\"]'",
+    "DOM lookup 'input[role=\"spinbutton\"]'",
+    "DOM lookup 'vue-app'",
+    "host selector or token [data-testid=\"value-control\"]"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeRelationWorkflowPort.ts": [
+    "host member graph.extra",
+    "host member graph.setDirtyCanvas",
+    "host member graph?.afterChange",
+    "host member graph?.beforeChange",
+    "host member graph?.extra",
+    "typed host member ComfyGraph.afterChange",
+    "typed host member ComfyGraph.beforeChange",
+    "typed host member ComfyGraph.extra",
+    "typed host member ComfyGraph.setDirtyCanvas"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeRunStripContentVisibility.ts": [
+    "DOM lookup ':scope > [data-testid=\"legacy-topbar-container\"]'",
+    "DOM lookup 'button,input,select,textarea,img,svg,canvas,video,audio,iframe,[contenteditable=\"true\"]'",
+    "host selector or token [data-testid=\"legacy-topbar-container\"]"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeSeedReuseBinding.ts": [
+    "host member graph._nodes",
+    "host member graph?.afterChange",
+    "host member graph?.beforeChange",
+    "host member graph?.setDirtyCanvas",
+    "typed host member ComfyGraph.afterChange",
+    "typed host member ComfyGraph.beforeChange",
+    "typed host member ComfyGraph.setDirtyCanvas"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeSharedSeedModes.ts": [
+    "host member owner.widget.name",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/NativeWorkflowSeedReuse.ts": [
+    "host member owner.widget.name",
+    "host member this.app?.graph",
+    "typed host member ComfyApplication.graph",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/relations/infrastructure/OverrideGraphLayout.ts": [
+    "host member node.pos",
+    "host member node.size",
+    "typed host member ComfyNode.pos",
+    "typed host member ComfyNode.size"
+  ],
+  "frontend/comfyui/ui/relations/presentation/CubeRelationPresenter.ts": [
+    "DOM lookup '[data-capture-wheel]'",
+    "DOM lookup '[data-testid=\"widget-select-default-trigger\"]'",
+    "host selector or token [data-testid=\"widget-select-default-trigger\"]"
+  ],
+  "frontend/comfyui/ui/relations/presentation/GlobalOverrideCardStyles.ts": [
+    "host selector or token --comfy-input-bg",
+    "host selector or token .lg-node",
+    "host selector or token .lg-node-header",
+    "host selector or token [data-testid=\"node-collapse-button\"]",
+    "host selector or token [data-testid=\"widget-layout-field-label\"]"
+  ],
+  "frontend/comfyui/ui/relations/presentation/GlobalOverrideToolbar.ts": [
+    "DOM lookup '[data-testid=\"widget-layout-field-label\"]'",
+    "host selector or token [data-testid=\"widget-layout-field-label\"]"
+  ],
+  "frontend/comfyui/ui/relations/presentation/OverrideToolbarFieldLayout.ts": [
+    "DOM lookup '[data-presentation=\"plugin\"]'"
+  ],
+  "frontend/comfyui/ui/relations/presentation/OverrideToolbarPlacement.ts": [
+    "DOM lookup '.p-splitterpanel'",
+    "host selector or token .p-splitterpanel"
+  ],
+  "frontend/comfyui/ui/relations/presentation/RelationStyles.ts": [
+    "DOM lookup 'sc-relation-styles'",
+    "host selector or token --comfy-input-bg",
+    "host selector or token --comfy-menu-bg",
+    "host selector or token .actionbar-container",
+    "host selector or token .lg-node-header",
+    "host selector or token [data-testid=\"node-title\"]",
+    "host selector or token [data-testid=\"widget-layout-field-label\"]"
+  ],
+  "frontend/comfyui/ui/save/CubeSaveCommandCoordinator.ts": [
+    "host member appRef.graphToPrompt",
+    "host member appRef?.graph",
+    "typed host member ComfyApplication.graph",
+    "typed host member ComfyApplication.graphToPrompt"
+  ],
+  "frontend/comfyui/ui/save/CubeSaveIdentityAssigner.ts": [
+    "host member graph._nodes",
+    "host member graph.nodes",
+    "host member node.id",
+    "typed host member ComfyGraph._nodes",
+    "typed host member ComfyGraph.nodes",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/search/infrastructure/MasonrySearchCorpus.ts": [
+    "DOM lookup '[data-masonry-card]'",
+    "DOM lookup '[data-testid=\"widget-layout-field-label\"]'",
+    "DOM lookup 'input:not([role=\"combobox\"])'",
+    "DOM lookup 'textarea'",
+    "host member candidate.name",
+    "host member card.node.class_type",
+    "host member card.node.title",
+    "host member card.node.type",
+    "host member field.widget.value",
+    "host member source.node.widgets",
+    "host member widget.name",
+    "host member widget.options",
+    "host selector or token [data-testid=\"widget-layout-field-label\"]",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.title",
+    "typed host member ComfyNode.type",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.options",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/search/infrastructure/MasonrySearchHost.ts": [
+    "DOM lookup '[data-testid=\"node-widget\"]'",
+    "DOM lookup '[role=\"dialog\"][aria-modal=\"true\"]'",
+    "host member app.extensionManager",
+    "host member app?.extensionManager",
+    "host member graph.id",
+    "host selector or token [data-testid=\"node-widget\"]",
+    "typed host member ComfyApplication.extensionManager",
+    "typed host member ComfyGraph.id"
+  ],
+  "frontend/comfyui/ui/search/presentation/FinderStyles.ts": [
+    "DOM lookup 'sc-masonry-finder-styles'"
+  ],
+  "frontend/comfyui/ui/settings/ComfyAboutInformation.ts": [
+    "module, endpoint or setting /scripts/api.js"
+  ],
+  "frontend/comfyui/ui/settings/SettingsWorkspaceHost.ts": [
+    "DOM lookup '[data-testid=\"settings-dialog\"] [data-nav-id]'",
+    "DOM lookup '[data-testid=\"settings-dialog\"]'",
+    "host member app.extensionManager",
+    "host selector or token [data-testid=\"settings-dialog\"]",
+    "module, endpoint or setting Comfy.Execution.PreviewMethod",
+    "module, endpoint or setting Comfy.Keybinding.NewBindings",
+    "module, endpoint or setting Comfy.ShowSettingsDialog"
+  ],
+  "frontend/comfyui/ui/settings/workspace/ComfySettingStore.ts": [
+    "host member this.app.extensionManager",
+    "host member this.app.ui"
+  ],
+  "frontend/comfyui/ui/settings/workspace/ComfySettingsDialog.ts": [
+    "DOM lookup '[data-nav-id]'",
+    "DOM lookup 'i'"
+  ],
+  "frontend/comfyui/ui/settings/workspace/ComfySettingsPages.ts": [
+    "module, endpoint or setting Comfy.",
+    "module, endpoint or setting LiteGraph."
+  ],
+  "frontend/comfyui/ui/settings/workspace/SettingsCards.ts": [
+    "DOM lookup '[data-disabled]'",
+    "DOM lookup '[role=\"switch\"]'",
+    "DOM lookup 'button,input,select'"
+  ],
+  "frontend/comfyui/ui/settings/workspace/SettingsLooks.ts": [
+    "host selector or token --comfy-input-bg",
+    "host selector or token --comfy-menu-bg",
+    "host selector or token --p-primary-color"
+  ],
+  "frontend/comfyui/ui/settings/workspace/SettingsWorkspaceStyles.ts": [
+    "host selector or token --comfy-menu-bg"
+  ],
+  "frontend/comfyui/ui/sugarscript/PngSugarScriptArtifactReader.ts": [
+    "dynamic member run_id",
+    "dynamic member source_node_id"
+  ],
+  "frontend/comfyui/ui/surface/ComfyCanvasGraphChangeAdapter.ts": [
+    "host adapter member canvas.graph",
+    "host adapter member canvas.setGraph",
+    "host member canvas.setGraph"
+  ],
+  "frontend/comfyui/ui/surface/ComfyCanvasGraphFocusAdapter.ts": [
+    "host adapter member canvas.ds"
+  ],
+  "frontend/comfyui/ui/surface/ComfyCanvasHistoryAdapter.ts": [
+    "host member canvas.emitAfterChange",
+    "host member canvas.emitBeforeChange",
+    "host member canvas[afterName]",
+    "host member canvas[beforeName]",
+    "host member this.app.canvas",
+    "host member this.app.extensionManager"
+  ],
+  "frontend/comfyui/ui/surface/ComfyCanvasViewStateAdapter.ts": [
+    "host adapter member canvas.ds"
+  ],
+  "frontend/comfyui/ui/surface/ComfyCubePreviewCatalog.ts": [
+    "host member graph._nodes",
+    "host member link.origin_slot",
+    "host member link.target",
+    "host member link.target_id",
+    "host member node.id",
+    "host member node.subgraph",
+    "module, endpoint or setting /api/view",
+    "module, endpoint or setting /view",
+    "typed host member ComfyLink.origin_slot",
+    "typed host member ComfyLink.target",
+    "typed host member ComfyLink.target_id",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.subgraph"
+  ],
+  "frontend/comfyui/ui/surface/ComfyFrontendModuleGraph.ts": [
+    "DOM lookup module"
+  ],
+  "frontend/comfyui/ui/surface/ComfyLiteGraphCanvasOverlay.ts": [
+    "host member canvas.ownerDocument",
+    "host member canvas.parentElement"
+  ],
+  "frontend/comfyui/ui/surface/ComfyLiteGraphCubeBoundaryHost.ts": [
+    "dynamic member 0",
+    "dynamic member 1",
+    "host member globalThis.LiteGraph?.NODE_SLOT_HEIGHT",
+    "typed host member LiteGraphHost.NODE_SLOT_HEIGHT"
+  ],
+  "frontend/comfyui/ui/surface/ComfyLiteGraphCubeDomWidgetHost.ts": [
+    "host adapter member canvas.canvas",
+    "host adapter member canvas.ds",
+    "host adapter member canvas.read_only",
+    "host member candidate.name",
+    "host member node.id",
+    "host member node.isWidgetVisible",
+    "host member owner.widgets",
+    "host member this.#canvas.canvas.getBoundingClientRect",
+    "host member widget.element",
+    "host member widget.name",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.isWidgetVisible",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.element",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/surface/ComfyLiteGraphCubeDropTargetBridge.ts": [
+    "host member node.onDragDrop",
+    "host member node.onDragOver",
+    "host member target.onDragDrop",
+    "host member target.onDragOver",
+    "typed host member ComfyNode.onDragDrop",
+    "typed host member ComfyNode.onDragOver"
+  ],
+  "frontend/comfyui/ui/surface/ComfyLiteGraphCubeFaceProjectionHost.ts": [
+    "host adapter member canvas.canvas",
+    "host adapter member canvas.ds",
+    "host member node.id",
+    "host member this.#canvas.canvas.addEventListener",
+    "host member this.#canvas.canvas.getBoundingClientRect",
+    "host member this.#canvas.canvas.removeEventListener",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/surface/ComfyLiteGraphCubeNodeHost.ts": [
+    "host adapter member canvas.canvas",
+    "host adapter member canvas.graph",
+    "host adapter member canvas.setDirty",
+    "host member options.canvas.graph_mouse",
+    "host member options.canvas.processWidgetClick"
+  ],
+  "frontend/comfyui/ui/surface/ComfyLiteGraphCubeNodeInteraction.ts": [
+    "host adapter member canvas.canvas",
+    "host adapter member canvas.convertCanvasToOffset",
+    "host adapter member canvas.ds",
+    "host adapter member canvas.setDirty",
+    "host member card.node.pos",
+    "host member options.canvas.canvas",
+    "host member options.canvas.canvas.addEventListener",
+    "host member options.canvas.canvas.ownerDocument",
+    "host member this.#canvas.canvas.getBoundingClientRect",
+    "host member this.#canvas.canvas.releasePointerCapture",
+    "host member this.#canvas.canvas.removeEventListener",
+    "host member this.#canvas.canvas.setPointerCapture",
+    "host member this.#canvas.canvas.style",
+    "typed host member ComfyNode.pos"
+  ],
+  "frontend/comfyui/ui/surface/ComfyLiteGraphNodeCardRenderer.ts": [
+    "dynamic member drawTitleBox",
+    "dynamic member onDrawTitleBox",
+    "dynamic member skip_subgraph_button",
+    "host member canvas.className",
+    "host member canvas.dataset",
+    "host member canvas.getContext",
+    "host member canvas.height",
+    "host member canvas.remove",
+    "host member canvas.style",
+    "host member canvas.width",
+    "host member node.size",
+    "typed host member ComfyNode.size"
+  ],
+  "frontend/comfyui/ui/surface/ComfyLiteGraphNodeColorTheme.ts": [
+    "dynamic member bgcolor",
+    "dynamic member color"
+  ],
+  "frontend/comfyui/ui/surface/ComfyLiteGraphWidgetInteraction.ts": [
+    "host member canvas.addEventListener",
+    "host member canvas.getBoundingClientRect",
+    "host member canvas.releasePointerCapture",
+    "host member canvas.removeEventListener",
+    "host member canvas.setPointerCapture",
+    "host member canvas.style",
+    "host member node.getWidgetOnPos",
+    "host member node.pos",
+    "host member node.size",
+    "typed host member ComfyNode.getWidgetOnPos",
+    "typed host member ComfyNode.pos",
+    "typed host member ComfyNode.size"
+  ],
+  "frontend/comfyui/ui/surface/ComfyPropertiesPanelAdapter.ts": [
+    "host member app.extensionManager",
+    "module, endpoint or setting Comfy.RightSidePanel.IsOpen"
+  ],
+  "frontend/comfyui/ui/surface/ComfyRendererPresenceObserver.ts": [
+    "DOM lookup '.lg-node[data-node-id]'",
+    "host selector or token .lg-node",
+    "host selector or token [data-node-id]"
+  ],
+  "frontend/comfyui/ui/surface/ComfyRuntimeModuleLoader.ts": [
+    "bundle discovery '[A-Za-z_$][\\\\w$]*'",
+    "bundle discovery 'extractVueNodeData'",
+    "bundle discovery 'requestSlotLayoutSyncForAllNodes'",
+    "bundle discovery 'sugarcubesExtractVueNodeData'",
+    "bundle discovery 'sugarcubesNativeNodeComponent'",
+    "bundle discovery /((?:from|import)\\s*(?:\\(\\s*)?)([\"'])\\.\\/([^\"'`]+)\\2/g",
+    "bundle discovery /([A-Za-z_$][\\w$]*)=[A-Za-z_$][\\w$]*\\(\\{__name:[`'\"]LGraphNode[`'\"]/",
+    "bundle discovery /\\/vendor-primevue-[^/?]+\\.js(?:\\?.*)?$/",
+    "bundle discovery /\\/vendor-vue-core-[^/?]+\\.js(?:\\?.*)?$/",
+    "bundle discovery /new URL\\(([\"'`])([^\"'`]+)\\1,\\s*import\\.meta\\.url\\)/g"
+  ],
+  "frontend/comfyui/ui/surface/ComfyVueCubeBoundaryHost.ts": [
+    "DOM lookup '.lg-node'",
+    "DOM lookup '.lg-slot'",
+    "DOM lookup '.lg-slot--input'",
+    "DOM lookup '.lg-slot--output'",
+    "DOM lookup '.text-node-component-slot-text'",
+    "DOM lookup '[data-cube-preview-output-title]'",
+    "host member node.inputs",
+    "host member node.outputs",
+    "host member node.properties",
+    "host member node.subgraph",
+    "host member this.#node.inputs",
+    "host member this.#node.inputs?.[index]?.type",
+    "host member this.#node.pos",
+    "host selector or token .lg-node",
+    "host selector or token .lg-slot",
+    "host selector or token .lg-slot--input",
+    "host selector or token .lg-slot--output",
+    "typed host member ComfyInput.type",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.outputs",
+    "typed host member ComfyNode.pos",
+    "typed host member ComfyNode.properties",
+    "typed host member ComfyNode.subgraph"
+  ],
+  "frontend/comfyui/ui/surface/ComfyVueCubeColorScope.ts": [
+    "DOM lookup '[data-testid=\"node-inner-wrapper\"]'",
+    "DOM lookup NATIVE_INNER_WRAPPER_SELECTOR",
+    "host selector or token [data-testid=\"node-inner-wrapper\"]"
+  ],
+  "frontend/comfyui/ui/surface/ComfyVueCubeDropTargetBridge.ts": [
+    "DOM lookup '.lg-node'",
+    "DOM lookup '[data-cube-node-id]'",
+    "host member node.id",
+    "host selector or token .lg-node",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/surface/ComfyVueCubeEditorFooter.ts": [
+    "DOM lookup '.lg-node'",
+    "DOM lookup '[data-testid=\"subgraph-enter-button\"]'",
+    "DOM lookup 'span.truncate, span'",
+    "host selector or token .lg-node",
+    "host selector or token [data-testid=\"subgraph-enter-button\"]"
+  ],
+  "frontend/comfyui/ui/surface/ComfyVueCubeNodeHost.ts": [
+    "DOM lookup '.lg-node[data-node-id]'",
+    "DOM lookup '.lg-slot, [data-testid=\"slot-connection-dot\"], [data-node-id][data-slot-index], [data-slot-index]'",
+    "DOM lookup '[data-sugarcube-edge-resize], [data-sugarcube-port-leaders], [data-sugarcube-output-leader]'",
+    "DOM lookup '[data-testid^=\"node-body-\"]'",
+    "DOM lookup '[data-testid^=\"node-header-\"]'",
+    "host selector or token .lg-node",
+    "host selector or token .lg-slot",
+    "host selector or token [data-node-id]",
+    "host selector or token [data-testid=\"slot-connection-dot\"]",
+    "host selector or token [data-testid^=\"node-body-\"]",
+    "host selector or token [data-testid^=\"node-header-\"]"
+  ],
+  "frontend/comfyui/ui/surface/ComfyVueCubeNodeResizeHost.ts": [
+    "DOM lookup '[data-sugarcube-edge-resize]'"
+  ],
+  "frontend/comfyui/ui/surface/ComfyVueNodeCardRenderer.ts": [
+    "DOM lookup '*'",
+    "DOM lookup '.lg-node'",
+    "DOM lookup ':scope > .isolate.-z-1.-mt-5'",
+    "DOM lookup ':scope > [role=\"button\"]'",
+    "DOM lookup '[data-testid=\"subgraph-enter-button\"]'",
+    "DOM lookup '[data-testid^=\"node-body-\"]'",
+    "DOM lookup '[data-widgets-grid-node-id]'",
+    "host member node.id",
+    "host member node.isSubgraphNode",
+    "host member node.showAdvanced",
+    "host member nodeData.sugarcubesEditorWidgets",
+    "host member nodeData.widgets",
+    "host member source.node.widgets",
+    "host member widget.name",
+    "host selector or token .lg-node",
+    "host selector or token [data-testid=\"subgraph-enter-button\"]",
+    "host selector or token [data-testid^=\"node-body-\"]",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.isSubgraphNode",
+    "typed host member ComfyNode.showAdvanced",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/surface/ComfyVueNodeHeaderAccessoryHost.ts": [
+    "DOM lookup '[data-testid=\"node-title\"]'",
+    "DOM lookup '[data-testid^=\"node-header-\"]'",
+    "host member node.id",
+    "host selector or token [data-testid=\"node-title\"]",
+    "host selector or token [data-testid^=\"node-header-\"]",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/surface/ComfyVueTree.ts": [
+    "DOM lookup 'vue-app'",
+    "dynamic member __vueParentComponent",
+    "dynamic member _vnode",
+    "host member app._context",
+    "host member app?._context"
+  ],
+  "frontend/comfyui/ui/surface/ComfyWorkflowWorkspace.ts": [
+    "host member app.ui",
+    "host member this.canvas.content",
+    "host member this.canvas.dispose",
+    "host member this.canvas.reserveBottom",
+    "host member this.canvas.sessionSnapshots",
+    "host member this.canvas.setup"
+  ],
+  "frontend/comfyui/ui/surface/CubeAddIcon.ts": [
+    "DOM lookup STYLE_ID",
+    "host selector or token --comfy-menu-bg"
+  ],
+  "frontend/comfyui/ui/surface/CubeCardVisibilitySignature.ts": [
+    "host member node.id",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/surface/CubeCardWidgetSources.ts": [
+    "host member boundary.link",
+    "host member boundary.links",
+    "host member boundary?.widget",
+    "host member input.link",
+    "host member input.widget",
+    "host member link.origin_id",
+    "host member link.origin_slot",
+    "host member node.inputs",
+    "typed host member ComfyInput.link",
+    "typed host member ComfyInput.links",
+    "typed host member ComfyInput.widget",
+    "typed host member ComfyLink.origin_id",
+    "typed host member ComfyLink.origin_slot",
+    "typed host member ComfyNode.inputs"
+  ],
+  "frontend/comfyui/ui/surface/CubeDomBoundaryGeometry.ts": [
+    "DOM lookup '[data-testid=\"slot-connection-dot\"]'",
+    "host selector or token [data-testid=\"slot-connection-dot\"]"
+  ],
+  "frontend/comfyui/ui/surface/CubeDomPortLeaderHost.ts": [
+    "DOM lookup '[data-cube-preview-output-label]'"
+  ],
+  "frontend/comfyui/ui/surface/CubeEditorContextResolver.ts": [
+    "host member graph._nodes",
+    "host member graph.id"
+  ],
+  "frontend/comfyui/ui/surface/CubeEditorHudPositioner.ts": [
+    "DOM lookup VIEWPORT_SELECTOR",
+    "host selector or token #graph-canvas",
+    "host selector or token #graph-canvas-container"
+  ],
+  "frontend/comfyui/ui/surface/CubeEditorMetadataHud.ts": [
+    "DOM lookup `[${FOCUS_KEY_ATTRIBUTE}=\"${focused.key}\"]`",
+    "DOM lookup `[${FOCUS_KEY_ATTRIBUTE}=\"customTargetModel\"]`",
+    "DOM lookup `[${FOCUS_KEY_ATTRIBUTE}=\"default-alias\"]`"
+  ],
+  "frontend/comfyui/ui/surface/CubeEditorNavigationPresenter.ts": [
+    "host member graph.id"
+  ],
+  "frontend/comfyui/ui/surface/CubeFaceActivationStyles.ts": [
+    "DOM lookup styleId",
+    "host selector or token --p-primary-active-color",
+    "host selector or token --p-primary-color",
+    "host selector or token --p-primary-contrast-color",
+    "host selector or token --p-text-color",
+    "host selector or token --p-text-muted-color",
+    "host selector or token --p-toggleswitch-checked-hover-background",
+    "host selector or token .p-toggleswitch",
+    "host selector or token .p-toggleswitch-handle",
+    "host selector or token .p-toggleswitch-input",
+    "host selector or token .p-toggleswitch-slider"
+  ],
+  "frontend/comfyui/ui/surface/CubeFaceCardPolicy.ts": [
+    "host member graph._links",
+    "host member graph.getLink",
+    "host member graph.links",
+    "host member link.id",
+    "host member link?.origin",
+    "host member link?.origin_id",
+    "host member node.graph",
+    "host member node.id",
+    "host member node.inputs",
+    "host member node.title",
+    "host member node.type",
+    "typed host member ComfyGraph._links",
+    "typed host member ComfyGraph.getLink",
+    "typed host member ComfyGraph.links",
+    "typed host member ComfyLink.id",
+    "typed host member ComfyLink.origin",
+    "typed host member ComfyLink.origin_id",
+    "typed host member ComfyNode.graph",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.title",
+    "typed host member ComfyNode.type"
+  ],
+  "frontend/comfyui/ui/surface/CubeFaceCardStateController.ts": [
+    "host member node.id",
+    "host member node.mode",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.mode"
+  ],
+  "frontend/comfyui/ui/surface/CubeFaceCardStateService.ts": [
+    "host member candidate.id",
+    "host member target._nodes",
+    "host member target.extra",
+    "host member target.nodes",
+    "typed host member ComfyGraph._nodes",
+    "typed host member ComfyGraph.extra",
+    "typed host member ComfyGraph.nodes",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/surface/CubeFaceNodeMeasurement.ts": [
+    "dynamic member animatedImages",
+    "dynamic member constructor",
+    "dynamic member imgs",
+    "host member candidate.name",
+    "host member node.size",
+    "host member owner.widgets",
+    "host member widget.name",
+    "typed host member ComfyNode.size",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/surface/CubeFaceNodePresentationPolicy.ts": [
+    "dynamic member label",
+    "dynamic member widgets_start_y",
+    "dynamic member widgets_up",
+    "host member node.flags",
+    "host member node.widgets",
+    "host member nodeData.flags",
+    "host member nodeData.widgets",
+    "host member node[key]",
+    "host member widget.label",
+    "host member widget.name",
+    "host member widget.options",
+    "typed host member ComfyNode.flags",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.label",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.options"
+  ],
+  "frontend/comfyui/ui/surface/CubeFaceNodeSemantics.ts": [
+    "host member node.class_type",
+    "host member node.inputs",
+    "host member node.isSubgraphNode",
+    "host member node.outputs",
+    "host member node.type",
+    "host member node.widgets",
+    "host member widget.name",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.isSubgraphNode",
+    "typed host member ComfyNode.outputs",
+    "typed host member ComfyNode.type",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/surface/CubeFacePromptPolicy.ts": [
+    "host member graph._links",
+    "host member graph._nodes",
+    "host member graph.getLink",
+    "host member graph.links",
+    "host member graph.nodes",
+    "host member input.label",
+    "host member input.name",
+    "host member link.id",
+    "host member link.target",
+    "host member link.target_id",
+    "host member link.target_slot",
+    "host member node.class_type",
+    "host member node.graph",
+    "host member node.id",
+    "host member node.outputs",
+    "host member node.title",
+    "host member node.type",
+    "host member output.link",
+    "host member output.links",
+    "host member output.type",
+    "host member target.inputs",
+    "host member widget.element",
+    "host member widget.name",
+    "host member widget.options",
+    "host member widget.type",
+    "typed host member ComfyGraph._links",
+    "typed host member ComfyGraph._nodes",
+    "typed host member ComfyGraph.getLink",
+    "typed host member ComfyGraph.links",
+    "typed host member ComfyGraph.nodes",
+    "typed host member ComfyInput.label",
+    "typed host member ComfyInput.name",
+    "typed host member ComfyLink.id",
+    "typed host member ComfyLink.target",
+    "typed host member ComfyLink.target_id",
+    "typed host member ComfyLink.target_slot",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.graph",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.outputs",
+    "typed host member ComfyNode.title",
+    "typed host member ComfyNode.type",
+    "typed host member ComfyOutput.link",
+    "typed host member ComfyOutput.links",
+    "typed host member ComfyOutput.type",
+    "typed host member ComfyWidget.element",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.options",
+    "typed host member ComfyWidget.type"
+  ],
+  "frontend/comfyui/ui/surface/CubeFaceRevealPolicy.ts": [
+    "host member node.mode",
+    "typed host member ComfyNode.mode"
+  ],
+  "frontend/comfyui/ui/surface/CubeFaceWidgetPolicy.ts": [
+    "host member input.link",
+    "host member input.links",
+    "host member input.widget",
+    "host member node.flags",
+    "host member node.inputs",
+    "host member node.isWidgetVisible",
+    "host member node.showAdvanced",
+    "host member widget.name",
+    "typed host member ComfyInput.link",
+    "typed host member ComfyInput.links",
+    "typed host member ComfyInput.widget",
+    "typed host member ComfyNode.flags",
+    "typed host member ComfyNode.inputs",
+    "typed host member ComfyNode.isWidgetVisible",
+    "typed host member ComfyNode.showAdvanced",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/surface/CubeModelPillAppearance.ts": [
+    "host selector or token --comfy-menu-bg",
+    "host selector or token --p-content-background",
+    "host selector or token --p-primary-color"
+  ],
+  "frontend/comfyui/ui/surface/CubeModelPillDomRenderer.ts": [
+    "DOM lookup STYLE_ID"
+  ],
+  "frontend/comfyui/ui/surface/CubeNodeColorTheme.ts": [
+    "dynamic member bgcolor",
+    "dynamic member color"
+  ],
+  "frontend/comfyui/ui/surface/CubeOutputPreviewAncestry.ts": [
+    "host member graph._nodes",
+    "host member link.origin",
+    "host member link.origin_id",
+    "host member node.id",
+    "host member node.subgraph",
+    "host member outputNode.id",
+    "typed host member ComfyLink.origin",
+    "typed host member ComfyLink.origin_id",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.subgraph"
+  ],
+  "frontend/comfyui/ui/surface/CubePreviewRailView.ts": [
+    "DOM lookup '[data-cube-preview-items]'"
+  ],
+  "frontend/comfyui/ui/surface/CubePromptDomWidgetSizingHost.ts": [
+    "host member widget.margin",
+    "typed host member ComfyWidget.margin"
+  ],
+  "frontend/comfyui/ui/surface/CubePromptTextareaAutosizer.ts": [
+    "DOM lookup 'textarea'",
+    "dynamic member value"
+  ],
+  "frontend/comfyui/ui/surface/CubePromptTextareaScope.ts": [
+    "DOM lookup 'textarea:not([data-sp-owned])'",
+    "host member candidate.name",
+    "host member owner.widgets",
+    "host member presented?.name",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/surface/CubeSurfaceDomLayout.ts": [
+    "host member card.node.size",
+    "typed host member ComfyNode.size"
+  ],
+  "frontend/comfyui/ui/surface/CubeSurfaceRendererLifecycle.ts": [
+    "DOM lookup '#vue-app'"
+  ],
+  "frontend/comfyui/ui/surface/CubeSurfaceSignatures.ts": [
+    "host member widget.name",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/surface/CubeSurfaceStyles.ts": [
+    "DOM lookup STYLE_ID",
+    "host selector or token --comfy-menu-bg",
+    "host selector or token --p-border-radius-md",
+    "host selector or token --p-border-radius-sm",
+    "host selector or token --p-content-background",
+    "host selector or token --p-content-hover-background",
+    "host selector or token --p-inputtext-background",
+    "host selector or token --p-inputtext-border-color",
+    "host selector or token --p-inputtext-color",
+    "host selector or token --p-orange-400",
+    "host selector or token --p-primary-color",
+    "host selector or token --p-primary-contrast-color",
+    "host selector or token --p-red-300",
+    "host selector or token --p-red-400",
+    "host selector or token --p-text-color",
+    "host selector or token --p-text-muted-color",
+    "host selector or token .lg-node",
+    "host selector or token .lg-node-slots",
+    "host selector or token .lg-node-widget",
+    "host selector or token .lg-slot",
+    "host selector or token .p-inputtext",
+    "host selector or token .p-toggleswitch",
+    "host selector or token [data-testid=\"node-inner-wrapper\"]",
+    "host selector or token [data-testid=\"slot-connection-dot\"]",
+    "host selector or token [data-testid=\"subgraph-enter-button\"]",
+    "host selector or token [data-testid^=\"node-header-\"]",
+    "host selector or token [data-testid^=\"node-inner-wrapper\"]"
+  ],
+  "frontend/comfyui/ui/surface/NativeAdvancedInputControl.ts": [
+    "host member node.graph",
+    "host member node.graph?.afterChange",
+    "host member node.graph?.beforeChange",
+    "host member node.showAdvanced",
+    "host member widget.advanced",
+    "host member widget.options",
+    "typed host member ComfyGraph.afterChange",
+    "typed host member ComfyGraph.beforeChange",
+    "typed host member ComfyNode.graph",
+    "typed host member ComfyNode.showAdvanced",
+    "typed host member ComfyWidget.advanced",
+    "typed host member ComfyWidget.options"
+  ],
+  "frontend/comfyui/ui/surface/NativeChoicePreparation.ts": [
+    "DOM lookup '[role=\"combobox\"]'"
+  ],
+  "frontend/comfyui/ui/surface/NativeChoiceRestrictions.ts": [
+    "DOM lookup '[data-highlighted][data-sc-choice-locked]'",
+    "DOM lookup '[role=\"combobox\"]'",
+    "DOM lookup '[role=\"option\"]'",
+    "DOM lookup 'span'",
+    "DOM lookup id"
+  ],
+  "frontend/comfyui/ui/surface/NativeFieldActionMount.ts": [
+    "DOM lookup 'input:not([type=\"checkbox\"])'"
+  ],
+  "frontend/comfyui/ui/surface/NativeForwardedWidgetLease.ts": [
+    "host member internal.element",
+    "host member internal.value",
+    "host member node.widgets",
+    "host member owner.callback",
+    "host member owner.value",
+    "host member source.node.onWidgetChanged",
+    "host member source.node.widgets",
+    "host member widget.name",
+    "typed host member ComfyNode.onWidgetChanged",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.callback",
+    "typed host member ComfyWidget.element",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/surface/NativeNodeBodyAccessories.ts": [
+    "DOM lookup '.lg-node'",
+    "DOM lookup '[data-testid^=\"node-body-\"]'",
+    "host selector or token .lg-node",
+    "host selector or token [data-testid^=\"node-body-\"]"
+  ],
+  "frontend/comfyui/ui/surface/NativeNodeCardHost.ts": [
+    "host member node.graph",
+    "host member node.graph.id",
+    "host member node.graph?.id",
+    "host member node.id",
+    "typed host member ComfyGraph.id",
+    "typed host member ComfyNode.graph",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/surface/NativeNodeFieldRows.ts": [
+    "DOM lookup '.lg-node'",
+    "DOM lookup '[data-testid=\"widget-layout-field-label\"]'",
+    "DOM lookup '[role=\"combobox\"][aria-label], [aria-label]'",
+    "dynamic member _vnode",
+    "host selector or token .lg-node",
+    "host selector or token [data-testid=\"widget-layout-field-label\"]"
+  ],
+  "frontend/comfyui/ui/surface/NativeNodeFields.ts": [
+    "host member field.widget.type",
+    "host member owner.widget.disabled",
+    "host member owner.widget.hidden",
+    "host member owner.widget.name",
+    "host member owner.widget.options",
+    "host member owner.widget.type",
+    "host member owner.widget.value",
+    "host member this.node.addCustomWidget",
+    "host member this.node.widgets",
+    "host member widget.label",
+    "host member widget.serialize",
+    "typed host member ComfyNode.addCustomWidget",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.disabled",
+    "typed host member ComfyWidget.hidden",
+    "typed host member ComfyWidget.label",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.options",
+    "typed host member ComfyWidget.serialize",
+    "typed host member ComfyWidget.type",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/surface/NativeNodeMediaPresentation.ts": [
+    "DOM lookup 'sc-native-media-presentation'",
+    "DOM lookup `[${attribute}=\"replaced\"]`",
+    "host selector or token .lg-node-content"
+  ],
+  "frontend/comfyui/ui/surface/NativePresentationWidgets.ts": [
+    "host member item.name",
+    "host member node.widgets",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/surface/NativeProjectedAdvancedInputs.ts": [
+    "DOM lookup '.lg-node'",
+    "DOM lookup '[data-testid=\"advanced-inputs-button\"]'",
+    "host member this.#node.flags",
+    "host selector or token .lg-node",
+    "host selector or token [data-testid=\"advanced-inputs-button\"]",
+    "typed host member ComfyNode.flags"
+  ],
+  "frontend/comfyui/ui/surface/NativeProjectedNodeCollapse.ts": [
+    "DOM lookup '[data-testid=\"node-collapse-button\"]'",
+    "host member this.#node.collapse",
+    "host member this.#node.collapsible",
+    "host member this.#node.flags",
+    "host member this.#node.graph",
+    "host member this.#node.graph?.afterChange",
+    "host member this.#node.graph?.beforeChange",
+    "host selector or token [data-testid=\"node-collapse-button\"]",
+    "typed host member ComfyGraph.afterChange",
+    "typed host member ComfyGraph.beforeChange",
+    "typed host member ComfyNode.collapse",
+    "typed host member ComfyNode.collapsible",
+    "typed host member ComfyNode.flags",
+    "typed host member ComfyNode.graph"
+  ],
+  "frontend/comfyui/ui/surface/NativeProjectedNodeTitleBoundary.ts": [
+    "DOM lookup '.lg-node-header'",
+    "host selector or token .lg-node-header"
+  ],
+  "frontend/comfyui/ui/surface/NativeProjectedWidgetEdits.ts": [
+    "host member node.graph",
+    "host member node.rootGraph",
+    "host member node.widgets",
+    "host member owner.name",
+    "host member owner.value",
+    "host member widget.name",
+    "typed host member ComfyNode.graph",
+    "typed host member ComfyNode.rootGraph",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.value"
+  ],
+  "frontend/comfyui/ui/surface/NativeSubgraphChangeObserver.ts": [
+    "host member graph.onAfterChange",
+    "host member graph[method]"
+  ],
+  "frontend/comfyui/ui/surface/NativeVueNodeData.ts": [
+    "dynamic member widgets"
+  ],
+  "frontend/comfyui/ui/surface/NativeWidgetElementLease.ts": [
+    "host member node.widgets",
+    "host member widget.element",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.element"
+  ],
+  "frontend/comfyui/ui/surface/NativeWidgetOrigins.ts": [
+    "host member node.isSubgraphNode",
+    "typed host member ComfyNode.isSubgraphNode"
+  ],
+  "frontend/comfyui/ui/surface/NodeCardIconHost.ts": [
+    "DOM lookup '[data-cube-node-id], [data-masonry-card]'",
+    "DOM lookup '[data-testid=\"node-title\"]'",
+    "DOM lookup '[data-testid^=\"node-header-\"]'",
+    "host member this.#node.id",
+    "host selector or token [data-testid=\"node-title\"]",
+    "host selector or token [data-testid^=\"node-header-\"]",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/surface/NodeCardIconPolicy.ts": [
+    "host member node.class_type",
+    "host member node.type",
+    "host member node.widgets",
+    "host member widget.name",
+    "host member widget.options",
+    "host member widget.type",
+    "typed host member ComfyNode.class_type",
+    "typed host member ComfyNode.type",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name",
+    "typed host member ComfyWidget.options",
+    "typed host member ComfyWidget.type"
+  ],
+  "frontend/comfyui/ui/surface/NodeCardProjection.ts": [
+    "host member source.node.widgets",
+    "host member widget.name",
+    "typed host member ComfyNode.widgets",
+    "typed host member ComfyWidget.name"
+  ],
+  "frontend/comfyui/ui/surface/WorkflowEditorNavigationHost.ts": [
+    "DOM lookup '.actionbar-container'",
+    "DOM lookup '.p-breadcrumb-item-label'",
+    "DOM lookup '.subgraph-breadcrumb'",
+    "DOM lookup '[data-sugarcubes-model-pill]'",
+    "DOM lookup '[data-testid=\"subgraph-breadcrumb-back\"]'",
+    "DOM lookup '[data-testid^=\"subgraph-breadcrumb-item-\"]'",
+    "DOM lookup 'nav'",
+    "host member app.canvas",
+    "host member app.canvas.graph",
+    "host member app.graph",
+    "host member app?.canvas",
+    "host member app?.canvas?.graph",
+    "host selector or token .actionbar-container",
+    "host selector or token .p-breadcrumb-item-label",
+    "host selector or token [data-testid=\"subgraph-breadcrumb-back\"]",
+    "host selector or token [data-testid^=\"subgraph-breadcrumb-item-\"]",
+    "typed host member ComfyApplication.canvas",
+    "typed host member ComfyApplication.graph",
+    "typed host member ComfyCanvas.graph"
+  ],
+  "frontend/comfyui/ui/surface/WorkflowNodeOrder.ts": [
+    "host member a.pos",
+    "host member b.pos",
+    "host member graph._nodes",
+    "host member graph.nodes",
+    "host member node.id",
+    "typed host member ComfyGraph._nodes",
+    "typed host member ComfyGraph.nodes",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.pos"
+  ],
+  "frontend/comfyui/ui/surface/appearance/AccentColorSetting.ts": [
+    "DOM lookup 'button'"
+  ],
+  "frontend/comfyui/ui/surface/appearance/AccentThemeHost.ts": [
+    "DOM lookup 'style'",
+    "host member app.canvas",
+    "host member app.ui",
+    "host member canvas.setDirty"
+  ],
+  "frontend/comfyui/ui/surface/appearance/AccentThemeStyles.ts": [
+    "host selector or token #graph-canvas-container",
+    "host selector or token --p-button-primary-active-background",
+    "host selector or token --p-button-primary-active-border-color",
+    "host selector or token --p-button-primary-active-color",
+    "host selector or token --p-button-primary-background",
+    "host selector or token --p-button-primary-border-color",
+    "host selector or token --p-button-primary-color",
+    "host selector or token --p-button-primary-hover-background",
+    "host selector or token --p-button-primary-hover-border-color",
+    "host selector or token --p-button-primary-hover-color",
+    "host selector or token --p-checkbox-checked-background",
+    "host selector or token --p-checkbox-checked-border-color",
+    "host selector or token --p-checkbox-checked-hover-background",
+    "host selector or token --p-checkbox-checked-hover-border-color",
+    "host selector or token --p-checkbox-icon-checked-color",
+    "host selector or token --p-inputtext-focus-border-color",
+    "host selector or token --p-primary-active-color",
+    "host selector or token --p-primary-color",
+    "host selector or token --p-primary-contrast-color",
+    "host selector or token --p-primary-hover-color",
+    "host selector or token --p-radiobutton-checked-background",
+    "host selector or token --p-radiobutton-checked-border-color",
+    "host selector or token --p-select-focus-border-color",
+    "host selector or token --p-slider-range-background",
+    "host selector or token --p-toggleswitch-checked-background",
+    "host selector or token --p-toggleswitch-checked-hover-background",
+    "host selector or token .p-checkbox-box",
+    "host selector or token .p-checkbox-checked",
+    "host selector or token .p-disabled",
+    "host selector or token .p-toggleswitch-checked",
+    "host selector or token .p-toggleswitch-slider"
+  ],
+  "frontend/comfyui/ui/surface/appearance/AppearanceHost.ts": [
+    "DOM lookup '.lg-node'",
+    "DOM lookup '.lg-node, .sugarcubes-native-widget'",
+    "DOM lookup 'vue-app'",
+    "DOM lookup `.lg-node, ${surfaceSelector}`",
+    "DOM lookup surfaceSelector",
+    "host selector or token .lg-node",
+    "module, endpoint or setting Comfy.ColorPalette.change"
+  ],
+  "frontend/comfyui/ui/surface/appearance/ComboToggleController.ts": [
+    "DOM lookup ':disabled,[aria-disabled=\"true\"]'",
+    "DOM lookup ':scope > [role=\"combobox\"]'",
+    "DOM lookup '[role=\"combobox\"], .sc-model-field-arrow, button[aria-hidden=\"true\"]'",
+    "DOM lookup popupId"
+  ],
+  "frontend/comfyui/ui/surface/appearance/ComfyNativeNumericField.ts": [
+    "DOM lookup ':scope > .pointer-events-none.absolute.size-full'",
+    "DOM lookup '[data-testid=\"decrement\"], .p-inputnumber-decrement-button'",
+    "DOM lookup '[data-testid=\"increment\"], .p-inputnumber-increment-button'",
+    "DOM lookup 'input[role=\"spinbutton\"]'",
+    "host selector or token .p-inputnumber-decrement-button",
+    "host selector or token .p-inputnumber-increment-button",
+    "host selector or token [data-testid=\"decrement\"]",
+    "host selector or token [data-testid=\"increment\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/ComfyNativeSeedControl.ts": [
+    "host member app.graph",
+    "host member graph._nodes",
+    "host member graph.afterChange",
+    "host member graph.getLink",
+    "host member graph.inputNode"
+  ],
+  "frontend/comfyui/ui/surface/appearance/CommandButtonMount.ts": [
+    "DOM lookup ':focus-within'"
+  ],
+  "frontend/comfyui/ui/surface/appearance/FluentThemeRuntime.ts": [
+    "DOM lookup 'body'"
+  ],
+  "frontend/comfyui/ui/surface/appearance/GimpAppearanceStyles.ts": [
+    "host selector or token [data-testid=\"node-title\"]",
+    "host selector or token [data-testid^=\"node-header-\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/GimpComboStyles.ts": [
+    "host selector or token [data-testid=\"widget-layout-field-label\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/GimpThemeRuntime.ts": [
+    "DOM lookup 'button'",
+    "DOM lookup 'input'"
+  ],
+  "frontend/comfyui/ui/surface/appearance/GimpWorkspaceStyles.ts": [
+    "host selector or token [data-testid=\"node-title\"]",
+    "host selector or token [data-testid^=\"node-header-\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/HostColorPalette.ts": [
+    "host member app.ui",
+    "module, endpoint or setting Comfy.ColorPalette"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeAdvancedDisclosureGeometry.ts": [
+    "DOM lookup '.lg-node'",
+    "DOM lookup ':scope > [data-sc-style-advanced-row]'",
+    "host selector or token .lg-node"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeAppearanceStyles.ts": [
+    "host selector or token --p-inputtext-background",
+    "host selector or token --p-inputtext-border-color",
+    "host selector or token --p-inputtext-color",
+    "host selector or token --p-inputtext-focus-border-color",
+    "host selector or token --p-select-background",
+    "host selector or token --p-select-border-color",
+    "host selector or token --p-select-color",
+    "host selector or token --p-toggleswitch-checked-background",
+    "host selector or token --p-toggleswitch-checked-hover-background",
+    "host selector or token [data-testid=\"node-inner-wrapper\"]",
+    "host selector or token [data-testid=\"node-state-outline-overlay\"]",
+    "host selector or token [data-testid=\"node-title\"]",
+    "host selector or token [data-testid=\"widget-select-default-trigger\"]",
+    "host selector or token [data-testid^=\"node-body-\"]",
+    "host selector or token [data-testid^=\"node-header-\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeBooleanSegments.ts": [
+    "DOM lookup ':scope > button'",
+    "DOM lookup '[data-testid=\"widget-layout-field-label\"]'",
+    "DOM lookup '[role=\"group\"]'",
+    "host selector or token [data-testid=\"widget-layout-field-label\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeCardAdapter.ts": [
+    "DOM lookup '.lg-node'",
+    "DOM lookup '.lg-slot'",
+    "DOM lookup '[aria-label]'",
+    "DOM lookup '[data-capture-wheel]'",
+    "DOM lookup '[data-testid=\"advanced-inputs-button\"]'",
+    "DOM lookup '[data-testid=\"node-collapse-button\"]'",
+    "DOM lookup '[data-testid=\"node-title\"] .editable-text > span'",
+    "DOM lookup '[data-testid=\"widget-layout-field-label\"]'",
+    "DOM lookup '[data-testid=\"widget-select-default-trigger\"]'",
+    "DOM lookup '[data-testid^=\"node-body-\"]'",
+    "DOM lookup 'input:not([type=\"checkbox\"]), textarea'",
+    "host member nodeData.widgets",
+    "host selector or token .lg-node",
+    "host selector or token .lg-slot",
+    "host selector or token [data-testid=\"advanced-inputs-button\"]",
+    "host selector or token [data-testid=\"node-collapse-button\"]",
+    "host selector or token [data-testid=\"node-title\"]",
+    "host selector or token [data-testid=\"widget-layout-field-label\"]",
+    "host selector or token [data-testid=\"widget-select-default-trigger\"]",
+    "host selector or token [data-testid^=\"node-body-\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeCardGraphGeometry.ts": [
+    "DOM lookup '.lg-node[data-node-id]'",
+    "host selector or token .lg-node",
+    "host selector or token [data-node-id]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeCardTitlebar.ts": [
+    "DOM lookup '[data-cube-card-activation] [data-sc-activation-switch]'",
+    "DOM lookup '[data-testid=\"node-collapse-button\"]'",
+    "DOM lookup '[data-testid=\"node-title\"]'",
+    "DOM lookup 'button, input, textarea, select, a, label, [contenteditable=\"true\"], [role=\"switch\"], [role=\"combobox\"]'",
+    "host selector or token [data-testid=\"node-collapse-button\"]",
+    "host selector or token [data-testid=\"node-title\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeComboPopupAppearance.ts": [
+    "DOM lookup id",
+    "DOM lookup triggerSelector"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeFieldPresentation.ts": [
+    "native component WidgetInputNumber",
+    "native component WidgetInputNumberInput",
+    "native component WidgetInputNumberSlider",
+    "native component WidgetInputText",
+    "native component WidgetSelect",
+    "native component WidgetTextarea",
+    "native component WidgetToggleSwitch"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeInlineComboSearch.ts": [
+    "DOM lookup '[data-capture-wheel]'",
+    "DOM lookup '[data-testid=\"widget-select-default-search-input\"]'",
+    "host selector or token [data-testid=\"widget-select-default-search-input\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeInlineComboSuggestion.ts": [
+    "DOM lookup '[role=\"option\"][data-highlighted]'"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeInteractionStyles.ts": [
+    "host selector or token .lg-node",
+    "host selector or token [data-testid=\"node-collapse-button\"]",
+    "host selector or token [data-testid=\"node-inner-wrapper\"]",
+    "host selector or token [data-testid^=\"node-body-\"]",
+    "host selector or token [data-testid^=\"node-header-\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeSeedMenuHost.ts": [
+    "DOM lookup '.lg-node'",
+    "DOM lookup '[data-testid=\"value-control\"]'",
+    "DOM lookup 'button[data-testid=\"value-control\"]'",
+    "DOM lookup 'input[type=\"radio\"][value=\"fixed\"]'",
+    "DOM lookup 'input[type=\"radio\"][value=\"randomize\"]'",
+    "DOM lookup 'label[for=\"fixed\"]'",
+    "DOM lookup `input[type=\"radio\"][value=\"${pending.control.readMode()}\"]`",
+    "host selector or token .lg-node",
+    "host selector or token [data-testid=\"value-control\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeSeedStyles.ts": [
+    "host selector or token [data-testid=\"value-control\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeTabGroup.ts": [
+    "DOM lookup '[role=\"tab\"]'",
+    "DOM lookup '[role=\"tab\"]:not([disabled])'"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeThemeScopes.ts": [
+    "DOM lookup '#graph-canvas-container'",
+    "DOM lookup OWNED_SCOPE_SELECTOR",
+    "host selector or token #graph-canvas-container"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NativeToggleRows.ts": [
+    "DOM lookup '[data-pc-name=\"toggleswitch\"]'",
+    "DOM lookup 'input, button, a, label, [role=\"button\"], [data-testid=\"slot-connection-dot\"], [role=\"switch\"], [data-sc-boolean-checkbox], [contenteditable=\"true\"]'",
+    "DOM lookup 'input[type=\"checkbox\"]:not([data-sc-boolean-checkbox]), input[role=\"switch\"]'",
+    "DOM lookup 'label'",
+    "host selector or token [data-pc-name=\"toggleswitch\"]",
+    "host selector or token [data-testid=\"slot-connection-dot\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NodeCardAppearanceStyles.ts": [
+    "DOM lookup 'sugarcubes-node-card-appearance'",
+    "host selector or token --comfy-input-bg",
+    "host selector or token .lg-node",
+    "host selector or token [data-testid=\"advanced-inputs-button\"]",
+    "host selector or token [data-testid=\"node-inner-wrapper\"]",
+    "host selector or token [data-testid=\"node-state-outline-overlay\"]",
+    "host selector or token [data-testid^=\"node-body-\"]",
+    "host selector or token [data-testid^=\"node-header-\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/NodeChinStyles.ts": [
+    "host selector or token [data-testid=\"node-inner-wrapper\"]",
+    "host selector or token [data-testid^=\"node-body-\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/OrphanedTooltipRetirement.ts": [
+    "DOM lookup OWNER_SELECTOR",
+    "host selector or token .p-tooltip"
+  ],
+  "frontend/comfyui/ui/surface/appearance/OverlayScrollbarHost.ts": [
+    "DOM lookup '*'"
+  ],
+  "frontend/comfyui/ui/surface/appearance/OwnedColorScheme.ts": [
+    "DOM lookup '.light-theme'",
+    "host selector or token --comfy-menu-bg"
+  ],
+  "frontend/comfyui/ui/surface/appearance/OwnedControlAppearanceStyles.ts": [
+    "DOM lookup 'sugarcubes-owned-control-appearance'",
+    "host selector or token [data-testid=\"widget-layout-field-label\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/OwnedNumericSlider.ts": [
+    "DOM lookup STYLE_ID",
+    "host selector or token --comfy-input-bg",
+    "host selector or token --p-primary-color"
+  ],
+  "frontend/comfyui/ui/surface/appearance/PhotoProAppearanceStyles.ts": [
+    "host selector or token [data-testid=\"advanced-inputs-button\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/PhotoProCardStyles.ts": [
+    "host selector or token [data-testid=\"advanced-inputs-button\"]",
+    "host selector or token [data-testid=\"node-collapse-button\"]",
+    "host selector or token [data-testid=\"node-title\"]",
+    "host selector or token [data-testid^=\"node-header-\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/PhotoProMenuStyles.ts": [
+    "host selector or token [data-testid=\"widget-select-default-viewport\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/PhotoProWorkspaceStyles.ts": [
+    "host selector or token #graph-canvas-container",
+    "host selector or token .p-splitter"
+  ],
+  "frontend/comfyui/ui/surface/appearance/PointerTooltipPlacement.ts": [
+    "host selector or token .p-tooltip",
+    "host selector or token .p-tooltip-arrow"
+  ],
+  "frontend/comfyui/ui/surface/appearance/ScrollbarStyles.ts": [
+    "host selector or token .p-scrollpanel-bar"
+  ],
+  "frontend/comfyui/ui/surface/appearance/SpectrumAppearanceStyles.ts": [
+    "host selector or token [data-testid=\"node-title\"]"
+  ],
+  "frontend/comfyui/ui/surface/appearance/SpectrumThemeRuntime.ts": [
+    "DOM lookup '[hidden]'"
+  ],
+  "frontend/comfyui/ui/surface/appearance/ThemeService.ts": [
+    "DOM lookup 'sugarcubes-theme-providers'"
+  ],
+  "frontend/comfyui/ui/surface/frame/AppOrbRenderer.ts": [
+    "host member canvas.getContext",
+    "host member this.canvas.height",
+    "host member this.canvas.setAttribute",
+    "host member this.canvas.width"
+  ],
+  "frontend/comfyui/ui/surface/frame/AppOrbView.ts": [
+    "host member this.#renderer.canvas.hidden"
+  ],
+  "frontend/comfyui/ui/surface/frame/ChromeTextSelectionStyles.ts": [
+    "host selector or token .comfy-markdown",
+    "host selector or token .p-dialog-content",
+    "host selector or token .p-toast-message-content"
+  ],
+  "frontend/comfyui/ui/surface/frame/ComfyFrameWorkflowAdapter.ts": [
+    "DOM lookup '.workflow-label'",
+    "DOM lookup '.workflow-tab'",
+    "DOM lookup 'button'",
+    "host adapter member app.graph",
+    "host adapter member app.loadGraphData",
+    "host adapter member app.rootGraph",
+    "host adapter member workflow.$subscribe",
+    "host adapter member workflow.activeWorkflow",
+    "host adapter member workflow.openWorkflows",
+    "host adapter member workflow.reorderWorkflows",
+    "host member app.extensionManager"
+  ],
+  "frontend/comfyui/ui/surface/frame/ComfyGenerationAdapter.ts": [
+    "DOM lookup '.actionbar-container'",
+    "DOM lookup '.batch-count'",
+    "DOM lookup '.queue-button-group'",
+    "DOM lookup 'button'",
+    "DOM lookup 'button[aria-label=\"Cancel current run\"]'",
+    "host member app.api",
+    "host member app.extensionManager",
+    "host selector or token .actionbar-container",
+    "module, endpoint or setting Comfy.QueuePrompt"
+  ],
+  "frontend/comfyui/ui/surface/frame/ComfyGenerationQueueSurface.ts": [
+    "DOM lookup 'button[data-testid=\"queue-overlay-toggle\"]'",
+    "DOM lookup CANCEL_RUN",
+    "host selector or token [data-testid=\"queue-overlay-toggle\"]"
+  ],
+  "frontend/comfyui/ui/surface/frame/ComfyMenuStyles.ts": [
+    "host selector or token --p-",
+    "host selector or token .litecontextmenu",
+    "host selector or token .p-contextmenu",
+    "host selector or token .p-contextmenu-item",
+    "host selector or token .p-contextmenu-item-content",
+    "host selector or token .p-disabled",
+    "host selector or token .p-menu",
+    "host selector or token .p-menu-item",
+    "host selector or token .p-menu-item-content",
+    "host selector or token .p-tieredmenu",
+    "host selector or token .p-tieredmenu-item",
+    "host selector or token .p-tieredmenu-item-content"
+  ],
+  "frontend/comfyui/ui/surface/frame/ComfySidebarTabs.ts": [
+    "DOM lookup '.side-bar-button-label'",
+    "DOM lookup '[class*=\"-tab-button\"]'",
+    "host member this.app.extensionManager"
+  ],
+  "frontend/comfyui/ui/surface/frame/ComfyWorkflowTabMenuAdapter.ts": [
+    "DOM lookup '[role=\"menu\"]'",
+    "DOM lookup 'vue-app'",
+    "dynamic member _vnode"
+  ],
+  "frontend/comfyui/ui/surface/frame/DesktopFrameStyles.ts": [
+    "host selector or token #graph-canvas",
+    "host selector or token #graph-canvas-container"
+  ],
+  "frontend/comfyui/ui/surface/frame/DesktopGraphBackdrop.ts": [
+    "host member app.canvas",
+    "host member canvas.getContext",
+    "host member canvas.height",
+    "host member canvas.setDirty",
+    "host member canvas.toDataURL",
+    "host member canvas.width",
+    "host member canvas[CLEAR_COLOR]",
+    "host member canvas[GRID_IMAGE]",
+    "host member canvas[GRID_PATTERN]"
+  ],
+  "frontend/comfyui/ui/surface/frame/DesktopGraphNodeOcclusion.ts": [
+    "DOM lookup '.lg-node[data-node-id]'",
+    "host member app.extensionManager",
+    "host member app.ui",
+    "host member app.ui.settings",
+    "host member canvas.canvas",
+    "host member canvas.graph",
+    "host member canvas.setDirty",
+    "host member canvas.visible_area",
+    "host member graph._nodes",
+    "host selector or token .lg-node",
+    "host selector or token [data-node-id]",
+    "module, endpoint or setting Comfy.Node.Opacity"
+  ],
+  "frontend/comfyui/ui/surface/frame/GenerationQueueDock.ts": [
+    "DOM lookup '.p-toolbar-start > .ml-auto'",
+    "DOM lookup '.p-toolbar-start'",
+    "DOM lookup '.side-bar-panel'",
+    "DOM lookup GENERATION_QUEUE_DOCK",
+    "host member this.app.extensionManager",
+    "host selector or token .p-toolbar-start",
+    "host selector or token [data-testid=\"job-history-sidebar\"]"
+  ],
+  "frontend/comfyui/ui/surface/frame/GenerationQueueRowMenu.ts": [
+    "DOM lookup '#vue-app'",
+    "DOM lookup '.flex-col > div'",
+    "DOM lookup '[data-job-id]'",
+    "DOM lookup ROW",
+    "dynamic member __vue_app__",
+    "host member this.options.app.api",
+    "host selector or token [data-testid=\"job-assets-list\"]",
+    "module, endpoint or setting /history/",
+    "module, endpoint or setting /queue"
+  ],
+  "frontend/comfyui/ui/surface/frame/GenerationQueueSkinStyles.ts": [
+    "host selector or token .p-splitter-gutter",
+    "host selector or token [data-testid=\"queue-progress-overlay\"]"
+  ],
+  "frontend/comfyui/ui/surface/frame/GenerationStripHost.ts": [
+    "host member app.api",
+    "host member app.extensionManager"
+  ],
+  "frontend/comfyui/ui/surface/frame/GraphToolbarStyles.ts": [
+    "host selector or token --comfy-menu-bg",
+    "host selector or token .graph-canvas",
+    "host selector or token .litegraph",
+    "host selector or token [data-pc-name=\"buttongroup\"]"
+  ],
+  "frontend/comfyui/ui/surface/frame/PluginFrameStyles.ts": [
+    "host selector or token .graph-canvas"
+  ],
+  "frontend/comfyui/ui/surface/frame/PluginModePreference.ts": [
+    "host member app.ui"
+  ],
+  "frontend/comfyui/ui/surface/frame/PluginToolbarPlacement.ts": [
+    "DOM lookup '.actionbar-container'",
+    "host selector or token .actionbar-container"
+  ],
+  "frontend/comfyui/ui/surface/frame/SidebarPanelClose.ts": [
+    "DOM lookup GENERATION_QUEUE_DOCK",
+    "DOM lookup PANEL",
+    "DOM lookup STYLE_ID"
+  ],
+  "frontend/comfyui/ui/surface/frame/SubstituteFrameHost.ts": [
+    "DOM lookup '.workflow-tabs-container .workflow-tabs-container'",
+    "host selector or token .workflow-tabs-container",
+    "module, endpoint or setting Comfy.NewBlankWorkflow"
+  ],
+  "frontend/comfyui/ui/surface/frame/SubstituteFrameMode.ts": [
+    "host member app.ui"
+  ],
+  "frontend/comfyui/ui/surface/frame/SubstituteFrameStyles.ts": [
+    "host selector or token .comfyui-body",
+    "host selector or token .comfyui-body-left",
+    "host selector or token .comfyui-body-right",
+    "host selector or token .comfyui-body-top",
+    "host selector or token .graph-canvas",
+    "host selector or token .graph-canvas-container",
+    "host selector or token .p-splitter-gutter",
+    "host selector or token [data-testid=\"linear-progress-overall\"]",
+    "host selector or token [data-testid=\"queue-inline-progress\"]",
+    "host selector or token [data-testid=\"queue-notification-banner\"]",
+    "host selector or token [data-testid=\"queue-progress-overlay\"]"
+  ],
+  "frontend/comfyui/ui/surface/frame/SubstituteFrameView.ts": [
+    "module, endpoint or setting Comfy.Manager.CustomNodesManager.ShowCustomNodesMenu",
+    "module, endpoint or setting Comfy.OpenWorkflow",
+    "module, endpoint or setting Comfy.SaveWorkflow",
+    "module, endpoint or setting Comfy.SaveWorkflowAs",
+    "module, endpoint or setting Comfy.ShowSettingsDialog"
+  ],
+  "frontend/comfyui/ui/surface/frame/SubstituteToolbarLayout.ts": [
+    "DOM lookup '.actionbar-container'",
+    "DOM lookup 'button'",
+    "DOM lookup 'button[aria-label=\"Workflow actions\"]'",
+    "DOM lookup EXTENSIONS_ICON",
+    "host selector or token .actionbar-container"
+  ],
+  "frontend/comfyui/ui/surface/frame/SubstituteToolbarStyles.ts": [
+    "host selector or token --comfy-menu-bg",
+    "host selector or token .p-panel-content",
+    "host selector or token .p-splitter",
+    "host selector or token .p-splitterpanel"
+  ],
+  "frontend/comfyui/ui/surface/frame/WorkflowTabStyles.ts": [
+    "host selector or token --comfy-menu-bg"
+  ],
+  "frontend/comfyui/ui/surface/frame/WorkflowTabsView.ts": [
+    "DOM lookup this.element.activeid"
+  ],
+  "frontend/comfyui/ui/surface/frame/queue/ComfyQueueActions.ts": [
+    "dynamic member LiteGraph",
+    "host member canvas.visible_area",
+    "host member graph.add",
+    "host member litegraph.createNode",
+    "host member this.app.canvas",
+    "host member this.app.extensionManager",
+    "host member this.app.graph",
+    "module, endpoint or setting /history",
+    "module, endpoint or setting /queue",
+    "module, endpoint or setting /settings/",
+    "module, endpoint or setting Comfy.Queue.QPOV2",
+    "module, endpoint or setting Comfy.Queue.ShowRunProgressBar"
+  ],
+  "frontend/comfyui/ui/surface/frame/queue/ComfyQueueJobSource.ts": [
+    "dynamic member detail",
+    "host transport addEventListener b_preview_with_metadata",
+    "host transport addEventListener progress_state",
+    "host transport removeEventListener b_preview_with_metadata",
+    "host transport removeEventListener progress_state",
+    "module, endpoint or setting /api/view?",
+    "module, endpoint or setting /queue"
+  ],
+  "frontend/comfyui/ui/surface/frame/queue/GenerationQueueController.ts": [
+    "DOM lookup BUTTON",
+    "host member graph.getNodeById",
+    "host member this.options.app.graph"
+  ],
+  "frontend/comfyui/ui/surface/frame/queue/GenerationQueueDialogs.ts": [
+    "DOM lookup STYLE_ID"
+  ],
+  "frontend/comfyui/ui/surface/frame/queue/GenerationQueueMenus.ts": [
+    "host member this.host.app.loadGraphData"
+  ],
+  "frontend/comfyui/ui/surface/frame/queue/GenerationQueueReorder.ts": [
+    "DOM lookup ROW",
+    "DOM lookup `${ROW}[data-dragging]`"
+  ],
+  "frontend/comfyui/ui/surface/frame/queue/GenerationQueueView.ts": [
+    "DOM lookup 'img'"
+  ],
+  "frontend/comfyui/ui/surface/masonry/ComfyMasonryLinkAdapter.ts": [
+    "dynamic member drawLink",
+    "dynamic member drawLinkPath",
+    "dynamic member stroke",
+    "host member canvas.bgcanvas",
+    "host member canvas.canvas",
+    "host member canvas.canvas?.getBoundingClientRect",
+    "host member canvas.linkRenderer",
+    "host member context.canvas.height",
+    "host member context.canvas.width",
+    "typed host member ComfyCanvas.bgcanvas",
+    "typed host member ComfyCanvas.canvas",
+    "typed host member ComfyCanvas.linkRenderer"
+  ],
+  "frontend/comfyui/ui/surface/masonry/MasonryCubeSections.ts": [
+    "DOM lookup 'header[data-masonry-section]'"
+  ],
+  "frontend/comfyui/ui/surface/masonry/MasonrySupplementBoundary.ts": [
+    "DOM lookup '.lg-node'",
+    "host selector or token .lg-node"
+  ],
+  "frontend/comfyui/ui/surface/masonry/NativeGraphCardAssembly.ts": [
+    "DOM lookup '[data-widgets-grid-node-id]'"
+  ],
+  "frontend/comfyui/ui/surface/masonry/WorkflowMasonryController.ts": [
+    "host member card.node.type",
+    "typed host member ComfyNode.type"
+  ],
+  "frontend/comfyui/ui/surface/masonry/WorkflowMasonryGraphGeometry.ts": [
+    "DOM lookup '#graph-canvas, .ph-no-capture, .isolate'",
+    "DOM lookup '#graph-canvas-container'",
+    "DOM lookup '.lg-node[data-node-id], .lg-node[data-sc-masonry-graph-node]'",
+    "DOM lookup '[data-cube-node-id]'",
+    "host member card.node.id",
+    "host selector or token #graph-canvas",
+    "host selector or token #graph-canvas-container",
+    "host selector or token .lg-node",
+    "host selector or token [data-node-id]",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/surface/masonry/WorkflowMasonryGraphReveal.ts": [
+    "DOM lookup '#graph-canvas-container'",
+    "DOM lookup '.lg-node, .sugarcubes-workflow-masonry'",
+    "DOM lookup '.lg-node[data-node-id]'",
+    "DOM lookup '[aria-label=\"Canvas Toolbar\"], .minimap-main-container'",
+    "host member card.node.id",
+    "host selector or token #graph-canvas-container",
+    "host selector or token .lg-node",
+    "host selector or token [data-node-id]",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/surface/masonry/WorkflowMasonryGraphVisibility.ts": [
+    "DOM lookup '#graph-canvas-container'",
+    "host selector or token #graph-canvas-container"
+  ],
+  "frontend/comfyui/ui/surface/masonry/WorkflowMasonryHostLifecycle.ts": [
+    "DOM lookup '#graph-canvas-container'",
+    "host member app.canvas",
+    "host member app.canvas.graph",
+    "host member app.graph",
+    "host member app?.canvas",
+    "host member app?.canvas?.graph",
+    "host member canvas?.openSubgraph",
+    "host member options.app?.canvas",
+    "host member options.app?.graph",
+    "host member this.#options.app?.canvas",
+    "host member this.#options.app?.graph",
+    "host selector or token #graph-canvas-container",
+    "typed host member ComfyApplication.canvas",
+    "typed host member ComfyApplication.graph",
+    "typed host member ComfyCanvas.graph",
+    "typed host member ComfyCanvas.openSubgraph"
+  ],
+  "frontend/comfyui/ui/surface/masonry/WorkflowMasonryLinkMotion.ts": [
+    "DOM lookup '.ph-no-capture, .isolate'"
+  ],
+  "frontend/comfyui/ui/surface/masonry/WorkflowMasonryProjection.ts": [
+    "host member node.id",
+    "host member node.sugarcubesPresentationOnly",
+    "typed host member ComfyNode.id",
+    "typed host member ComfyNode.sugarcubesPresentationOnly"
+  ],
+  "frontend/comfyui/ui/surface/masonry/WorkflowMasonryPropertiesButton.ts": [
+    "DOM lookup 'button'",
+    "DOM lookup ICON",
+    "DOM lookup SURFACES",
+    "host selector or token .actionbar-container",
+    "host selector or token [data-testid=\"properties-panel\"]"
+  ],
+  "frontend/comfyui/ui/surface/masonry/WorkflowMasonrySectionHeaderView.ts": [
+    "host selector or token --comfy-menu-bg"
+  ],
+  "frontend/comfyui/ui/surface/masonry/WorkflowMasonrySectionView.ts": [
+    "host member node.id",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/surface/masonry/WorkflowMasonryStyles.ts": [
+    "DOM lookup '#graph-canvas-container'",
+    "DOM lookup 'sugarcubes-workflow-masonry-styles'",
+    "DOM lookup MOUNTED_HIDES",
+    "DOM lookup MOUNTED_STILLS",
+    "DOM lookup `[${MASONRY_HIDES_ATTRIBUTE}=\"graph\"]`",
+    "DOM lookup `[${MASONRY_HIDES_ATTRIBUTE}=\"graph-chrome\"]`",
+    "DOM lookup `[${MASONRY_HIDES_ATTRIBUTE}=\"mounted\"]`",
+    "DOM lookup `[${MASONRY_STILLS_ATTRIBUTE}]`",
+    "host selector or token #graph-canvas-container",
+    "host selector or token --comfy-menu-bg",
+    "host selector or token .graph-canvas",
+    "host selector or token .lg-node-content",
+    "host selector or token [data-testid=\"selection-toolbox\"]"
+  ],
+  "frontend/comfyui/ui/surface/masonry/WorkflowMasonryToolbarButton.ts": [
+    "DOM lookup '.actionbar-container'",
+    "DOM lookup '[data-testid=\"queue-overlay-toggle\"]'",
+    "host selector or token .actionbar-container",
+    "host selector or token [data-testid=\"queue-overlay-toggle\"]"
+  ],
+  "frontend/comfyui/ui/surface/masonry/WorkflowMasonryTransition.ts": [
+    "DOM lookup '.lg-node'",
+    "host member graph.cards",
+    "host member graph.layers",
+    "host member graph.viewport",
+    "host selector or token .lg-node"
+  ],
+  "frontend/comfyui/ui/surface/masonry/WorkflowViewIcon.ts": [
+    "host member WORKFLOW_VIEW_ICON.graph.map",
+    "host member graph[k]"
+  ],
+  "frontend/comfyui/ui/surface/motion/CardDisclosureMotion.ts": [
+    "DOM lookup '.lg-node'",
+    "DOM lookup '[data-testid=\"node-inner-wrapper\"]'",
+    "DOM lookup '[data-testid^=\"node-header-\"]'",
+    "host selector or token .lg-node",
+    "host selector or token [data-testid=\"node-inner-wrapper\"]",
+    "host selector or token [data-testid^=\"node-header-\"]"
+  ],
+  "frontend/comfyui/ui/surface/stack/CubeStackPreferences.ts": [
+    "host member app.ui"
+  ],
+  "frontend/comfyui/ui/surface/stack/CubeStackStyles.ts": [
+    "DOM lookup 'sugarcubes-cube-stack-styles'",
+    "host selector or token --comfy-menu-bg"
+  ],
+  "frontend/comfyui/ui/surface/stack/vue/CubeStackVueRuntime.ts": [
+    "host member app.mount",
+    "host member app.unmount"
+  ],
+  "frontend/comfyui/ui/types/extension.ts": [
+    "module, endpoint or setting /scripts/app.js"
+  ],
+  "frontend/comfyui/ui/wildcards/infrastructure/ComfyWildcardPrompts.ts": [
+    "host member graph._nodes",
+    "host member graph.nodes",
+    "host member node.id",
+    "typed host member ComfyGraph._nodes",
+    "typed host member ComfyGraph.nodes",
+    "typed host member ComfyNode.id"
+  ],
+  "frontend/comfyui/ui/workflow/CubeWorkflowLibraryActions.ts": [
+    "host member app.graph",
+    "host member app?.graph",
+    "host member app?.graphToPrompt",
+    "typed host member ComfyApplication.graph",
+    "typed host member ComfyApplication.graphToPrompt"
+  ],
+  "frontend/comfyui/ui/workflow/ExactIntegerRelations.ts": [
+    "dynamic member extra"
+  ],
+  "frontend/comfyui/ui/workflow/ImportedScriptState.ts": [
+    "dynamic member _nodes",
+    "dynamic member extra",
+    "dynamic member nodes"
+  ],
+  "frontend/comfyui/ui/workflow/infrastructure/ComfyDesktopCapture.ts": [
+    "host member this.options.canvas.capture"
+  ],
+  "frontend/comfyui/ui/workflow/infrastructure/ComfyDesktopDocumentAdoption.ts": [
+    "host adapter member app.canvas",
+    "host member canvas.ds",
+    "host member options.app.loadGraphData"
+  ],
+  "frontend/comfyui/ui/workflow/infrastructure/ComfyDesktopDocuments.ts": [
+    "host adapter member app.canvas",
+    "host adapter member app.rootGraph",
+    "host adapter member workflow.activeWorkflow",
+    "host adapter member workflow.openWorkflows",
+    "host adapter member workflow.reorderWorkflows",
+    "host member app.extensionManager",
+    "host member this.#app.canvas.ds"
+  ],
+  "frontend/comfyui/ui/workflow/infrastructure/ComfyDesktopMaterialization.ts": [
+    "host member this.options.canvas.restore"
+  ],
+  "frontend/comfyui/ui/workflow/infrastructure/ComfyDesktopReadiness.ts": [
+    "host member app.extensionManager",
+    "host member app.ui",
+    "module, endpoint or setting Comfy.Workflow.Persist",
+    "module, endpoint or setting Comfy.Workflow.Persist.change"
+  ],
+  "frontend/comfyui/ui/workflow/infrastructure/ComfyDesktopSessionHost.ts": [
+    "dynamic member __COMFYUI_FRONTEND_VERSION__"
+  ],
+  "frontend/comfyui/ui/workflow/infrastructure/ComfyDesktopSessionRuntime.ts": [
+    "host adapter member graph.dispose",
+    "host member canvas.subscribe",
+    "host member this.options.app.rootGraph",
+    "host member this.options.canvas.signature"
+  ],
+  "frontend/comfyui/ui/workflow/infrastructure/ComfyWorkflowChangeTracker.ts": [
+    "host member graph.extra",
+    "host member this.app.extensionManager",
+    "host member this.app.rootGraph"
+  ],
+  "frontend/comfyui/ui/workflow/infrastructure/ComfyWorkflowDraftTimes.ts": [
+    "module, endpoint or setting Comfy.Workflow.DraftIndex."
+  ],
+  "frontend/comfyui/ui/workflow/infrastructure/ComfyWorkflowViewDocument.ts": [
+    "host member graph.extra",
+    "host member graph.nodes"
+  ],
+  "frontend/comfyui/ui/workflow/infrastructure/NativeDesktopSessionTransport.ts": [
+    "dynamic member sugarcubesSessionHost"
+  ],
+  "frontend/sugarprompt/editor/src/canonical-row-edges.ts": [
+    "DOM lookup '.cm-line'"
+  ],
+  "frontend/sugarprompt/editor/src/completion-tooltip.ts": [
+    "DOM lookup '[role=option]'"
+  ],
+  "frontend/sugarprompt/editor/src/context-menu-local-presentation.ts": [
+    "DOM lookup '.sp-lora-chip'",
+    "DOM lookup 'input,textarea'"
+  ],
+  "frontend/sugarprompt/editor/src/drawn-selection.ts": [
+    "DOM lookup '.sp-lora-chip'"
+  ],
+  "frontend/sugarprompt/editor/src/exact-weight.ts": [
+    "DOM lookup '.sp-exact-weight-input'",
+    "DOM lookup weightLabelSelector"
+  ],
+  "frontend/sugarprompt/editor/src/lora-active.ts": [
+    "DOM lookup '.sp-lora-chip'"
+  ],
+  "frontend/sugarprompt/editor/src/lora-media-decoder.ts": [
+    "host member canvas.getContext",
+    "host member canvas.height",
+    "host member canvas.width"
+  ],
+  "frontend/sugarprompt/editor/src/lora-widget.ts": [
+    "DOM lookup '.sp-lora-media'",
+    "DOM lookup '.sp-lora-weight'",
+    "host member canvas.className",
+    "host member canvas.height",
+    "host member canvas.setAttribute",
+    "host member canvas.width"
+  ],
+  "frontend/sugarprompt/editor/src/mouse-selection.ts": [
+    "DOM lookup '.sp-lora-chip'"
+  ],
+  "frontend/sugarprompt/editor/src/native-host-updates.ts": [
+    "DOM lookup readOnly"
+  ],
+  "frontend/sugarprompt/editor/src/projection-widgets.ts": [
+    "DOM lookup '.sp-emphasis-weight'",
+    "DOM lookup '.sp-exact-weight-input'"
+  ],
+  "frontend/sugarprompt/editor/src/prompt-history.ts": [
+    "DOM lookup 'input,textarea'"
+  ],
+  "frontend/sugarprompt/editor/src/readonly-widget-media.ts": [
+    "host member canvas.className",
+    "host member canvas.height",
+    "host member canvas.remove",
+    "host member canvas.setAttribute",
+    "host member canvas.width"
+  ],
+  "frontend/sugarprompt/editor/src/region-hover.ts": [
+    "DOM lookup '.sp-region-separator'"
+  ],
+  "frontend/sugarprompt/editor/src/region-name.ts": [
+    "DOM lookup '.sp-region-label'",
+    "DOM lookup '.sp-region-separator'",
+    "DOM lookup `.sp-region-separator[data-region-scope=\"${CSS.escape(target.target.scopeId)}\"][data-region-index=\"${target.target.ordinal}\"]`"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-base-context.ts": [
+    "DOM lookup '.cm-line'"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-chip-presentation.ts": [
+    "DOM lookup '.cm-editor'",
+    "DOM lookup reorderChipPresentationSelector(value, id, 'active')",
+    "DOM lookup reorderChipPresentationSelector(value, id, 'held')"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-current-geometry.ts": [
+    "DOM lookup '.sp-reorder-preview [data-reorder-chip], .sp-reorder-preview [data-reorder-gap], .sp-reorder-preview [data-reorder-partition]'"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-grab-paint.ts": [
+    "DOM lookup '.cm-line'",
+    "DOM lookup '[data-reorder-chip=\"' +\n      String(held) +\n      '\"]' +\n      (nativeValue === null\n        ? ':not([data-reorder-native-value])'\n        : '[data-reorder-native-value=\"' + nativeValue + '\"]')"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-landing-paint-lease.ts": [
+    "DOM lookup `[data-reorder-native-value=\"${recipe.key}\"][data-reorder-chip=\"${preview.activeChip}\"]`",
+    "DOM lookup `[data-reorder-native-value=\"${requireValue(recipe, 'reorder-landing-paint-lease').key}\"][data-reorder-chip=\"${held}\"]`"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-motion-paint-admission.ts": [
+    "DOM lookup '.cm-line'"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-motion-peer-carriers.ts": [
+    "DOM lookup chips"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-motion-preparation.ts": [
+    "DOM lookup prepared"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-motion-scene.ts": [
+    "DOM lookup '.cm-content, .cm-scroller'"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-motion-stage.ts": [
+    "DOM lookup prepared"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-mounted-layout.ts": [
+    "DOM lookup '.cm-line'"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-native-paint.ts": [
+    "DOM lookup '.cm-line'",
+    "DOM lookup `[data-reorder-native-value=\"${recipe.key}\"][data-reorder-chip=\"${held}\"]`",
+    "host member canvas.getContext",
+    "host member canvas.height",
+    "host member canvas.width"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-native-projection.ts": [
+    "DOM lookup '.cm-line'",
+    "DOM lookup issue",
+    "DOM lookup this.issue"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-passive-context.ts": [
+    "DOM lookup '.cm-line'"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-placement-measurement.ts": [
+    "DOM lookup '.cm-line'"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-pointer-target.ts": [
+    "DOM lookup '[data-reorder-chip]'"
+  ],
+  "frontend/sugarprompt/editor/src/reorder-sparse-grab-paint.ts": [
+    "DOM lookup '.cm-line'"
+  ],
+  "frontend/sugarprompt/editor/src/tooltip-parent.ts": [
+    "DOM lookup ':popover-open'"
+  ],
+  "frontend/sugarprompt/editor/src/weight-control-geometry.ts": [
+    "DOM lookup \".sp-wildcard-tag[data-numeric='true']\"",
+    "DOM lookup '.sp-lora-weight'"
+  ],
+  "frontend/sugarprompt/editor/src/weight-interactions.ts": [
+    "DOM lookup steppableLabelSelector"
+  ],
+  "frontend/sugarprompt/editor/src/weight-pointer.ts": [
+    "DOM lookup steppableLabelSelector"
+  ],
+  "frontend/sugarprompt/editor/src/wheel-geometry.ts": [
+    "DOM lookup '.sp-lora-chip'",
+    "DOM lookup '.sp-lora-weight'",
+    "DOM lookup steppableLabelSelector"
+  ],
+  "integrations/gimp/companion/src/connection.rs": [
+    "readiness member devices",
+    "readiness member system"
+  ],
+  "integrations/gimp/companion/src/infrastructure/probe.rs": [
+    "native wire route /system_stats"
+  ],
+  "integrations/gimp/src/infrastructure/TauriInvocation.ts": [
+    "dynamic member __TAURI__"
+  ],
+  "integrations/gimp/src/infrastructure/TauriPanelTransport.ts": [
+    "dynamic member Channel",
+    "dynamic member __TAURI__",
+    "dynamic member core"
+  ],
+  "integrations/gimp/src/presentation/main.ts": [
+    "DOM lookup id"
+  ],
+  "integrations/photoshop/src/infrastructure/PhotoshopCanvasDocuments.ts": [
+    "host member app.activeDocument"
+  ],
+  "integrations/photoshop/src/infrastructure/PhotoshopCanvasGeometry.ts": [
+    "host member app.activeDocument"
+  ],
+  "integrations/photoshop/src/infrastructure/PhotoshopCanvasIdentity.ts": [
+    "host member app.documents",
+    "host member app.documents.find"
+  ],
+  "integrations/photoshop/src/infrastructure/PhotoshopCanvasMasks.ts": [
+    "host member app.activeDocument",
+    "host member app.activeDocument?.activeHistoryState",
+    "host member app.activeDocument?.activeHistoryState.id",
+    "host member app.activeDocument?.id",
+    "host member app.activeDocument?.quickMaskMode"
+  ],
+  "integrations/photoshop/src/infrastructure/PhotoshopCanvasSources.ts": [
+    "host member app.activeDocument",
+    "host member app.activeDocument.id",
+    "host member app.activeDocument?.id",
+    "host member app.activeDocument?.quickMaskMode"
+  ],
+  "integrations/photoshop/src/infrastructure/PhotoshopPanel.ts": [
+    "DOM lookup id",
+    "host member canvas.dispose",
+    "host member canvas.receive",
+    "host member canvas.start"
+  ],
+  "integrations/photoshop/static/panel.css": [
+    "host selector or token #comfyui"
+  ],
+  "integrations/shared/CanvasClient.ts": [
+    "host member context.canvas.capabilities",
+    "host member this.#context?.canvas.capabilities",
+    "host member this.#context?.canvas.id"
+  ],
+  "integrations/shared/CanvasPlacement.ts": [
+    "host member canvas.height",
+    "host member canvas.width"
+  ],
+  "integrations/shared/CanvasServer.ts": [
+    "host member (await this.port.context()).canvas.capabilities"
+  ],
+  "integrations/shared/CanvasSurfaceConnection.ts": [
+    "host member canvas.capabilities",
+    "host member canvas.id",
+    "host member canvas.label"
+  ],
+  "integrations/shared/CanvasSurfaceDiscovery.ts": [
+    "host member context.canvas.capabilities"
+  ],
+  "integrations/shared/CanvasSurfaceDispatch.ts": [
+    "host member context?.canvas.capabilities"
+  ],
+  "integrations/shared/conformance/HostConformance.ts": [
+    "host member HOST_PROTOCOLS.canvas.name"
+  ],
+  "prestartup_script.py": [
+    "dynamic host import folder_paths"
+  ],
+  "sugarcubes/backend/comfy_node_registry.py": [
+    "dynamic attribute getattr(module, 'NODE_CLASS_MAPPINGS', None)",
+    "dynamic attribute getattr(module, '__file__', None)",
+    "dynamic host import nodes"
+  ],
+  "sugarcubes/backend/queue_order_routes.py": [
+    "dynamic attribute getattr(getattr(server, 'PromptServer', None), 'instance', None)",
+    "dynamic attribute getattr(instance, 'prompt_queue', None)",
+    "dynamic attribute getattr(mutex, '__enter__', None)",
+    "dynamic attribute getattr(mutex, '__exit__', None)",
+    "dynamic attribute getattr(queue, 'mutex', None)",
+    "dynamic attribute getattr(queue, 'queue', None)",
+    "dynamic attribute getattr(queue, 'server', None)",
+    "dynamic attribute getattr(server, 'PromptServer', None)",
+    "dynamic attribute getattr(server, 'queue_updated', None)",
+    "dynamic host import server"
+  ],
+  "sugarcubes/backend/routes.py": [
+    "dynamic attribute getattr(prompt_server, 'instance', prompt_server)"
+  ],
+  "sugarcubes/backend/self_update/comfy_start.py": [
+    "dynamic attribute getattr(server, 'start_multi_address', None)",
+    "dynamic attribute getattr(sys.modules.get('nodes'), 'NODE_CLASS_MAPPINGS', None)",
+    "dynamic host import nodes"
+  ],
+  "sugarcubes/danbooru/integration.py": [
+    "dynamic attribute getattr(instance, 'app', None)",
+    "dynamic attribute getattr(instance, 'routes', None)",
+    "dynamic attribute getattr(prompt_server, 'instance', prompt_server)"
+  ],
+  "sugarcubes/execution/comfy_execution_port.py": [
+    "host member self._execution.SENSITIVE_EXTRA_DATA_KEYS",
+    "host member self._execution.validate_prompt",
+    "host member self._prompt_server.node_replace_manager",
+    "host member self._prompt_server.node_replace_manager.apply_replacements",
+    "host member self._prompt_server.number",
+    "host member self._prompt_server.prompt_queue",
+    "host member self._prompt_server.prompt_queue.put",
+    "host protocol ComfyExecutionModuleLike.SENSITIVE_EXTRA_DATA_KEYS(self)",
+    "host protocol ComfyExecutionModuleLike.validate_prompt(self, prompt_id: str, prompt: object, partial_execution_list: object)",
+    "host protocol NodeReplacementManagerLike.apply_replacements(self, prompt: object)",
+    "host protocol PromptQueueLike.put(self, item: object)",
+    "host protocol PromptServerLike.node_replace_manager(self)",
+    "host protocol PromptServerLike.number(self)",
+    "host protocol PromptServerLike.number(self, value: float)",
+    "host protocol PromptServerLike.prompt_queue(self)"
+  ],
+  "sugarcubes/execution/comfy_spatial_probe.py": [
+    "host member self._execution.queue",
+    "host protocol SpatialNativeQueue.delete_history_item(self, prompt_id: str)",
+    "host protocol SpatialNativeQueue.delete_queue_item(self, match: Callable[[object], bool])",
+    "host protocol SpatialNativeQueue.get_current_queue(self)",
+    "host protocol SpatialNativeQueue.get_history(self, prompt_id: str)"
+  ],
+  "sugarcubes/execution/spatial_probe_http.py": [
+    "dynamic attribute getattr(instance, 'app', None)",
+    "dynamic attribute getattr(instance, 'prompt_queue', None)",
+    "dynamic attribute getattr(instance, 'routes', None)",
+    "dynamic attribute getattr(prompt_server, 'instance', prompt_server)",
+    "dynamic attribute getattr(sys.modules.get('nodes'), 'NODE_CLASS_MAPPINGS', None)",
+    "dynamic host import execution",
+    "dynamic host import nodes"
+  ],
+  "sugarcubes/execution/spatial_probe_service.py": [
+    "host member self._execution.run"
+  ],
+  "sugarcubes/exporter/definition_snapshot.py": [
+    "dynamic attribute getattr(internal_module, '_ComfyNodeInternal', None)",
+    "dynamic attribute getattr(nodes_module, 'NODE_CLASS_MAPPINGS')",
+    "dynamic attribute getattr(nodes_module, 'NODE_DISPLAY_NAME_MAPPINGS', {})",
+    "dynamic attribute getattr(obj_class, 'API_NODE', None)",
+    "dynamic attribute getattr(obj_class, 'CATEGORY', 'sd')",
+    "dynamic attribute getattr(obj_class, 'DEPRECATED', False)",
+    "dynamic attribute getattr(obj_class, 'DESCRIPTION', '')",
+    "dynamic attribute getattr(obj_class, 'EXPERIMENTAL', False)",
+    "dynamic attribute getattr(obj_class, 'GET_NODE_INFO_V1', None)",
+    "dynamic attribute getattr(obj_class, 'INPUT_TYPES', None)",
+    "dynamic attribute getattr(obj_class, 'OUTPUT_IS_LIST', None)",
+    "dynamic attribute getattr(obj_class, 'OUTPUT_NODE', False)",
+    "dynamic attribute getattr(obj_class, 'RELATIVE_PYTHON_MODULE', getattr(obj_class, '__module__', 'nodes'))",
+    "dynamic attribute getattr(obj_class, 'RETURN_NAMES', None)",
+    "dynamic attribute getattr(obj_class, 'RETURN_TYPES', ())",
+    "dynamic attribute getattr(obj_class, '__module__', 'nodes')",
+    "dynamic attribute hasattr(nodes_module, 'NODE_CLASS_MAPPINGS')",
+    "dynamic host import comfy_api.internal",
+    "dynamic host import nodes"
+  ],
+  "sugarcubes/frontend_assets.py": [
+    "dynamic attribute getattr(instance, 'app', None)",
+    "dynamic attribute getattr(prompt_server, 'instance', prompt_server)"
+  ],
+  "sugarcubes/input_canvas/infrastructure/comfy_image_preview.py": [
+    "dynamic attribute getattr(constructor, 'INPUT_TYPES', None)",
+    "dynamic attribute getattr(import_module('torch'), 'Tensor', None)",
+    "dynamic attribute getattr(loader, 'load_image', None)",
+    "dynamic attribute getattr(nodes, 'NODE_CLASS_MAPPINGS', None)",
+    "dynamic host import nodes",
+    "host protocol _ImageLoader.load_image(self, image: str)",
+    "host protocol _Tensor.cpu(self)",
+    "host protocol _Tensor.detach(self)",
+    "host protocol _Tensor.float(self)",
+    "host protocol _Tensor.numpy(self)",
+    "host protocol _Tensor.shape(self)"
+  ],
+  "sugarcubes/input_canvas/infrastructure/comfy_mask_loader.py": [
+    "dynamic attribute getattr(candidate, 'FUNCTION', None)",
+    "dynamic attribute getattr(candidate, 'INPUT_IS_LIST', False)",
+    "dynamic attribute getattr(candidate, 'INPUT_TYPES', None)",
+    "dynamic attribute getattr(candidate, 'RETURN_TYPES', None)",
+    "dynamic attribute getattr(import_module('nodes'), 'NODE_CLASS_MAPPINGS', None)",
+    "dynamic attribute getattr(result, 'expand', None)",
+    "dynamic attribute getattr(result, 'result', None)",
+    "dynamic host import nodes",
+    "host protocol _Node.INPUT_TYPES(self)"
+  ],
+  "sugarcubes/input_canvas/infrastructure/comfy_mask_preview.py": [
+    "dynamic attribute getattr(import_module('torch'), 'Tensor', None)",
+    "host protocol _NativeMaskTensor.cpu(self)",
+    "host protocol _NativeMaskTensor.detach(self)",
+    "host protocol _NativeMaskTensor.float(self)",
+    "host protocol _NativeMaskTensor.numpy(self)",
+    "host protocol _NativeMaskTensor.shape(self)"
+  ],
+  "sugarcubes/input_canvas/infrastructure/comfy_media_path.py": [
+    "dynamic attribute getattr(folders, 'annotated_filepath', None)",
+    "dynamic attribute getattr(folders, 'get_input_directory', None)",
+    "dynamic host import folder_paths"
+  ],
+  "sugarcubes/input_canvas/infrastructure/http_routes.py": [
+    "dynamic attribute getattr(instance, 'app', None)",
+    "dynamic attribute getattr(instance, 'routes', None)",
+    "dynamic attribute getattr(prompt_server, 'instance', prompt_server)"
+  ],
+  "sugarcubes/input_canvas/infrastructure/prepared_input_http.py": [
+    "dynamic attribute getattr(instance, 'app', None)",
+    "dynamic attribute getattr(instance, 'routes', None)",
+    "dynamic attribute getattr(prompt_server, 'instance', prompt_server)"
+  ],
+  "sugarcubes/model_library/infrastructure/comfy_architecture_detector.py": [
+    "host import from comfy import model_detection",
+    "host import from comfy import model_detection, supported_models, supported_models_base, utils",
+    "host member model_detection.convert_diffusers_mmdit",
+    "host member model_detection.detect_unet_config",
+    "host member model_detection.model_config_from_diffusers_unet",
+    "host member model_detection.model_config_from_unet_config",
+    "host member model_detection.unet_prefix_from_state_dict"
+  ],
+  "sugarcubes/model_library/infrastructure/comfy_credentials.py": [
+    "dynamic attribute getattr(module, 'get_system_user_directory', None)",
+    "dynamic host import folder_paths"
+  ],
+  "sugarcubes/model_library/infrastructure/comfy_model_usage.py": [
+    "dynamic attribute getattr(queue, 'put', None)",
+    "dynamic attribute getattr(self.queue, 'put', None)",
+    "dynamic attribute setattr(queue, 'put', put)",
+    "dynamic attribute setattr(self.queue, 'put', self.original)"
+  ],
+  "sugarcubes/model_library/infrastructure/comfy_roots.py": [
+    "dynamic attribute getattr(module, 'filename_list_cache', None)",
+    "dynamic attribute getattr(module, 'folder_names_and_paths', None)",
+    "dynamic attribute getattr(module, 'models_dir', None)",
+    "dynamic host import folder_paths",
+    "host protocol FolderPaths.filename_list_cache: dict[str, object]",
+    "host protocol FolderPaths.folder_names_and_paths: dict[str, tuple[list[str], set[str]]]",
+    "host protocol FolderPaths.get_filename_list(self, folder_name: str)",
+    "host protocol FolderPaths.get_folder_paths(self, folder_name: str)",
+    "host protocol FolderPaths.get_full_path(self, folder_name: str, filename: str)",
+    "host protocol FolderPaths.models_dir: str"
+  ],
+  "sugarcubes/model_library/integration.py": [
+    "dynamic attribute getattr(instance, 'app', None)",
+    "dynamic attribute getattr(instance, 'prompt_queue', None)",
+    "dynamic attribute getattr(instance, 'routes', None)",
+    "dynamic attribute getattr(prompt_server, 'instance', prompt_server)"
+  ],
+  "sugarcubes/nodes.py": [
+    "host import from comfy_execution.utils import get_executing_context"
+  ],
+  "sugarcubes/output_saving/infrastructure/comfy_node_capabilities.py": [
+    "dynamic attribute getattr(module, 'NODE_CLASS_MAPPINGS', None)",
+    "dynamic attribute getattr(node, 'INPUT_TYPES', None)",
+    "dynamic attribute getattr(node, 'OUTPUT_NODE', False)",
+    "dynamic attribute getattr(node, 'RETURN_TYPES', None)",
+    "dynamic attribute getattr(node, 'SUGARCUBES_IMAGE_SAVER', None)",
+    "dynamic host import nodes"
+  ],
+  "sugarcubes/output_saving/infrastructure/runtime.py": [
+    "dynamic attribute getattr(arguments, 'disable_metadata', False)",
+    "dynamic attribute getattr(module, 'args', None)",
+    "dynamic host import comfy.cli_args",
+    "dynamic host import folder_paths"
+  ],
+  "sugarcubes/output_saving/integration.py": [
+    "dynamic attribute getattr(instance, 'add_on_prompt_handler', None)",
+    "dynamic attribute getattr(instance, 'app', None)",
+    "dynamic attribute getattr(instance, 'prompt_queue', None)",
+    "dynamic attribute getattr(instance, 'routes', None)",
+    "dynamic attribute getattr(prompt_server, 'instance', prompt_server)"
+  ],
+  "sugarcubes/runtime/cube_output_images.py": [
+    "host import folder_paths",
+    "host import from comfy.cli_args import args",
+    "host member args.disable_metadata",
+    "host member folder_paths.get_output_directory",
+    "host member folder_paths.get_save_image_path",
+    "host member folder_paths.get_temp_directory"
+  ],
+  "sugarcubes/runtime/model_output_preview.py": [
+    "dynamic attribute getattr(value, 'faces', None)",
+    "dynamic attribute getattr(value, 'format', None)",
+    "dynamic attribute getattr(value, 'texture', None)",
+    "dynamic attribute getattr(value, 'unlit', False)",
+    "dynamic attribute getattr(value, 'vertices', None)",
+    "dynamic host import comfy_extras.nodes_save_3d",
+    "dynamic host import folder_paths",
+    "host protocol _MeshWriter.get_mesh_batch_item(self, mesh: object, index: int)",
+    "host protocol _MeshWriter.save_glb(self, vertices: _ModelTensor, faces: _ModelTensor, filepath: str, *, uvs: _ModelTensor | None, vertex_colors: _ModelTensor | None, texture_image: Image.Image | None, unlit: bool)",
+    "host protocol _ModelFile.format(self)",
+    "host protocol _ModelFile.save_to(self, path: str)",
+    "host protocol _ModelTensor.__getitem__(self, index: int)",
+    "host protocol _ModelTensor.clamp(self, minimum: float, maximum: float)",
+    "host protocol _ModelTensor.cpu(self)",
+    "host protocol _ModelTensor.numpy(self)",
+    "host protocol _ModelTensor.shape(self)",
+    "host protocol _Storage.get_output_directory(self)",
+    "host protocol _Storage.get_temp_directory(self)"
+  ],
+  "sugarcubes/runtime/video_output_preview.py": [
+    "host import folder_paths",
+    "host protocol _FolderPaths.get_input_directory(self)",
+    "host protocol _FolderPaths.get_output_directory(self)",
+    "host protocol _FolderPaths.get_temp_directory(self)",
+    "host protocol _VideoValue.get_active_trim_window(self)",
+    "host protocol _VideoValue.get_dimensions(self)",
+    "host protocol _VideoValue.get_duration(self)",
+    "host protocol _VideoValue.get_stream_source(self)",
+    "host protocol _VideoValue.save_to(self, path: str)"
+  ],
+  "sugarcubes_model_roots/__init__.py": [
+    "dynamic attribute getattr(module, 'base_path', None)",
+    "dynamic attribute getattr(module, 'models_dir', None)",
+    "dynamic host import folder_paths"
+  ],
+  "sugarcubes_model_roots/startup.py": [
+    "dynamic attribute getattr(getattr(folder_paths, name, None), 'clear', None)",
+    "dynamic attribute getattr(value, 'base_path', None)",
+    "dynamic attribute getattr(value, 'folder_names_and_paths', None)",
+    "dynamic attribute getattr(value, 'models_dir', None)",
+    "host member registry.folder_names_and_paths.items",
+    "host protocol StartupFolderRegistry.base_path: str",
+    "host protocol StartupFolderRegistry.folder_names_and_paths: dict[str, tuple[list[str], set[str] | list[str]]]",
+    "host protocol StartupFolderRegistry.models_dir: str"
+  ]
+}

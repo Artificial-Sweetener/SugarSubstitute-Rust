@@ -1,0 +1,18 @@
+{
+  "cube_id": "Artificial-Sweetener/Base-Cubes/PromptStudio.cube",
+  "version": "1.0.0",
+  "metadata": {"default_alias": "PromptStudio"},
+  "implementation": {
+    "nodes": {"text": {"class_type": "PrimitiveStringMultiline", "label": "positive prompt", "inputs": {"value": "sunlit garden"}}},
+    "inputs": {},
+    "outputs": {"output.text": ["text", 0]},
+    "layout": {"nodes":{"text":{"title":"Positive prompt","pos":[0,0],"size":[320,180]}}},
+    "definitions": {"PrimitiveStringMultiline": {"input": {"required": {"value": ["STRING", {"multiline": true}]}}, "output": ["STRING"], "output_name": ["STRING"]}},
+    "subgraphs": []
+  },
+  "surface": {
+    "default_flavor_id": "default",
+    "controls": [{"control_id":"text.value","symbol":"text","input_name":"value","label":"Prompt","class_type":"PrimitiveStringMultiline","value_type":"string"}]
+  },
+  "flavors": {"authored":[{"id":"default","name":"Default","values":{}}]}
+}

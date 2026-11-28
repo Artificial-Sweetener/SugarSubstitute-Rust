@@ -1,0 +1,244 @@
+[[contract]]
+id = "authoring-replay"
+test = "two authored Cubes retain distinct aliases"
+owners = ["frontend/comfyui/ui/import/CubeImportHostCoordinator.ts", "frontend/comfyui/ui/workflow/NativeWorkflowMaterializer.ts", "sugarcubes/authoring/workflow_sugarscript_projection.py"]
+assumption = "Two instances of the same catalog Cube receive distinct aliases and edited widths. Native graph serialization preserves the embedded documents and authoring recovers both assignments."
+repair = "Compare the imported graph's definitions and instance properties with the compile plan. Check the host subgraph registration and graphToPrompt serialization before modifying the writer."
+
+[[contract]]
+id = "authoring-rejection"
+test = "invalid SugarScript returns a located diagnostic"
+owners = ["frontend/comfyui/ui/import/CubeImportHostCoordinator.ts", "sugarcubes/backend/routes.py"]
+assumption = "An unresolved alias is diagnosed at line one before the browser mutates the active graph."
+repair = "Compare the compile response, refusal handling and graph prompt before and after the failed import."
+
+[[contract]]
+id = "native-project-storage"
+test = "project files preserve Unicode"
+owners = ["frontend/comfyui/ui/projects/infrastructure/ComfyProjects.ts", "sugarcubes/backend/project_folder_routes.py"]
+assumption = "The per-user file API accepts encoded nested paths and preserves script text, arbitrary mask bytes and the original destination on a move conflict."
+repair = "Inspect userdata listing detail fields, move status codes and encoded destination handling in ComfyUI's user manager."
+
+[[contract]]
+id = "editor-readiness"
+test = "GIMP companion accepts the real loopback"
+owners = ["integrations/gimp/companion/src/connection.rs", "integrations/gimp/companion/src/infrastructure/probe.rs"]
+assumption = "ComfyUI answers an HTTP/1.0 loopback request within three seconds and 65536 bytes. Its JSON has a system object and a devices array."
+repair = "Check the observed status, response size, transfer framing and system_stats fields against the native companion's wire parser."
+
+[[contract]]
+id = "contributions"
+test = "Comfy registers the full SugarCubes"
+owners = ["frontend/comfyui/ui.ts", "frontend/comfyui/ui/SugarCubesCommands.ts", "frontend/comfyui/ui/settings/SettingsWorkspaceHost.ts"]
+assumption = "The host retains SugarCubes' extension callbacks, command labels and IDs, menu placements, and registered preference types and defaults."
+repair = "Compare the missing registration in extension-registration.json with the extension object and the host extension manager's contribution stores."
+
+[[contract]]
+id = "stylesheet-bindings"
+test = "owned styles still match the native graph"
+owners = ["frontend/comfyui/ui/surface/appearance/NativeCardAdapter.ts", "frontend/comfyui/ui/surface/frame/SubstituteFrameView.ts", "frontend/comfyui/ui/surface/frame/SubstituteToolbarStyles.ts"]
+assumption = "The SugarCubes stylesheets apply the reviewed selectors to the visible Fluent node, Substitute frame, and open menu."
+repair = "Use the stylesheet ID and selector from native-style-selectors.json to find the exact CSS owner. Inspect the matching native element and its ancestors in the trace."
+
+# Source ownership and repair evidence for the independent outcomes exercised in a real host.
+[[contract]]
+id = "host-authoring-menu"
+test = "native graph context menu exposes Cube authoring"
+owners = ["frontend/comfyui/ui/cube/CubeAuthoringHostCommands.ts", "frontend/comfyui/ui.ts"]
+assumption = "A right click on an empty canvas position in either renderer shows the Create Empty SugarCube action inside Comfy's own context menu. Clicking the graph outside the menu dismisses it and restores graph interaction."
+repair = "Trace the host menu hook, active canvas and selection object and check how the running LiteGraph frontend renders and dismisses contributed entries."
+
+[[contract]]
+id = "native-dimension-actions"
+test = "projected dimension menu swaps both native field values"
+owners = ["frontend/comfyui/ui/editor_actions/presentation/EditorContextMenuHost.ts", "frontend/comfyui/ui/editor_actions/infrastructure/NativeEditorCardAdapter.ts", "frontend/comfyui/ui/editor_actions/presentation/DimensionMenu.ts"]
+assumption = "A right click on an actual projected scalar field opens the dimension actions. Swapping width and height writes both native widget values and updates the mounted controls."
+repair = "Inspect field metadata, the native card target and pointer route before checking the two field write callbacks and refreshed values."
+
+[[contract]]
+id = "connected-output-identities"
+test = "connected Cube outputs preserve link direction"
+owners = ["sugarcubes/authoring/native_workflow_projection.py", "sugarcubes/execution/comfy_execution_port.py", "sugarcubes/runtime/cube_output_images.py"]
+assumption = "A real image link runs producer before consumer, retains both Cube output identities in history, and delivers 512 opaque red pixels upstream and 512 opaque cyan pixels downstream."
+repair = "Inspect the serialized link tuple, flattened prompt references, synthetic output IDs, Comfy history and both saved images to isolate the first changed value."
+
+[[contract]]
+id = "projected-prompt"
+test = "projected prompt edits survive canvas shortcuts"
+owners = ["frontend/comfyui/ui/prompt_editor/CubePromptEditorHost.ts", "frontend/comfyui/ui/prompt_editor/PromptWidgetBinding.ts", "frontend/comfyui/ui/prompt_editor/ComfyCanvasEditorKeyBoundary.ts", "frontend/comfyui/ui/surface/CubeFacePromptPolicy.ts"]
+assumption = "A labeled prompt Cube mounts one editable SugarPrompt field. Select-all and Unicode typing edit that document, and the persisted widget text returns when the card remounts."
+repair = "Check the native textarea and widget identity, the prompt role inferred from the Cube node label, key event ownership, and the value committed before the renderer unmounts."
+
+[[contract]]
+id = "projected-cube-edit"
+test = "editing a projected Cube field in masonry"
+owners = ["frontend/comfyui/ui/surface/ComfyNativeNodeAssets.ts", "frontend/comfyui/ui/surface/appearance/NativeCardAdapter.ts", "frontend/comfyui/ui/surface/masonry/WorkflowMasonryView.ts", "frontend/comfyui/ui/workflow/NativeWorkflowMaterializer.ts"]
+assumption = "A projected native Empty Image card exposes the Cube's actual height. Editing 16 to 24 survives destruction and remount of the masonry view."
+repair = "Check native Vue component discovery, projected widget binding and the value written to the Cube member before the masonry view is disposed."
+
+[[contract]]
+id = "wildcard-storage"
+test = "wildcard files preserve line breaks"
+owners = ["frontend/comfyui/ui/wildcards/infrastructure/ComfyWildcardFiles.ts", "frontend/comfyui/ui/core/user_files/ComfyUserFolder.ts"]
+assumption = "The configured host user can create, read, rename and delete wildcard files. Conflicting creates and moves retain both files and their original UTF-8 lines."
+repair = "Check native userdata URL decoding, conflict statuses and the user-folder adapter's decoding of reads and writes."
+
+[[contract]]
+id = "output-capabilities"
+test = "output management recognizes native save and preview nodes"
+owners = ["sugarcubes/output_saving/infrastructure/comfy_node_capabilities.py", "sugarcubes/backend/routes.py"]
+assumption = "The two native image output nodes expose an IMAGE input called images, and output policy classifies them for managed saves and previews."
+repair = "Compare object_info with the installed output capability adapter, including the output-node flag, input key and native image type."
+
+[[contract]]
+id = "model-root-startup"
+test = "saved model root redirects the native loader catalog"
+owners = ["prestartup_script.py", "load_model_roots.py", "sugarcubes_model_roots/startup.py", "sugarcubes/model_library/infrastructure/comfy_roots.py"]
+assumption = "The installation's persisted model directory replaces native category defaults before Comfy builds its loader menus. The status and active loader both point at the selected directory."
+repair = "Inspect the prestartup log, folder_paths.base_path, models_dir and folder_names_and_paths. Compare the reported active path with the CheckpointLoaderSimple file list."
+
+[[contract]]
+id = "editor-presentation"
+test = "editor panel negotiates Plugin Mode"
+owners = ["frontend/comfyui/ui/core/embedded/EmbeddedPanelHost.ts", "frontend/comfyui/ui/core/embedded/NativePanelTransport.ts", "frontend/comfyui/ui/core/embedded/UxpPanelTransport.ts", "integrations/shared/PanelSession.ts"]
+assumption = "The real page negotiates the identified editor session before applying host-owned Plugin Mode, PhotoPro style and an 18-pixel native resize corner. Each browser peer receives an applied receipt."
+repair = "Trace the ready, host description, configure and applied messages for the same navigation identity. Compare the HTML attributes and computed resize variable after receipt."
+
+[[contract]]
+id = "pack-registration"
+test = "backend registers SugarCubes with its running pack identity"
+owners = ["__init__.py", "sugarcubes/backend/routes.py", "sugarcubes/backend/composition.py"]
+assumption = "Comfy loads the pack after PromptServer.instance and the execution module exist. The registered handlers must remain reachable on the running server."
+repair = "Inspect the first route registration error in comfy.log and compare PromptServer's application and route registration lifecycle."
+
+[[contract]]
+id = "library"
+test = "installed frontend finishes setup and reads the Cube library"
+owners = ["frontend/comfyui/ui.ts", "frontend/comfyui/ui/index.ts", "sugarcubes/backend/routes.py"]
+assumption = "The host executes the registered setup hook and the browser's API shim serves the same library that is installed in the backend."
+repair = "Read browser-diagnostics for module, registration or setup failures. Inspect the trace for the library request and its JSON response."
+
+[[contract]]
+id = "substitute-toolbar"
+test = "Substitute frame retains a 44px toolbar row on the live graph"
+owners = ["frontend/comfyui/ui/surface/frame/SubstituteToolbarLayout.ts", "frontend/comfyui/ui/surface/frame/SubstituteToolbarStyles.ts"]
+assumption = "The workflow selector and action bar have an identifiable shared container. The layout owner marks that row and places progress at its lower edge."
+repair = "Inspect the action bar and Workflow actions accessibility tree in the trace. Follow those elements to the shared row in the candidate DOM and reconcile its owner. Verify the row measures 44 CSS pixels."
+
+[[contract]]
+id = "frame-menu"
+test = "Substitute application menu opens and frame cleanup restores native controls"
+owners = ["frontend/comfyui/ui/surface/frame/SubstituteFrameHost.ts", "frontend/comfyui/ui/surface/frame/SubstituteFrameView.ts", "frontend/comfyui/ui/surface/frame/AppOrbView.ts"]
+assumption = "The Substitute header can take over the active workspace, open its menu, and surrender the toolbar to ComfyUI when disabled."
+repair = "Check the native tab strip discovery, frame mount location, popup anchor and disposal in the failing browser trace."
+
+[[contract]]
+id = "queue-and-output"
+test = "direct Cube queue produces the authored 32 by 16 red image in Comfy history"
+owners = ["sugarcubes/execution/comfy_execution_port.py", "sugarcubes/nodes.py", "sugarcubes/runtime/cube_output_images.py", "sugarcubes/backend/execution_routes.py"]
+assumption = "Node replacement, prompt validation, native queue insertion, history serialization and output file resolution deliver the exact RGB pixels declared in the embedded Cube."
+repair = "Compare the queue receipt and history response in the trace. Inspect validate_prompt, PromptQueue.put and the image descriptor for the submitted prompt ID."
+
+[[contract]]
+id = "renderer-styles"
+test = "native node survives Nodes 2.0 to 1.0 and back with authored values"
+owners = ["frontend/comfyui/ui/core/ComfyRendererMode.ts", "frontend/comfyui/ui/surface/appearance/AppearanceHost.ts", "frontend/comfyui/ui/surface/appearance/NativeCardAdapter.ts", "frontend/comfyui/ui/surface/appearance/VisualStylePreference.ts"]
+assumption = "Comfy's active renderer preference and mounted native card stay synchronized. Returning to Nodes 2.0 restores the selected style on the actual card and preserves all four authored values."
+repair = "Check setting delivery, inspect the live native node DOM on both transitions and compare graph widget values with the saved workflow."
+
+[[contract]]
+id = "native-image-inputs"
+test = "preview preserves the selected channel and dimensions after upload"
+owners = ["sugarcubes/input_canvas/infrastructure/comfy_media_path.py", "sugarcubes/input_canvas/infrastructure/comfy_image_preview.py", "sugarcubes/input_canvas/infrastructure/comfy_mask_loader.py", "sugarcubes/input_canvas/infrastructure/comfy_mask_preview.py"]
+assumption = "Comfy resolves annotated input filenames and LoadImage or LoadImageMask returns native tensors with the expected axes and alpha convention."
+repair = "Compare /upload/image with the decoded preview. Inspect the object-info schema, the host loader method, channel mapping, and the resulting PNG pixel values."
+
+[[contract]]
+id = "output-canvas-allocation"
+test = "output canvas stays flush with the graph panel"
+owners = ["frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasFrameAllocation.ts", "frontend/comfyui/ui/output_canvas/infrastructure/BrowserCanvasWorkspace.ts"]
+assumption = "The graph panel and output pane meet at the same x coordinate, including after resizing."
+repair = "Compare the panel and pane bounding boxes and trace the native splitter, graph chrome, and root containers used by the allocation owner."
+
+[[contract]]
+id = "masonry"
+test = "masonry opens under Nodes 2.0"
+owners = ["frontend/comfyui/ui/surface/masonry/WorkflowMasonryController.ts", "frontend/comfyui/ui/surface/masonry/WorkflowMasonryView.ts"]
+assumption = "Comfy registers the view command, tracks renderer activation, and supplies the live graph container for a reversible masonry mount."
+repair = "Inspect command dispatch, the render mode setting, graph container discovery and the visible masonry root after each toggle."
+
+[[contract]]
+id = "console"
+test = "Substitute console opens within the frame"
+owners = ["frontend/comfyui/ui/console/WorkspaceConsole.ts", "frontend/comfyui/ui/SugarCubesCommands.ts"]
+assumption = "The frame's Console command docks the live output and releases the reserved area when closed."
+repair = "Follow the command to the active frame's dock and Comfy log subscription, then compare the mounted panel and close behavior."
+
+[[contract]]
+id = "native-components"
+test = "projected cards can acquire the real native component"
+owners = ["frontend/comfyui/ui/surface/ComfyNativeNodeAssets.ts", "frontend/comfyui/ui/surface/ComfyRuntimeModuleLoader.ts", "frontend/comfyui/ui/surface/ComfyFrontendModuleGraph.ts", "frontend/comfyui/ui/surface/NativeVueNodeData.ts"]
+assumption = "The shipped frontend bundles expose a native LGraphNode and compatible Vue render, node data extraction, and layout functions that projected cards can acquire."
+repair = "Inspect the installed frontend entry and module imports from the trace. Match the candidate component and functions against the bundled source maps, then verify the projected renderer mounts and edits a real control."
+
+[[contract]]
+id = "desktop-presentation"
+test = "desktop frame reserves caption geometry"
+owners = ["frontend/comfyui/ui/surface/frame/DesktopFramePresentation.ts", "frontend/comfyui/ui/surface/frame/DesktopMaterialWash.ts", "frontend/comfyui/ui/surface/frame/SubstituteFrameHost.ts"]
+assumption = "The browser frame accepts a version-one desktop presentation, reserves native caption space and applies the correct translucent body wash on both native color schemes."
+repair = "Follow the receipt, the frame host ancestor markers and their resolved custom properties after each theme transition."
+
+[[contract]]
+id = "cube-picker"
+test = "Cube picker opens the real catalog"
+owners = ["frontend/comfyui/ui/picker/CubeStackCartHost.ts", "frontend/comfyui/ui/picker/CubePickerHostIntegration.ts"]
+assumption = "The installed extension opens the graph's Cube stack alongside the backend catalog. A clean cart has no changes to apply and can be dismissed."
+repair = "Inspect the picker catalog response, the graph captured for the stack, and the dialog mount and action roles."
+
+[[contract]]
+id = "host-browser-members"
+test = "live host members consumed by SugarCubes remain reachable"
+owners = ["types/comfyui/app.d.ts", "frontend/comfyui/ui/types/graph.ts"]
+assumption = "The running page provides the native objects and members recorded for the representative graph, canvas, workflow store, node and widgets."
+repair = "Use the missing member in host-dependencies.json to locate each source consumer. Compare its current owner in the installed frontend with the verified control."
+
+[[contract]]
+id = "host-backend-members"
+test = "all contributed routes, node schemas and consumed backend members survive host startup"
+owners = ["__init__.py", "sugarcubes/nodes.py", "sugarcubes/backend/routes.py", "sugarcubes/execution/comfy_execution_port.py"]
+assumption = "Every recorded SugarCubes route and node schema is present after Comfy loads all node packs. The host provides the consumed queue, replacement, execution and storage members."
+repair = "Inspect the exact missing registration or native member in the snapshot diff. Find the matching consumer in host-dependencies.json and the registration exception in comfy.log."
+[[contract]]
+id = "finder-native-fields"
+test = "masonry finder reads native prompt values"
+owners = ["frontend/comfyui/ui/search/infrastructure/MasonrySearchHost.ts", "frontend/comfyui/ui/search/infrastructure/MasonrySearchCorpus.ts", "frontend/comfyui/ui/search/presentation/MasonrySearchPresenter.ts"]
+assumption = "Ctrl+F opens the finder over the masonry viewport, discovers one occurrence of sunlit in the projected prompt, and preserves that query across Escape and reopen."
+repair = "Check the active workflow identity, native node-widget field discovery, keyboard capture and projected CodeMirror text extraction."
+
+[[contract]]
+id = "native-settings-dialog"
+test = "Substitute settings mounts inside the native dialog"
+owners = ["frontend/comfyui/ui/settings/SettingsWorkspaceHost.ts", "frontend/comfyui/ui/settings/workspace/SettingsWorkspaceView.ts"]
+assumption = "The native settings command mounts a dialog that the Substitute frame owns. Its search receives focus, returns an empty state for an unmatched preference, and closes back to the graph."
+repair = "Check the native settings dialog test ID, mount observer, focus owner and close command in SettingsWorkspaceHost."
+
+[[contract]]
+id = "native-prompt-relations"
+test = "prompt relations expose only earlier compatible Cubes"
+owners = ["frontend/comfyui/ui/relations/infrastructure/NativeRelationInventory.ts", "frontend/comfyui/ui/relations/infrastructure/NativeRelationWidgetRenderer.ts", "frontend/comfyui/ui/relations/presentation/CubeRelationPresenter.ts", "frontend/comfyui/ui/relations/infrastructure/NativeRelationWorkflowPort.ts"]
+assumption = "Two independent positive prompts show two editors. The second offers the first as its source. Linking hides the duplicate editor and unlinking restores it."
+repair = "Inspect prompt role detection, source ordering, the native WidgetSelect owner, persisted nodeLinks and native widget visibility after the selection."
+
+[[contract]]
+id = "native-dirty-state"
+test = "dirty snapshots preserve native link endpoints"
+owners = ["frontend/comfyui/ui/graph/DirtySnapshotter.ts", "frontend/comfyui/ui/graph/GraphQuery.ts"]
+assumption = "A real EmptyImage-to-ImageInvert connection keeps its endpoint IDs and slots. Moving the pair and its anchor together preserves the saved state. Changing width from 32 to 48 changes the snapshot and restoring 32 restores the original."
+repair = "Inspect live node positions, widget arrays and LiteGraph link storage. Compare snapshotInstance with the expected relative positions and the assertion for each endpoint."
+
+[[contract]]
+id = "native-queue-events"
+test = "generation queue observes the browser client execution events"
+owners = ["frontend/comfyui/ui/surface/frame/queue/ComfyQueueJobSource.ts", "frontend/comfyui/ui/cube/execution/CubeDirectExecutionService.ts", "sugarcubes/execution/comfy_execution_port.py"]
+assumption = "The submitting browser receives execution_start followed by execution_success for its own prompt ID. SugarCubes reads the finished job and recovers its saved workflow name through the live Comfy jobs API."
+repair = "Trace client_id through the queue tuple, compare the native websocket event detail with the receipt, and inspect /jobs and the per-job extra_data used by ComfyQueueJobSource."

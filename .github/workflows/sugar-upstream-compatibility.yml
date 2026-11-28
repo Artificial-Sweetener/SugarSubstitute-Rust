@@ -1,0 +1,199 @@
+name: SugarCubes upstream compatibility
+
+on:
+  schedule:
+    - cron: '13,43 * * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'Sugar/**'
+      - '.github/compatibility/**'
+      - '.github/workflows/sugar-upstream-compatibility.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sugar-upstream-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.releases.outputs.matrix }}
+      key: ${{ steps.releases.outputs.key }}
+      retry_key: ${{ steps.window.outputs.key }}
+      cached: ${{ steps.seen.outputs.cache-matched-key != '' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - id: releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/compatibility/releases.py --github-output "$GITHUB_OUTPUT"
+      - id: window
+        if: github.event_name == 'schedule'
+        run: echo "key=$(( $(date -u +%s) / 21600 ))" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        if: github.event_name == 'schedule'
+        id: seen
+        with:
+          lookup-only: true
+          path: .compatibility-complete
+          key: sugar-upstream-v1-${{ steps.releases.outputs.key }}-${{ steps.window.outputs.key }}
+          restore-keys: |
+            sugar-upstream-complete-v1-${{ steps.releases.outputs.key }}
+
+  qualify:
+    needs: discover
+    if: needs.discover.outputs.cached != 'true'
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+    timeout-minutes: 70
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: Comfy-Org/ComfyUI
+          ref: ${{ matrix.core }}
+          path: upstream
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: Sugar/package-lock.json
+      - working-directory: Sugar
+        run: npm ci && npx playwright install --with-deps chromium firefox
+      - name: Install the release's CPU host
+        id: install
+        env:
+          FRONTEND: ${{ matrix.frontend }}
+        run: |
+          python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -m pip install -r upstream/requirements.txt -r Sugar/requirements.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -m pip install "comfyui-frontend-package==$env:FRONTEND"
+      - name: Exercise the installed pack
+        id: runtime
+        working-directory: Sugar
+        run: python -m tools.compatibility.host --comfy ../upstream --python (Get-Command python).Source --output "$env:RUNNER_TEMP/evidence"
+      - name: Verify the incident lifecycle and deliberately broken frontend on the control
+        id: drill
+        if: always() && steps.install.outcome == 'success' && matrix.name == 'control' && github.event_name != 'schedule'
+        run: |
+          python -m unittest discover -s .github/compatibility -p "test_*.py"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python .github/compatibility/drill.py --comfy upstream --python (Get-Command python).Source --output "$env:RUNNER_TEMP/evidence/drill"
+      - name: Record source locations, intent, local assertions and live contract ownership
+        id: inventory
+        if: always() && matrix.name == 'control'
+        working-directory: Sugar
+        run: |
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/evidence" | Out-Null
+          python -m tools.compatibility.inventory --output "$env:RUNNER_TEMP/evidence/touch-points.json"
+      - name: Retain acquisition and qualification outcomes
+        if: always() && !cancelled()
+        env:
+          INSTALL: ${{ steps.install.outcome }}
+          RUNTIME: ${{ steps.runtime.outcome }}
+          INVENTORY: ${{ steps.inventory.outcome }}
+          DRILL: ${{ steps.drill.outcome }}
+        run: |
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/evidence" | Out-Null
+          @{install=$env:INSTALL; runtime=$env:RUNTIME; inventory=$env:INVENTORY; drill=$env:DRILL} | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/evidence/stages.json" -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ runner.temp }}/evidence
+          retention-days: 14
+          if-no-files-found: warn
+
+  preview:
+    needs: [discover, qualify]
+    if: always() && !cancelled() && (github.event_name == 'pull_request' || github.ref != format('refs/heads/{0}', github.event.repository.default_branch))
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          path: evidence
+      - id: result
+        if: always() && !cancelled()
+        env:
+          MATRIX: ${{ needs.discover.outputs.matrix }}
+        run: python .github/compatibility/report.py --matrix "$MATRIX" --evidence evidence
+      - uses: actions/upload-artifact@v4
+        if: always() && !cancelled()
+        with:
+          name: compatibility-report
+          path: |
+            compatibility-report.md
+            evidence/*/upstream-review.json
+            evidence/*/coverage-changes.json
+            evidence/*/presentation-changes.json
+            evidence/*/native-member-changes.json
+      - if: steps.result.outputs.failed == 'true'
+        run: exit 1
+
+  diagnose:
+    needs: [discover, qualify]
+    if: always() && !cancelled() && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && needs.discover.outputs.cached != 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          path: evidence
+      - id: result
+        if: always() && !cancelled()
+        name: Compare expected and observed outcomes
+        env:
+          MATRIX: ${{ needs.discover.outputs.matrix }}
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH: ${{ github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+        run: |
+          args=()
+          if [[ "$PUBLISH" == true ]]; then args+=(--publish); fi
+          python .github/compatibility/report.py --matrix "$MATRIX" --evidence evidence "${args[@]}"
+      - id: comparison_artifact
+        uses: actions/upload-artifact@v4
+        if: always() && !cancelled()
+        with:
+          name: compatibility-report
+          path: |
+            compatibility-report.md
+            evidence/*/upstream-review.json
+            evidence/*/coverage-changes.json
+            evidence/*/presentation-changes.json
+            evidence/*/native-member-changes.json
+      - if: always() && !cancelled() && steps.comparison_artifact.outcome == 'success' && steps.result.outcome == 'success' && needs.discover.result == 'success' && github.event_name == 'schedule'
+        run: touch .compatibility-complete
+      - uses: actions/cache/save@v4
+        if: always() && !cancelled() && steps.comparison_artifact.outcome == 'success' && steps.result.outcome == 'success' && needs.discover.result == 'success' && github.event_name == 'schedule'
+        with:
+          path: .compatibility-complete
+          key: ${{ steps.result.outputs.complete == 'true' && format('sugar-upstream-complete-v1-{0}', needs.discover.outputs.key) || format('sugar-upstream-v1-{0}-{1}', needs.discover.outputs.key, needs.discover.outputs.retry_key) }}
+      - if: steps.result.outputs.failed == 'true'
+        run: exit 1
