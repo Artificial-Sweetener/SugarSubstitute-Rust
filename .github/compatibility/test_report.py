@@ -121,10 +121,30 @@ class IssueLifecycle(unittest.TestCase):
             publish(first, True, "test/repo")
             publish(first.replace("`old`", "`next`"), True, "test/repo")
             publish(changed, True, "test/repo")
+            member = (
+                changed
+                + "\n- Native member `graph._links` (chromium): present → absent."
+            )
+            publish(member, True, "test/repo")
+            publish(member.replace("graph._links", "graph.links"), True, "test/repo")
             publish(
                 MARKER + "\n### candidate\n2 of 2 checks passed.", False, "test/repo"
             )
-        self.assertEqual(events, ["create", "edit", "edit", "comment", "edit", "close"])
+        self.assertEqual(
+            events,
+            [
+                "create",
+                "edit",
+                "edit",
+                "comment",
+                "edit",
+                "comment",
+                "edit",
+                "comment",
+                "edit",
+                "close",
+            ],
+        )
 
 
 class ReleaseDiscovery(unittest.TestCase):

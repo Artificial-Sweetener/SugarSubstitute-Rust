@@ -184,6 +184,14 @@ def observed_difference(error: str) -> str:
     )
 
 
+def observation_marker(values: object) -> str:
+    """Identify changed evidence across runs without depending on artifact URLs or commit labels."""
+    digest = hashlib.sha256(
+        json.dumps(values, sort_keys=True, ensure_ascii=True).encode()
+    ).hexdigest()
+    return f"<!-- observations:{digest} -->"
+
+
 def presentation_differences(
     control: dict[tuple[str, str], dict[str, list[str]]],
     candidate: dict[tuple[str, str], dict[str, list[str]]],
@@ -414,10 +422,7 @@ def summarize(
                 control_presentation, scene, passed, selectors
             )
             if differences:
-                observation_hash = hashlib.sha256(
-                    json.dumps(differences, sort_keys=True, ensure_ascii=True).encode()
-                ).hexdigest()
-                lines.append(f"<!-- observations:{observation_hash} -->")
+                lines.append(observation_marker(differences))
                 (location / "presentation-changes.json").write_text(
                     json.dumps(differences, indent=2), encoding="utf-8"
                 )
@@ -474,6 +479,7 @@ def summarize(
                         ]
                     )
                     if unverified_losses:
+                        lines.append(observation_marker(sorted(unverified_losses)))
                         failed = True
                         lines.extend(
                             [
@@ -543,6 +549,14 @@ def summarize(
                     if not control_coverage.get(owner, {}).get("assertions")
                 )
             if review:
+                changes = {
+                    path: [
+                        facts["control"].get("sha256"),
+                        (facts["candidate"] or {}).get("sha256"),
+                    ]
+                    for path, facts in review.items()
+                }
+                lines.append(observation_marker(changes))
                 (location / "upstream-review.json").write_text(
                     json.dumps(review, indent=2), encoding="utf-8"
                 )
@@ -790,6 +804,8 @@ def publish(body: str, failed: bool, repo: str) -> None:
             (
                 "### ",
                 "**",
+                "- **",
+                "- Native member ",
                 "- Frontend source",
                 "- Core",
                 "Expected:",

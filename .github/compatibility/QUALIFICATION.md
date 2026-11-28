@@ -13,6 +13,23 @@ The two-Cube authoring scenario preserved independent aliases and widths after s
 
 On the pinned control, Firefox opened the Substitute Settings dialog through the application menu and completed search and close. Its search field was inactive after opening, although the Settings workspace calls `focusSearch()` after mounting. The focus assertion stays enabled and appears as an existing control failure in comparisons. [Settings workspace](../../Sugar/frontend/comfyui/ui/settings/SettingsWorkspaceHost.ts) · [Settings scenario](../../Sugar/tests/comfy_contract/integration/workspace.live.ts)
 
+## Full development matrix
+
+One frozen set of 82 checks ran against each of the six installed core/frontend pairs. Each browser ran 41 checks. Every lane had the same SugarCubes product and suite digests. Failed checks below include setup failures and existing control defects. Several checks can expose the same underlying defect.
+
+| Host | Frontend | Passed | Failed | Browser or host setup failures included |
+| --- | --- | ---: | ---: | ---: |
+| Development control | 1.47.11 | 79 | 3 | 2 |
+| v0.44.0 | 1.57.6 | 47 | 35 | 0 |
+| v0.45.0 | 1.58.5 | 47 | 35 | 0 |
+| v0.46.0 | 1.59.6 | 46 | 36 | 1 |
+| v0.46.0 with the standalone frontend | 1.59.15 | 46 | 36 | 2 |
+| Upstream HEAD at `5f0d863aa0c5` | 1.59.15 | 45 | 37 | 3 |
+
+Both interrupted Firefox control scenarios passed on an independent replay with the same source digests. The full control exercised 434 of the 624 indexed source files. The ledger contains 4,952 host-facing occurrences. The 35 contract families name 78 implementation owners, of which 56 appear in the host-dependency index. Static source comparisons, native member snapshots, selector measurements and local characterization tests provide additional evidence. The runtime index identifies the 190 indexed files without measured execution in this control.
+
+GitHub Actions separately qualified the published SugarCubes 0.38.0 baseline using Windows Server 2022 runners. The control passed 81 of 82 checks. Its sole failure was the same Firefox Settings focus discrepancy. The hosted fault drill passed and captured the injected 52-pixel toolbar against the unchanged 44-pixel control. [Hosted qualification](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/46130231066)
+
 ## Repair evidence
 
 - **Toolbar.** Comfy moved the workflow actions landmark from a button to a group. SugarCubes still searches for `button[aria-label="Workflow actions"]`. Inspect the native action bar in `TopMenuSection.vue`, update landmark discovery in both SugarCubes consumers, and require the shared row and its 44-pixel layout in both browsers. [Toolbar layout](../../Sugar/frontend/comfyui/ui/surface/frame/SubstituteToolbarLayout.ts) · [Override toolbar host](../../Sugar/frontend/comfyui/ui/relations/infrastructure/NativeOverrideToolbarHost.ts)
