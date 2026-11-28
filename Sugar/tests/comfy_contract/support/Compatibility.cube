@@ -1,0 +1,88 @@
+{
+  "cube_id": "Artificial-Sweetener/Base-Cubes/Compatibility.cube",
+  "version": "1.0.0",
+  "description": "Execution fixture Solid.",
+  "metadata": {
+    "default_alias": "Compatibility"
+  },
+  "implementation": {
+    "nodes": {
+      "color": {
+        "class_type": "EmptyImage",
+        "inputs": {
+          "width": 32,
+          "height": 16,
+          "batch_size": 1,
+          "color": 16711680
+        }
+      }
+    },
+    "inputs": {
+      "input.width": {
+        "kind": "input",
+        "targets": [
+          [
+            "color",
+            "width"
+          ]
+        ]
+      }
+    },
+    "outputs": {
+      "output.image": [
+        "color",
+        0
+      ]
+    },
+    "layout": {},
+    "definitions": {
+      "EmptyImage": {
+        "input": {
+          "required": {
+            "width": [
+              "INT"
+            ],
+            "height": [
+              "INT"
+            ],
+            "batch_size": [
+              "INT"
+            ],
+            "color": [
+              "INT"
+            ]
+          }
+        },
+        "output": [
+          "IMAGE"
+        ],
+        "output_name": [
+          "IMAGE"
+        ]
+      }
+    },
+    "subgraphs": []
+  },
+  "surface": {
+    "default_flavor_id": "default",
+    "controls": [
+      {
+        "input_name": "width",
+        "symbol": "color",
+        "value_type": "number",
+        "class_type": "EmptyImage",
+        "label": "Width",
+        "control_id": "color.width"
+      }
+    ]
+  },
+  "flavors": {
+    "authored": [
+      {
+        "id": "default",
+        "name": "Default",
+        "values": {}
+      }
+    ]
+  }
+}

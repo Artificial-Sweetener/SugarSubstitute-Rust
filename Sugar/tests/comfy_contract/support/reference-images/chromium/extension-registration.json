@@ -1,0 +1,139 @@
+{
+  "extensions": [
+    {
+      "name": "SugarCubes.PageLoadReport",
+      "hooks": [
+        "setup"
+      ],
+      "menus": []
+    },
+    {
+      "name": "SugarCubes.UI",
+      "hooks": [
+        "addCustomNodeDefs",
+        "afterConfigureGraph",
+        "beforeConfigureGraph",
+        "beforeRegisterVueAppNodeDefs",
+        "getCanvasMenuItems",
+        "getNodeMenuItems",
+        "loadedGraphNode",
+        "refreshComboInNodes",
+        "registerCustomNodes",
+        "setup"
+      ],
+      "menus": [
+        {
+          "path": [
+            "File"
+          ],
+          "commands": [
+            "SugarCubes.OpenSugarScript",
+            "SugarCubes.SaveSugarScript",
+            "SugarCubes.SaveSugarScriptAs",
+            "SugarCubes.ExportComfyWorkflow"
+          ]
+        },
+        {
+          "path": [
+            "View"
+          ],
+          "commands": [
+            "SugarCubes.ToggleConsole"
+          ]
+        }
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "id": "SugarCubes.CubeStackCart",
+      "label": "Add cubes / edit Cube stack"
+    },
+    {
+      "id": "SugarCubes.ExportComfyWorkflow",
+      "label": "Export to Comfy Workflow..."
+    },
+    {
+      "id": "SugarCubes.OpenSugarScript",
+      "label": "Open Sugar Script..."
+    },
+    {
+      "id": "SugarCubes.SaveSugarScript",
+      "label": "Save Sugar Script"
+    },
+    {
+      "id": "SugarCubes.SaveSugarScriptAs",
+      "label": "Save Sugar Script As..."
+    },
+    {
+      "id": "SugarCubes.ToggleConsole",
+      "label": "Toggle Console"
+    },
+    {
+      "id": "SugarCubes.ToggleMasonry",
+      "label": "Toggle workflow masonry"
+    },
+    {
+      "id": "SugarCubes.ToggleOutputCanvas",
+      "label": "Toggle output canvas"
+    }
+  ],
+  "settings": {
+    "SugarCubes.Appearance.AccentColor": {
+      "type": "hidden",
+      "default": "#479ef5"
+    },
+    "SugarCubes.Appearance.CompactMasonry": {
+      "type": "hidden",
+      "default": false
+    },
+    "SugarCubes.Appearance.PhotoProPalette": {
+      "type": "hidden",
+      "default": "medium-gray"
+    },
+    "SugarCubes.Appearance.PluginMode": {
+      "type": "hidden",
+      "default": false
+    },
+    "SugarCubes.Appearance.SubstituteFrame": {
+      "type": "hidden",
+      "default": false
+    },
+    "SugarCubes.Appearance.VisualStyle": {
+      "type": "hidden",
+      "default": "comfy"
+    },
+    "SugarCubes.Masonry.CompactStack": {
+      "type": "hidden",
+      "default": false
+    },
+    "SugarCubes.Masonry.CubeStack": {
+      "type": "hidden",
+      "default": true
+    },
+    "SugarCubes.Models.EnhancedPicker": {
+      "type": "hidden",
+      "default": true
+    },
+    "SugarCubes.OutputCanvas.Visible": {
+      "type": "hidden",
+      "default": true
+    },
+    "SugarCubes.PromptEditor.Preferences": {
+      "type": "hidden",
+      "default": null
+    },
+    "SugarCubes.PromptEditor.SpellingWords": {
+      "type": "hidden",
+      "default": []
+    },
+    "SugarCubes.Settings": {
+      "type": "custom",
+      "default": ""
+    },
+    "SugarCubes.WhatsNew.SeenVersions": {
+      "type": "hidden",
+      "default": {}
+    }
+  }
+}

@@ -58,6 +58,7 @@ sources = [
   "scripts/*.ts",
   "scripts/*.py",
   "scripts/dependencies/**",
+  "scripts/compatibility/**",
   "tools/**",
   "third_party/**",
   "web/third_party/**",
@@ -127,7 +128,7 @@ proofs = ["contract"]
 [[area]]
 name = "comfy_contract"
 sources = ["sugarcubes/comfy/**"]
-proofs = ["contract"]
+proofs = ["contract", "integration"]
 
 [[area]]
 name = "export"

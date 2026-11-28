@@ -1,0 +1,470 @@
+{
+  "routes": [
+    "DELETE /sugarcubes/local_flavors",
+    "DELETE /sugarcubes/repos",
+    "DELETE /sugarcubes/self-update/install",
+    "DELETE /sugarcubes/self-update/notice",
+    "DELETE /sugarcubes/v1/models/credentials/civitai",
+    "DELETE /sugarcubes/v1/models/discovery/{plan_id}",
+    "DELETE /sugarcubes/v1/models/jobs/{job_id}",
+    "DELETE /sugarcubes/v2/executions/spatial/{token}",
+    "GET /sugarcubes/assets/icon",
+    "GET /sugarcubes/dependencies/readiness",
+    "GET /sugarcubes/identity_policy",
+    "GET /sugarcubes/list",
+    "GET /sugarcubes/local_flavors",
+    "GET /sugarcubes/output-saving/capabilities",
+    "GET /sugarcubes/output-saving/image",
+    "GET /sugarcubes/output-saving/media-profile",
+    "GET /sugarcubes/output-saving/preview",
+    "GET /sugarcubes/output-saving/settings",
+    "GET /sugarcubes/picker_catalog",
+    "GET /sugarcubes/preview",
+    "GET /sugarcubes/projects/folder",
+    "GET /sugarcubes/release-notes",
+    "GET /sugarcubes/release-notes/notes",
+    "GET /sugarcubes/repos",
+    "GET /sugarcubes/revisions",
+    "GET /sugarcubes/self-update",
+    "GET /sugarcubes/status",
+    "GET /sugarcubes/v1/danbooru/pasted-post",
+    "GET /sugarcubes/v1/models",
+    "GET /sugarcubes/v1/models/assets/{asset_id}",
+    "GET /sugarcubes/v1/models/by-hash/{sha256}",
+    "GET /sugarcubes/v1/models/cache/civitai",
+    "GET /sugarcubes/v1/models/capabilities",
+    "GET /sugarcubes/v1/models/changes",
+    "GET /sugarcubes/v1/models/credentials/civitai",
+    "GET /sugarcubes/v1/models/detectors/library",
+    "GET /sugarcubes/v1/models/discovery/{plan_id}/preview/{index}/{provider_id}",
+    "GET /sugarcubes/v1/models/download-preferences",
+    "GET /sugarcubes/v1/models/jobs/{job_id}",
+    "GET /sugarcubes/v1/models/preferences",
+    "GET /sugarcubes/v1/models/relationships",
+    "GET /sugarcubes/v1/models/root",
+    "GET /sugarcubes/v1/models/updates",
+    "GET /sugarcubes/v1/models/{model_id}/versions",
+    "GET /sugarcubes/v1/models/{model_id}/versions/{version_id}/preview",
+    "GET /sugarcubes/v2/executions/capabilities",
+    "PATCH /sugarcubes/identity_policy",
+    "PATCH /sugarcubes/repos",
+    "PATCH /sugarcubes/v1/models/preferences",
+    "POST /sugarcubes/dependencies/repair",
+    "POST /sugarcubes/dependencies/sync-and-check",
+    "POST /sugarcubes/import_file",
+    "POST /sugarcubes/load",
+    "POST /sugarcubes/load_revision",
+    "POST /sugarcubes/local_flavors",
+    "POST /sugarcubes/local_flavors/migrate",
+    "POST /sugarcubes/local_flavors/reconcile",
+    "POST /sugarcubes/local_flavors/select",
+    "POST /sugarcubes/output-saving/artifact-receipt",
+    "POST /sugarcubes/output-saving/artifact-resolve",
+    "POST /sugarcubes/output-saving/image",
+    "POST /sugarcubes/output-saving/import",
+    "POST /sugarcubes/output-saving/photoshop",
+    "POST /sugarcubes/output-saving/preview",
+    "POST /sugarcubes/output-saving/reveal",
+    "POST /sugarcubes/output-saving/run-images",
+    "POST /sugarcubes/output-saving/settings",
+    "POST /sugarcubes/output-saving/transfer",
+    "POST /sugarcubes/packs/check",
+    "POST /sugarcubes/packs/check_all",
+    "POST /sugarcubes/projects/script/read",
+    "POST /sugarcubes/projects/script/write",
+    "POST /sugarcubes/promote",
+    "POST /sugarcubes/rename",
+    "POST /sugarcubes/repos",
+    "POST /sugarcubes/repos/authoring",
+    "POST /sugarcubes/repos/preflight",
+    "POST /sugarcubes/repos/sync",
+    "POST /sugarcubes/repos/sync_all",
+    "POST /sugarcubes/save_authored_flavor",
+    "POST /sugarcubes/save_implementation",
+    "POST /sugarcubes/save_implementation/preview",
+    "POST /sugarcubes/save_many",
+    "POST /sugarcubes/self-update/check",
+    "POST /sugarcubes/self-update/install",
+    "POST /sugarcubes/self-update/page-load",
+    "POST /sugarcubes/update_metadata",
+    "POST /sugarcubes/v1/models/cache/civitai/{action}",
+    "POST /sugarcubes/v1/models/credentials/civitai/test",
+    "POST /sugarcubes/v1/models/detectors/resolve",
+    "POST /sugarcubes/v1/models/discovery",
+    "POST /sugarcubes/v1/models/discovery/context",
+    "POST /sugarcubes/v1/models/discovery/{plan_id}/acquire",
+    "POST /sugarcubes/v1/models/metadata/prioritize",
+    "POST /sugarcubes/v1/models/refresh",
+    "POST /sugarcubes/v1/models/updates/check",
+    "POST /sugarcubes/v1/models/{model_id}/acquire",
+    "POST /sugarcubes/v1/models/{model_id}/fingerprint/refresh",
+    "POST /sugarcubes/v1/models/{model_id}/metadata/refresh",
+    "POST /sugarcubes/v1/models/{model_id}/updates/check",
+    "POST /sugarcubes/v1/models/{model_id}/updates/{decision}",
+    "POST /sugarcubes/v2/canvas-inputs/mask-preview",
+    "POST /sugarcubes/v2/canvas-inputs/prepare",
+    "POST /sugarcubes/v2/canvas-inputs/preview",
+    "POST /sugarcubes/v2/cubes/captured",
+    "POST /sugarcubes/v2/cubes/classify-workflow",
+    "POST /sugarcubes/v2/cubes/forks",
+    "POST /sugarcubes/v2/cubes/sync-source",
+    "POST /sugarcubes/v2/executions/queue",
+    "POST /sugarcubes/v2/executions/spatial/prepare",
+    "POST /sugarcubes/v2/executions/spatial/{token}/measure",
+    "POST /sugarcubes/v2/queue/job-seeds",
+    "POST /sugarcubes/v2/queue/order",
+    "POST /sugarcubes/v2/sugarscript/compile",
+    "POST /sugarcubes/v2/sugarscript/render",
+    "POST /sugarcubes/v2/workflows/analyze",
+    "POST /sugarcubes/v2/workflows/compile-legacy",
+    "POST /sugarcubes/v2/workflows/cubes/append",
+    "POST /sugarcubes/v2/workflows/cubes/create",
+    "POST /sugarcubes/v2/workflows/cubes/remove",
+    "POST /sugarcubes/v2/workflows/cubes/replace",
+    "POST /sugarcubes/v2/workflows/reorder",
+    "POST /sugarcubes/wildcards/open_folder",
+    "PUT /sugarcubes/v1/models/credentials/civitai",
+    "PUT /sugarcubes/v1/models/detectors/association",
+    "PUT /sugarcubes/v1/models/download-preferences",
+    "PUT /sugarcubes/v1/models/root",
+    "PUT /sugarcubes/v1/models/updates",
+    "PUT /sugarcubes/v1/models/{model_id}/content",
+    "PUT /sugarcubes/v1/models/{model_id}/thumbnail"
+  ],
+  "nodes": {
+    "SugarCubes.CubeInput": {
+      "required": [
+        "cube_id",
+        "default_alias",
+        "instance_alias",
+        "instance_id",
+        "value"
+      ],
+      "optional": [],
+      "outputs": [
+        "*"
+      ],
+      "method": "forward",
+      "outputNode": false
+    },
+    "SugarCubes.CubeOutput": {
+      "required": [
+        "cube_id",
+        "default_alias",
+        "instance_alias",
+        "instance_id",
+        "value"
+      ],
+      "optional": [
+        "save_outputs",
+        "save_ticket"
+      ],
+      "outputs": [
+        "*"
+      ],
+      "method": "forward",
+      "outputNode": true
+    },
+    "SugarCubes.ManagedImageOutput": {
+      "required": [
+        "images",
+        "save_ticket"
+      ],
+      "optional": [],
+      "outputs": [
+        "IMAGE"
+      ],
+      "method": "save_images",
+      "outputNode": true
+    },
+    "SugarCubes.OutputSavingPolicyError": {
+      "required": [
+        "message"
+      ],
+      "optional": [],
+      "outputs": [],
+      "method": "fail",
+      "outputNode": true
+    },
+    "SugarCubes.SpatialProbeMeasurement": {
+      "required": [],
+      "optional": [
+        "image_a",
+        "image_b",
+        "latent_a",
+        "latent_b"
+      ],
+      "outputs": [],
+      "method": "measure",
+      "outputNode": true
+    }
+  },
+  "wireSchemas": {
+    "SugarCubes.CubeInput": {
+      "inputs": {
+        "required": {
+          "value": [
+            "*"
+          ],
+          "cube_id": [
+            "STRING",
+            {
+              "default": "",
+              "multiline": false
+            }
+          ],
+          "default_alias": [
+            "STRING",
+            {
+              "default": "",
+              "multiline": false
+            }
+          ],
+          "instance_alias": [
+            "STRING",
+            {
+              "default": "",
+              "multiline": false
+            }
+          ],
+          "instance_id": [
+            "STRING",
+            {
+              "default": "",
+              "multiline": false
+            }
+          ]
+        }
+      },
+      "order": {
+        "required": [
+          "value",
+          "cube_id",
+          "default_alias",
+          "instance_alias",
+          "instance_id"
+        ]
+      },
+      "outputs": [
+        "*"
+      ],
+      "names": [
+        "value"
+      ],
+      "lists": [
+        false
+      ],
+      "outputNode": false,
+      "category": "SugarCubes/Markers",
+      "display": "Cube Input"
+    },
+    "SugarCubes.CubeOutput": {
+      "inputs": {
+        "required": {
+          "value": [
+            "*"
+          ],
+          "cube_id": [
+            "STRING",
+            {
+              "default": "",
+              "multiline": false
+            }
+          ],
+          "default_alias": [
+            "STRING",
+            {
+              "default": "",
+              "multiline": false
+            }
+          ],
+          "instance_alias": [
+            "STRING",
+            {
+              "default": "",
+              "multiline": false
+            }
+          ],
+          "instance_id": [
+            "STRING",
+            {
+              "default": "",
+              "multiline": false
+            }
+          ]
+        },
+        "optional": {
+          "save_outputs": [
+            "BOOLEAN",
+            {
+              "default": false
+            }
+          ],
+          "save_ticket": [
+            "STRING",
+            {
+              "default": ""
+            }
+          ]
+        }
+      },
+      "order": {
+        "required": [
+          "value",
+          "cube_id",
+          "default_alias",
+          "instance_alias",
+          "instance_id"
+        ],
+        "optional": [
+          "save_outputs",
+          "save_ticket"
+        ]
+      },
+      "outputs": [
+        "*"
+      ],
+      "names": [
+        "value"
+      ],
+      "lists": [
+        false
+      ],
+      "outputNode": true,
+      "category": "SugarCubes/Markers",
+      "display": "Cube Output"
+    },
+    "SugarCubes.ManagedImageOutput": {
+      "inputs": {
+        "required": {
+          "images": [
+            "IMAGE"
+          ],
+          "save_ticket": [
+            "STRING",
+            {
+              "default": ""
+            }
+          ]
+        }
+      },
+      "order": {
+        "required": [
+          "images",
+          "save_ticket"
+        ]
+      },
+      "outputs": [
+        "IMAGE"
+      ],
+      "names": [
+        "images"
+      ],
+      "lists": [
+        false
+      ],
+      "outputNode": true,
+      "category": "SugarCubes/Internal",
+      "display": "Managed image output"
+    },
+    "SugarCubes.OutputSavingPolicyError": {
+      "inputs": {
+        "required": {
+          "message": [
+            "STRING",
+            {
+              "default": "Output saving could not be prepared."
+            }
+          ]
+        }
+      },
+      "order": {
+        "required": [
+          "message"
+        ]
+      },
+      "outputs": [],
+      "names": [],
+      "lists": [],
+      "outputNode": true,
+      "category": "SugarCubes/Internal",
+      "display": "Output saving error"
+    },
+    "SugarCubes.SpatialProbeMeasurement": {
+      "inputs": {
+        "optional": {
+          "image_a": [
+            "IMAGE"
+          ],
+          "image_b": [
+            "IMAGE"
+          ],
+          "latent_a": [
+            "LATENT"
+          ],
+          "latent_b": [
+            "LATENT"
+          ]
+        }
+      },
+      "order": {
+        "optional": [
+          "image_a",
+          "image_b",
+          "latent_a",
+          "latent_b"
+        ]
+      },
+      "outputs": [],
+      "names": [],
+      "lists": [],
+      "outputNode": true,
+      "category": "_SugarCubes/Internal",
+      "display": "SugarCubes.SpatialProbeMeasurement"
+    }
+  },
+  "members": {
+    "execution": [
+      "SENSITIVE_EXTRA_DATA_KEYS",
+      "validate_prompt"
+    ],
+    "server": [
+      "add_on_prompt_handler",
+      "instance",
+      "node_replace_manager",
+      "number",
+      "prompt_queue",
+      "queue_updated",
+      "routes",
+      "start_multi_address"
+    ],
+    "queue": [
+      "delete_history_item",
+      "delete_queue_item",
+      "get_current_queue",
+      "get_history",
+      "mutex",
+      "put",
+      "queue",
+      "server"
+    ],
+    "replacements": [
+      "apply_replacements"
+    ],
+    "folder_paths": [
+      "annotated_filepath",
+      "base_path",
+      "filename_list_cache",
+      "folder_names_and_paths",
+      "get_filename_list",
+      "get_folder_paths",
+      "get_full_path",
+      "get_input_directory",
+      "get_output_directory",
+      "get_save_image_path",
+      "get_system_user_directory",
+      "get_temp_directory",
+      "models_dir"
+    ]
+  }
+}
