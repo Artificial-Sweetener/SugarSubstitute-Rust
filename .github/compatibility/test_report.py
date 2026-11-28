@@ -236,6 +236,7 @@ class Qualification(unittest.TestCase):
             ) -> None:
                 lane = root / name
                 lane.mkdir(exist_ok=True)
+                (lane / "comfy.log").touch()
                 (lane / "versions.json").write_text(
                     json.dumps(matrix["include"][0]), encoding="utf-8"
                 )
@@ -264,6 +265,35 @@ class Qualification(unittest.TestCase):
             record("control", "passed")
             record("new", "passed")
             self.assertEqual(summarize(matrix, root, "test-url")[1:], (False, True))
+            pack_error = (
+                "Traceback (most recent call last):\n"
+                '  File "D:\\run\\comfy-aa\\profile\\custom_nodes\\SugarCubes\\models.py", line 15, in resolve\n'
+                '  File "D:\\run\\comfy-aa\\comfy\\folder_paths.py", line 459, in get_full_path\n'
+                "ValueError: model path is on a different mount\n"
+            )
+            unrelated = (
+                "Traceback (most recent call last):\n"
+                '  File "asyncio/proactor_events.py", line 165, in disconnect\n'
+                "ConnectionResetError: browser closed\n"
+            )
+            log = root / "new/comfy.log"
+            log.write_text(unrelated + pack_error * 2, encoding="utf-8")
+            body, failed, complete = summarize(matrix, root, "test-url")
+            self.assertTrue(failed and complete)
+            self.assertEqual(body.count("New backend exception"), 1)
+            self.assertIn("Sugar/models.py:15", body)
+            self.assertIn("ComfyUI/folder_paths.py:459", body)
+            self.assertIn("new/comfy.log:4", body)
+            self.assertNotIn("browser closed", body)
+            control_log = root / "control/comfy.log"
+            control_log.write_text(
+                pack_error.replace("comfy-aa", "comfy-xy"), encoding="utf-8"
+            )
+            body, failed, complete = summarize(matrix, root, "test-url")
+            self.assertTrue(failed and not complete)
+            self.assertIn("Backend exception also on control", body)
+            log.write_text("", encoding="utf-8")
+            control_log.write_text("", encoding="utf-8")
             stage_file = root / "new/stages.json"
             stage_file.write_text(
                 '{"install":"success","runtime":"failure","inventory":"skipped","drill":"skipped"}',

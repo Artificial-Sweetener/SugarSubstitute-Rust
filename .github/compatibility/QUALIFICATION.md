@@ -40,3 +40,9 @@ GitHub Actions separately qualified the published SugarCubes 0.38.0 baseline usi
 On v0.46.0 with standalone frontend 1.59.15 and on upstream core `5f0d863aa0c5` with frontend 1.59.15, the Chromium toolbar and native renderer probes also failed. The browser queue reported the completed fixture under its authored workflow name on both hosts.
 
 The failure drill imposed a 52-pixel minimum on the upstream toolbar in a disposable frontend. The unchanged control passed. The altered frontend failed, and the incident report contained the expected 44 pixels, the observed 52 pixels, the owning code and the replay scenario. [Fault drill](drill.py)
+
+## Repair replay on the latest stable release
+
+In a disposable copy of the published SugarCubes source, both toolbar consumers recognized either the original button or the new group carrying the same workflow-actions label. Rebuilding the web artifacts restored the 44-pixel row on v0.46.0 with frontend 1.59.6. The existing check passed on the development control and the repaired latest release in Chromium and Firefox. The repository PR contains the compatibility monitor. The experimental product fix was tested in a separate worktree.
+
+The same local v0.46.0 replay logged a background model catalog failure while both browser checks passed. The reporter located the call from `sugarcubes/model_library/infrastructure/comfy_roots.py:175` into upstream `folder_paths.py:459`. Windows raised `ValueError` when resolving the seeded checkpoint across mounts. The compared local control and the hosted v0.46.0 full run did not log this exception. The report retains the failing stack and log line so a maintainer can reproduce the path-dependent case separately.

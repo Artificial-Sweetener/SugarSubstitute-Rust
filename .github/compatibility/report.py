@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from members import changed_members
+from host_errors import sugar_tracebacks
 
 MARKER = "<!-- sugarcubes-upstream-compatibility -->"
 
@@ -249,9 +250,11 @@ def summarize(
     baseline: dict[tuple[str, str], Check] = {}
     overview = ["| Host | Passed | Failed |", "| --- | ---: | ---: |"]
     regressions: dict[str, tuple[set[str], str, str]] = {}
+    backend_errors: dict[tuple[str, tuple[str, ...]], list[str]] = {}
     failed = False
     complete = True
     control_sources: dict[str, Any] = {}
+    control_exceptions: set[tuple[str, tuple[str, ...]]] | None = None
     control_coverage: dict[str, Any] = {}
     control_digest: dict[str, str] = {}
     control_presentation: dict[tuple[str, str], dict[str, list[str]]] = {}
@@ -386,7 +389,9 @@ def summarize(
             sources = json.loads(
                 (location / "upstream.json").read_text(encoding="utf-8")
             )
+            host_exceptions = sugar_tracebacks(location / "comfy.log")
             if name == "control":
+                control_exceptions = set(host_exceptions)
                 baseline = outcomes
                 control_sources = sources
                 control_presentation = scene
@@ -400,6 +405,28 @@ def summarize(
             complete = False
             failed = True
             continue
+        for (exception, frames), log_line in host_exceptions.items():
+            backend_errors.setdefault((exception, frames), []).append(name)
+            if name == "control":
+                classification = "Control backend exception"
+                complete = False
+            elif control_exceptions is None:
+                classification = "Backend exception with unavailable control"
+            elif (exception, frames) in control_exceptions:
+                classification = "Backend exception also on control"
+            else:
+                classification = "New backend exception"
+            lines.extend(
+                [
+                    f"**{classification}** · `{exception}`",
+                    "",
+                    "- **Traceback locations** · "
+                    + " → ".join(f"`{frame}`" for frame in frames),
+                    f"Inspect `{name}/comfy.log:{log_line}` and replay the host with the reported core and frontend. The server raised this exception while running the pack.",
+                    "",
+                ]
+            )
+            failed = True
         if sources.get("error"):
             lines.extend([f"**Source inspection incomplete.** {sources['error']}", ""])
             complete, failed = False, True
@@ -745,6 +772,15 @@ def summarize(
                 ]
             )
     highlights = []
+    if backend_errors:
+        highlights.extend(["### Server exceptions involving SugarCubes", ""])
+        for (exception, frames), hosts in backend_errors.items():
+            owner = next(
+                frame for frame in reversed(frames) if frame.startswith("Sugar/")
+            )
+            highlights.extend(
+                [f"- **{', '.join(hosts)}** · `{exception}` · `{owner}`", ""]
+            )
     if regressions:
         highlights.extend(["### Observed regressions", ""])
         for title, (hosts, example, source) in regressions.items():
